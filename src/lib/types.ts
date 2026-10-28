@@ -1,0 +1,45 @@
+// 与 Rust 端 model.rs 保持一致
+export type Source = 'local' | 'netease';
+
+export interface Track {
+  id: string; // "ncm:123" | "local:/path"
+  source: Source;
+  title: string;
+  artists: string[];
+  album: string;
+  durationMs: number;
+  cover: string | null;
+  path: string | null;
+  ncmId: number | null;
+}
+
+export interface Playlist {
+  id: number;
+  name: string;
+  cover: string | null;
+  trackCount: number;
+  isLiked: boolean;
+  creatorId: number;
+}
+
+export interface Profile {
+  userId: number;
+  nickname: string;
+  avatar: string | null;
+}
+
+export type Quality = 'standard' | 'higher' | 'exhigh' | 'lossless' | 'hires';
+
+export interface Settings {
+  quality: Quality;
+  localFolders: string[];
+  volume: number;
+}
+
+export const QUALITY_LABELS: Record<Quality, string> = {
+  standard: '标准 (128k)',
+  higher: '较高 (192k)',
+  exhigh: '极高 (320k)',
+  lossless: '无损 (FLAC)',
+  hires: 'Hi-Res',
+};

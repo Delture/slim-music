@@ -1,0 +1,170 @@
+//! 网易云接口封装：基于 crates.io 的 ncm-api-rs（WTFPL），只保留本应用需要的几个接口。
+use crate::model::{Playlist, Profile, Source, Track};
+use ncm_api_rs::{create_client, ApiResponse, Query};
+use serde_json::Value;
+
+type R<T> = Result<T, String>;
+
+fn ok(res: Result<ApiResponse, ncm_api_rs::NcmError>) -> R<ApiResponse> {
+    let res = res.map_err(|e| e.to_string())?;
+    if res.status != 200 {
+        let msg = res.body.get("message").or(res.body.get("msg")).and_then(Value::as_str).unwrap_or("请求失败");
+        return Err(format!("网易云返回 {}: {}", res.status, msg));
+    }
+    Ok(res)
+}
+
+fn q(cookie: &Option<String>) -> Query {
+    let q = Query::new();
+    match cookie {
+        Some(c) => q.cookie(c),
+        None => q,
+    }
+}
+
+/// 把网易云歌曲 JSON（song/detail、cloudsearch、推荐等通用格式）转换为 Track
+pub fn to_track(v: &Value) -> Option<Track> {
+    let id = v.get("id")?.as_i64()?;
+    let al = v.get("al").or(v.get("album"));
+    let ar = v.get("ar").or(v.get("artists"));
+    Some(Track {
+        id: format!("ncm:{id}"),
+        source: Source::Netease,
+        title: v.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
+        artists: ar
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|x| x.get("name")?.as_str().map(String::from)).collect())
+            .unwrap_or_default(),
+        album: al.and_then(|a| a.get("name")).and_then(Value::as_str).unwrap_or("").to_string(),
+        duration_ms: v.get("dt").or(v.get("duration")).and_then(Value::as_u64).unwrap_or(0),
+        cover: al.and_then(|a| a.get("picUrl")).and_then(Value::as_str).map(|s| format!("{s}?param=200y200")),
+        path: None,
+        ncm_id: Some(id),
+    })
+}
+
+fn tracks_at(v: &Value) -> Vec<Track> {
+    v.as_array().map(|a| a.iter().filter_map(to_track).collect()).unwrap_or_default()
+}
+
+/// 把 Set-Cookie 列表压成 "k=v; k2=v2" 形式，供后续请求使用
+fn join_set_cookie(list: &[String]) -> String {
+    list.iter()
+        .filter_map(|c| c.split(';').next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+pub struct QrKey {
+    pub key: String,
+    pub svg: String,
+}
+
+pub async fn qr_key() -> R<QrKey> {
+    let c = create_client(None);
+    let res = ok(c.login_qr_key(&Query::new()).await)?;
+    let key = res.body.pointer("/unikey").or(res.body.pointer("/data/unikey")).and_then(Value::as_str).ok_or("未取得二维码 key")?.to_string();
+    let url = format!("https://music.163.com/login?codekey={key}");
+    let code = qrcode::QrCode::new(url.as_bytes()).map_err(|e| e.to_string())?;
+    let svg = code.render::<qrcode::render::svg::Color>().min_dimensions(200, 200).build();
+    Ok(QrKey { key, svg })
+}
+
+/// 返回 (状态码, 登录成功时的 cookie)。800 过期 / 801 等待扫码 / 802 待确认 / 803 成功
+pub async fn qr_check(key: &str) -> R<(i64, Option<String>)> {
+    let c = create_client(None);
+    let res = c.login_qr_check(&Query::new().param("key", key)).await.map_err(|e| e.to_string())?;
+    let code = res.body.get("code").and_then(Value::as_i64).unwrap_or(res.status);
+    if code == 803 {
+        let cookie = res.body.get("cookie").and_then(Value::as_str).map(String::from).unwrap_or_else(|| join_set_cookie(&res.cookie));
+        return Ok((code, Some(cookie)));
+    }
+    Ok((code, None))
+}
+
+pub async fn profile(cookie: &Option<String>) -> R<Option<Profile>> {
+    if cookie.is_none() {
+        return Ok(None);
+    }
+    let res = ok(create_client(None).user_account(&q(cookie)).await)?;
+    let p = res.body.get("profile").filter(|p| !p.is_null());
+    Ok(p.map(|p| Profile {
+        user_id: p.get("userId").and_then(Value::as_i64).unwrap_or(0),
+        nickname: p.get("nickname").and_then(Value::as_str).unwrap_or("").into(),
+        avatar: p.get("avatarUrl").and_then(Value::as_str).map(String::from),
+    }))
+}
+
+pub async fn daily(cookie: &Option<String>) -> R<Vec<Track>> {
+    let res = ok(create_client(None).recommend_songs(&q(cookie)).await)?;
+    Ok(tracks_at(&res.body["data"]["dailySongs"]))
+}
+
+pub async fn search(cookie: &Option<String>, keywords: &str, offset: u32) -> R<Vec<Track>> {
+    let query = q(cookie).param("keywords", keywords).param("type", "1").param("limit", "50").param("offset", &offset.to_string());
+    let res = ok(create_client(None).cloudsearch(&query).await)?;
+    Ok(tracks_at(&res.body["result"]["songs"]))
+}
+
+pub async fn user_playlists(cookie: &Option<String>, uid: i64) -> R<Vec<Playlist>> {
+    let query = q(cookie).param("uid", &uid.to_string()).param("limit", "1000");
+    let res = ok(create_client(None).user_playlist(&query).await)?;
+    let list = res.body["playlist"].as_array().cloned().unwrap_or_default();
+    Ok(list
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let creator_id = p.pointer("/creator/userId").and_then(Value::as_i64).unwrap_or(0);
+            Playlist {
+                id: p["id"].as_i64().unwrap_or(0),
+                name: p["name"].as_str().unwrap_or("").into(),
+                cover: p["coverImgUrl"].as_str().map(|s| format!("{s}?param=200y200")),
+                track_count: p["trackCount"].as_i64().unwrap_or(0),
+                is_liked: p["specialType"].as_i64() == Some(5) || (i == 0 && creator_id == uid),
+                creator_id,
+            }
+        })
+        .collect())
+}
+
+pub async fn playlist_tracks(cookie: &Option<String>, id: i64) -> R<Vec<Track>> {
+    // playlist_track_all 内部先取 trackIds 再取 song/detail；单次最多 limit 首
+    let mut all = Vec::new();
+    let mut offset = 0;
+    loop {
+        let query = q(cookie).param("id", &id.to_string()).param("limit", "500").param("offset", &offset.to_string());
+        let res = ok(create_client(None).playlist_track_all(&query).await)?;
+        let page = tracks_at(&res.body["songs"]);
+        let n = page.len();
+        all.extend(page);
+        if n < 500 {
+            break;
+        }
+        offset += 500;
+    }
+    Ok(all)
+}
+
+pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option<String>> {
+    let query = q(cookie).param("id", &id.to_string()).param("level", level);
+    let res = ok(create_client(None).song_url_v1(&query).await)?;
+    Ok(res.body.pointer("/data/0/url").and_then(Value::as_str).map(String::from))
+}
+
+#[cfg(test)]
+mod tests {
+    // 联网测试：cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn anonymous_search_and_qr_key() {
+        let r = super::search(&None, "周杰伦", 0).await.expect("search");
+        assert!(!r.is_empty());
+        println!("first: {} - {:?}", r[0].title, r[0].artists);
+        let k = super::qr_key().await.expect("qr");
+        assert!(!k.key.is_empty() && k.svg.contains("<svg"));
+        let url = super::song_url(&None, r[0].ncm_id.unwrap(), "standard").await.expect("url");
+        println!("url present: {}", url.is_some());
+    }
+}
