@@ -258,9 +258,36 @@ fn parse_lrc(raw: &str) -> Vec<LyricLine> {
         lines.push(LyricLine {
             time_ms: min * 60_000 + sec * 1000 + ms,
             text,
+            translation: None,
         });
     }
     lines.sort_by_key(|l| l.time_ms);
+    lines
+}
+
+fn merge_translations(mut lines: Vec<LyricLine>, tlyric: &str) -> Vec<LyricLine> {
+    let tlines = parse_lrc(tlyric);
+    if tlines.is_empty() {
+        return lines;
+    }
+    // 按时间戳对齐；允许 ±50ms 误差（网易云偶发不一致）
+    for line in &mut lines {
+        let best = tlines.iter().min_by_key(|t| t.time_ms.abs_diff(line.time_ms));
+        if let Some(t) = best {
+            if t.time_ms.abs_diff(line.time_ms) <= 50 && !t.text.is_empty() {
+                line.translation = Some(t.text.clone());
+            }
+        }
+    }
+    // 若几乎对不上，退化为按顺序填空行翻译
+    let matched = lines.iter().filter(|l| l.translation.is_some()).count();
+    if matched == 0 {
+        for (line, t) in lines.iter_mut().zip(tlines.iter()) {
+            if !t.text.is_empty() {
+                line.translation = Some(t.text.clone());
+            }
+        }
+    }
     lines
 }
 
@@ -278,8 +305,12 @@ pub async fn lyric(cookie: &Option<String>, id: i64) -> R<LyricPayload> {
         .and_then(Value::as_str)
         .map(str::to_string)
         .filter(|s| !s.is_empty());
+    let lines = match &translated {
+        Some(t) => merge_translations(parse_lrc(&raw), t),
+        None => parse_lrc(&raw),
+    };
     Ok(LyricPayload {
-        lines: parse_lrc(&raw),
+        lines,
         raw,
         translated,
     })

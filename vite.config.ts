@@ -5,5 +5,13 @@ export default defineConfig({
   plugins: [vue()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },
-  build: { target: 'es2021' },
+  build: {
+    target: 'es2021',
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        lyricBar: 'lyric-bar.html',
+      },
+    },
+  },
 });

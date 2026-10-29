@@ -55,6 +55,9 @@ pub struct Profile {
 pub struct LyricLine {
     pub time_ms: u64,
     pub text: String,
+    /// 翻译行（tlyric），按时间戳对齐；无则 null
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translation: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

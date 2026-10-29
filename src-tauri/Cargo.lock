@@ -3510,6 +3510,7 @@ dependencies = [
  "futures-util",
  "lofty",
  "ncm-api-rs",
+ "objc2",
  "qrcode",
  "reqwest 0.12.28",
  "serde",

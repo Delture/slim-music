@@ -1,53 +1,91 @@
-// 托盘 / 菜单栏：图标旁只显示当前歌词行（短截断）；无歌词则清空标题
+// 托盘：右侧图标仅控制。歌词走刘海左侧透明条（主窗口隐藏时才显示）。
 import { listen } from '@tauri-apps/api/event';
 import { api } from './api';
 import { current, next, player, prev, togglePlay } from './player';
 import type { LyricLine } from './types';
 
 let lines: LyricLine[] = [];
-let lastTitle = '';
+let lastTrackKey = '';
 let lastEmit = '';
+let mainVisible = true;
+let lyricToken = 0;
 
 export function setTrayLyricLines(l: LyricLine[]) {
   lines = l;
-  pushTray();
+  lastTrackKey = current()?.id ?? lastTrackKey;
+  lastEmit = '';
+  pushLyric();
 }
 
 export function clearTrayLyric() {
   lines = [];
-  pushTray();
+  lastEmit = '';
+  pushLyric();
 }
 
 function activeLine(ms: number): string {
   if (!lines.length) return '';
-  let text = '';
+  let hit: LyricLine | null = null;
   for (const l of lines) {
-    if (l.timeMs <= ms) text = l.text;
+    if (l.timeMs <= ms) hit = l;
     else break;
   }
-  return text.trim();
+  if (!hit) return '';
+  const orig = hit.text.trim();
+  if (!orig) return '';
+  const tr = (hit.translation ?? '').trim();
+  if (!tr || tr === orig) return orig;
+  // 菜单栏空间紧：原文为主，短翻译用间隔点缀
+  const shortTr = [...tr].length > 12 ? `${[...tr].slice(0, 11).join('')}…` : tr;
+  return `${orig} · ${shortTr}`;
 }
 
-export function pushTray() {
-  // 只要歌词；没有就传空字符串让 Rust 清掉菜单栏标题
-  const text = activeLine(player.currentTime * 1000);
+function pushLyric() {
+  const text = mainVisible ? '' : activeLine(player.currentTime * 1000);
   if (text === lastEmit) return;
   lastEmit = text;
-  void api.setTrayTitle(text).catch(() => {});
+  void api.setMenubarLyric(text).catch(() => {});
+}
+
+async function loadLyricsForCurrent() {
+  const t = current();
+  const key = t?.id ?? '';
+  if (key === lastTrackKey) return;
+  lastTrackKey = key;
+  lastEmit = '';
+  lines = [];
+  void api.setMenubarLyric('').catch(() => {});
+  void api.setTrayTitle('').catch(() => {});
+
+  if (!t || t.source !== 'netease' || t.ncmId == null) return;
+
+  const token = ++lyricToken;
+  try {
+    const payload = await api.lyric(t.ncmId);
+    if (token !== lyricToken) return;
+    // 若 NowPlaying 已写入更新的行，不要覆盖
+    if ((current()?.id ?? '') !== key) return;
+    lines = payload.lines.filter((l) => l.text.trim());
+    lastEmit = '';
+    pushLyric();
+  } catch {
+    if (token !== lyricToken) return;
+    lines = [];
+    pushLyric();
+  }
 }
 
 export async function bindTrayBridge() {
   setInterval(() => {
-    const t = current();
-    const id = t?.id ?? '';
-    if (id !== lastTitle) {
-      lastTitle = id;
-      lastEmit = '';
-      // 切歌时先清空，等歌词加载后再显示
-      void api.setTrayTitle('').catch(() => {});
-    }
-    pushTray();
-  }, 500);
+    void loadLyricsForCurrent();
+    pushLyric();
+  }, 400);
+
+  await listen<boolean>('main-window-visible', (e) => {
+    mainVisible = !!e.payload;
+    lastEmit = '';
+    pushLyric();
+  });
 
   await listen<string>('player-cmd', (e) => {
     switch (e.payload) {

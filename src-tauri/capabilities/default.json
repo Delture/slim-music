@@ -2,7 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "主窗口权限",
-  "windows": ["main"],
+  "windows": [
+    "main",
+    "menubar-lyric"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-hide",
@@ -11,6 +14,10 @@
     "core:window:allow-is-visible",
     "core:window:allow-close",
     "core:tray:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-always-on-top",
+    "core:event:default"
   ]
 }

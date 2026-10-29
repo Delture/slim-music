@@ -107,7 +107,8 @@ async function onLike() {
           :class="{ on: i === activeIdx }"
           @click="seek(l.timeMs / 1000)"
         >
-          {{ l.text }}
+          <div class="orig">{{ l.text }}</div>
+          <div v-if="l.translation" class="trans">{{ l.translation }}</div>
         </div>
       </div>
     </div>

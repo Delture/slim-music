@@ -33,6 +33,8 @@ export interface Profile {
 export interface LyricLine {
   timeMs: number;
   text: string;
+  /** tlyric 对齐翻译，可能为空 */
+  translation?: string | null;
 }
 
 export interface LyricPayload {
