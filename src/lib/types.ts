@@ -49,6 +49,8 @@ export interface Settings {
   quality: Quality;
   localFolders: string[];
   volume: number;
+  shuffle: boolean;
+  repeat: 'off' | 'all' | 'one';
   cacheEnabled: boolean;
   audioCacheMaxMb: number;
 }

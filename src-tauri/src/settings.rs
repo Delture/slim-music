@@ -12,10 +12,20 @@ pub struct Settings {
     /// 本地音乐文件夹
     pub local_folders: Vec<String>,
     pub volume: f64,
+    /// 随机播放
+    #[serde(default)]
+    pub shuffle: bool,
+    /// off / all / one
+    #[serde(default = "default_repeat")]
+    pub repeat: String,
     /// 启用歌单/音频本地缓存
     pub cache_enabled: bool,
     /// 音频缓存上限（MB）
     pub audio_cache_max_mb: u64,
+}
+
+fn default_repeat() -> String {
+    "off".into()
 }
 
 impl Default for Settings {
@@ -24,6 +34,8 @@ impl Default for Settings {
             quality: "exhigh".into(),
             local_folders: vec![],
             volume: 0.8,
+            shuffle: false,
+            repeat: "off".into(),
             cache_enabled: true,
             audio_cache_max_mb: 2048,
         }

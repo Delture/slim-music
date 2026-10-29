@@ -65,6 +65,7 @@ function paint(r: number) {
 
 function tick() {
   paint(ratioNow());
+  if (!volDragging) paintVolume(player.volume);
   raf = requestAnimationFrame(tick);
 }
 
@@ -100,7 +101,53 @@ function onPointerUp(e: PointerEvent) {
   paint(ratioNow());
 }
 
+/** 音量条：同进度条 scaleX + thumb，不走 native range */
+const volTrackEl = ref<HTMLElement | null>(null);
+const volFillEl = ref<HTMLElement | null>(null);
+const volThumbEl = ref<HTMLElement | null>(null);
+let volDragging = false;
+
+function paintVolume(r: number) {
+  const v = Math.min(1, Math.max(0, r));
+  if (volFillEl.value) volFillEl.value.style.transform = `scaleX(${v})`;
+  if (volThumbEl.value) volThumbEl.value.style.left = `${v * 100}%`;
+}
+
+function volRatioFromEvent(e: PointerEvent): number {
+  const el = volTrackEl.value;
+  if (!el) return player.volume;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0) return player.volume;
+  return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+}
+
+function onVolDown(e: PointerEvent) {
+  const el = volTrackEl.value;
+  if (!el) return;
+  el.setPointerCapture(e.pointerId);
+  volDragging = true;
+  const r = volRatioFromEvent(e);
+  paintVolume(r);
+  setVolume(r);
+}
+
+function onVolMove(e: PointerEvent) {
+  if (!volDragging) return;
+  const r = volRatioFromEvent(e);
+  paintVolume(r);
+  setVolume(r);
+}
+
+function onVolUp(e: PointerEvent) {
+  if (!volDragging) return;
+  const r = volRatioFromEvent(e);
+  paintVolume(r);
+  setVolume(r);
+  volDragging = false;
+}
+
 onMounted(() => {
+  paintVolume(player.volume);
   raf = requestAnimationFrame(tick);
 });
 onUnmounted(() => cancelAnimationFrame(raf));
@@ -180,15 +227,24 @@ async function onLike() {
 
     <div class="vol">
       <Icon :name="volumeIcon" :size="15" />
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        :value="player.volume"
+      <div
+        ref="volTrackEl"
+        class="vol-seek"
+        role="slider"
+        :aria-valuenow="volumePct"
+        aria-valuemin="0"
+        aria-valuemax="100"
         :title="`音量 ${volumePct}%`"
-        @input="setVolume(+($event.target as HTMLInputElement).value)"
-      />
+        tabindex="0"
+        @pointerdown.prevent="onVolDown"
+        @pointermove="onVolMove"
+        @pointerup="onVolUp"
+        @pointercancel="onVolUp"
+      >
+        <div class="seek-rail"></div>
+        <div ref="volFillEl" class="seek-fill"></div>
+        <div ref="volThumbEl" class="seek-thumb"></div>
+      </div>
       <span class="pct">{{ volumePct }}%</span>
       <span class="sub queue">{{
         player.queue.length ? `${player.pos + 1}/${player.queue.length}` : ''
@@ -368,8 +424,51 @@ async function onLike() {
   color: var(--muted);
   min-width: 0;
 }
-.vol input {
+.vol-seek {
+  position: relative;
   width: 90px;
+  height: 16px;
+  cursor: pointer;
+  touch-action: none;
+  transition: none;
+  flex-shrink: 0;
+}
+.vol-seek .seek-rail,
+.vol-seek .seek-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  transition: none;
+  pointer-events: none;
+}
+.vol-seek .seek-rail {
+  background: var(--border);
+}
+.vol-seek .seek-fill {
+  right: auto;
+  width: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+.vol-seek .seek-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+  left: 0%;
+  transition: none;
+  pointer-events: none;
+  will-change: left;
 }
 .pct {
   font-size: 12px;

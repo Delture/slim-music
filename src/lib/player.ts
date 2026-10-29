@@ -120,19 +120,39 @@ export function seek(sec: number) {
   audio.currentTime = sec;
 }
 
-export function setVolume(v: number) {
-  player.volume = v;
-  audio.volume = v;
+export function setVolume(v: number, opts?: { persist?: boolean }) {
+  const n = Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0.8));
+  player.volume = n;
+  audio.volume = n;
+  if (opts?.persist === false) return;
+  void import('./session').then(({ session, persistPlaybackSettings }) => {
+    session.settings.volume = n;
+    persistPlaybackSettings();
+  });
+}
+
+/** 启动时从 settings 恢复随机/循环（不写回磁盘） */
+export function applyPlaybackPrefs(shuffle: boolean, repeat: Repeat) {
+  player.shuffle = !!shuffle;
+  player.repeat = repeat === 'all' || repeat === 'one' ? repeat : 'off';
 }
 
 export function toggleShuffle() {
   const cur = player.order[player.pos] ?? 0;
   player.shuffle = !player.shuffle;
   if (player.queue.length) buildOrder(cur);
+  void import('./session').then(({ session, persistPlaybackSettings }) => {
+    session.settings.shuffle = player.shuffle;
+    persistPlaybackSettings();
+  });
 }
 
 export function cycleRepeat() {
   player.repeat = player.repeat === 'off' ? 'all' : player.repeat === 'all' ? 'one' : 'off';
+  void import('./session').then(({ session, persistPlaybackSettings }) => {
+    session.settings.repeat = player.repeat;
+    persistPlaybackSettings();
+  });
 }
 
 audio.addEventListener('play', () => (player.playing = true));
