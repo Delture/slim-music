@@ -50,7 +50,7 @@ onMounted(async () => {
       </a>
       <div class="user muted">{{ session.profile ? session.profile.nickname : '未登录' }}</div>
     </nav>
-    <main class="content">
+    <main class="content" :class="{ locked: session.nowPlaying }">
       <KeepAlive v-if="ready">
         <component
           :is="pages.find((p) => p.key === page)!.view"

@@ -58,8 +58,12 @@ watch(
 
 watch(activeIdx, async (i) => {
   await nextTick();
-  const el = listEl.value?.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
-  el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const root = listEl.value;
+  const el = root?.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
+  if (!root || !el || i < 0) return;
+  // 只滚歌词列，避免 scrollIntoView 带动 .content 整页滚动（露出播放条）
+  const top = el.offsetTop - root.clientHeight / 2 + el.offsetHeight / 2;
+  root.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 });
 
 async function onLike() {
@@ -124,6 +128,8 @@ async function onLike() {
   display: flex;
   flex-direction: column;
   padding: 16px 24px 12px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .back {
   align-self: flex-start;
@@ -153,13 +159,18 @@ async function onLike() {
   align-items: center;
   justify-content: center;
   gap: 16px;
+  min-height: 0;
+  overflow: hidden;
 }
 .cover {
   width: min(100%, 320px);
+  max-width: 100%;
+  max-height: min(320px, 45vh);
   aspect-ratio: 1;
   border-radius: 12px;
   object-fit: cover;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  flex-shrink: 1;
 }
 .ph {
   display: grid;
@@ -190,9 +201,13 @@ async function onLike() {
   color: var(--accent);
 }
 .right {
-  overflow: auto;
-  padding: 20vh 12px;
-  mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 30% 12px;
+  mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
 }
 .line {
   padding: 10px 8px;

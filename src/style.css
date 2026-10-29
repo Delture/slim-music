@@ -15,6 +15,7 @@ body { margin: 0; }
 .nav a.on { color: var(--accent); font-weight: 600; }
 .nav .user { margin-top: auto; padding: 0 8px; }
 .content { position: relative; overflow: auto; padding: 16px 24px; min-width: 0; }
+.content.locked { overflow: hidden; }
 .player { grid-column: 1 / -1; }
 .head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
 .head h2 { margin: 0 8px 0 0; }
