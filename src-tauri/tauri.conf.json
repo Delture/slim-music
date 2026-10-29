@@ -28,7 +28,7 @@
         ]
       }
     },
-    "macOSPrivateApi": true
+    "macOSPrivateApi": false
   },
   "bundle": {
     "active": true,

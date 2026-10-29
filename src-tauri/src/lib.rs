@@ -2,7 +2,6 @@
 mod cache;
 mod local;
 mod local_playlists;
-mod menubar_lyric;
 mod model;
 mod ncm;
 mod settings;
@@ -318,29 +317,11 @@ fn local_playlist_set_tracks(
     state.local_pls.set_tracks(&id, tracks)
 }
 
-/// 刘海左侧菜单栏歌词（透明置顶窗，非右侧 NSStatusItem 标题）
-#[tauri::command]
-fn set_menubar_lyric(app: AppHandle, text: String) -> R<()> {
-    menubar_lyric::set_text(&app, text);
-    Ok(())
-}
-
-/// 兼容旧前端：清空右侧托盘标题（歌词不再走托盘）
-#[tauri::command]
-fn set_tray_title(app: AppHandle, _text: String) -> R<()> {
-    if let Some(tray) = app.tray_by_id("main") {
-        let _ = tray.set_title(None::<&str>);
-        let _ = tray.set_tooltip(Some("SlimMusic"));
-    }
-    Ok(())
-}
-
 #[tauri::command]
 fn show_main_window(app: AppHandle) -> R<()> {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.set_focus();
-        menubar_lyric::set_main_visible(&app, true);
     }
     Ok(())
 }
@@ -374,7 +355,6 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
-                    menubar_lyric::set_main_visible(app, true);
                 }
             }
             "play" => {
@@ -399,11 +379,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 if let Some(w) = app_handle.get_webview_window("main") {
                     if w.is_visible().unwrap_or(false) {
                         let _ = w.hide();
-                        menubar_lyric::set_main_visible(&app_handle, false);
                     } else {
                         let _ = w.show();
                         let _ = w.set_focus();
-                        menubar_lyric::set_main_visible(&app_handle, true);
                     }
                 }
             }
@@ -429,28 +407,17 @@ pub fn run() {
             };
             app.manage(state);
             build_tray(app.handle())?;
-            menubar_lyric::on_app_setup(app.handle());
+            // 托盘仅图标 + 菜单，不设标题（避免挤占右侧状态栏）
+            if let Some(tray) = app.handle().tray_by_id("main") {
+                let _ = tray.set_title(None::<&str>);
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
             // 红灯 / 关闭：隐藏窗口，音频继续在后台播；真正退出走托盘「退出」
-            // 仅主窗口参与「桌面窗可见 → 隐藏刘海左歌词」逻辑
-            if window.label() != "main" {
-                return;
-            }
-            match event {
-                WindowEvent::CloseRequested { api, .. } => {
-                    api.prevent_close();
-                    let _ = window.hide();
-                    menubar_lyric::set_main_visible(window.app_handle(), false);
-                }
-                WindowEvent::Focused(true) => {
-                    // 被唤起时视为可见
-                    if window.is_visible().unwrap_or(false) {
-                        menubar_lyric::set_main_visible(window.app_handle(), true);
-                    }
-                }
-                _ => {}
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -483,8 +450,6 @@ pub fn run() {
             local_playlist_remove_track,
             local_playlist_move_track,
             local_playlist_set_tracks,
-            set_tray_title,
-            set_menubar_lyric,
             show_main_window,
             quit_app
         ])

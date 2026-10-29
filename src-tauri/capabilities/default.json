@@ -3,8 +3,7 @@
   "identifier": "default",
   "description": "主窗口权限",
   "windows": [
-    "main",
-    "menubar-lyric"
+    "main"
   ],
   "permissions": [
     "core:default",
@@ -14,10 +13,6 @@
     "core:window:allow-is-visible",
     "core:window:allow-close",
     "core:tray:default",
-    "dialog:allow-open",
-    "core:window:allow-set-size",
-    "core:window:allow-set-position",
-    "core:window:allow-set-always-on-top",
-    "core:event:default"
+    "dialog:allow-open"
   ]
 }

@@ -35,8 +35,6 @@ export const api = {
     invoke<void>('playlist_subscribe', { id, subscribe }),
   playlistDelete: (id: number) => invoke<void>('playlist_delete', { id }),
   lyric: (id: number) => invoke<LyricPayload>('get_lyric', { id }),
-  setTrayTitle: (text: string) => invoke<void>('set_tray_title', { text }),
-  setMenubarLyric: (text: string) => invoke<void>('set_menubar_lyric', { text }),
   showMainWindow: () => invoke<void>('show_main_window'),
   quitApp: () => invoke<void>('quit_app'),
 
