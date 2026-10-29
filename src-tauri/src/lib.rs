@@ -7,7 +7,7 @@ mod ncm;
 mod settings;
 
 use model::{LyricPayload, Playlist, Profile, Track};
-use settings::{Settings, Store, QUALITY_LEVELS};
+use settings::{PlaybackSession, Settings, Store, QUALITY_LEVELS};
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
@@ -200,6 +200,17 @@ fn cache_stats(state: State<'_, AppState>) -> R<cache::CacheStats> {
 fn cache_clear(state: State<'_, AppState>) -> R<cache::CacheStats> {
     state.cache.clear()?;
     Ok(state.cache.stats())
+}
+
+
+#[tauri::command]
+fn get_playback_session(state: State<'_, AppState>) -> R<PlaybackSession> {
+    Ok(state.store.load_playback())
+}
+
+#[tauri::command]
+fn save_playback_session(state: State<'_, AppState>, session: PlaybackSession) -> R<()> {
+    state.store.save_playback(&session)
 }
 
 #[tauri::command]
@@ -433,6 +444,8 @@ pub fn run() {
             song_play_src,
             cache_stats,
             cache_clear,
+            get_playback_session,
+            save_playback_session,
             get_settings,
             save_settings,
             scan_local,

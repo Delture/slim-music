@@ -7,6 +7,7 @@ import type {
   Playlist,
   PlaySrc,
   Profile,
+  PlaybackSession,
   Settings,
   Track,
 } from './types';
@@ -28,6 +29,9 @@ export const api = {
   cacheClear: () => invoke<CacheStats>('cache_clear'),
   getSettings: () => invoke<Settings>('get_settings'),
   saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
+  getPlaybackSession: () => invoke<PlaybackSession>('get_playback_session'),
+  savePlaybackSession: (session: PlaybackSession) =>
+    invoke<void>('save_playback_session', { session }),
   scanLocal: () => invoke<Track[]>('scan_local'),
   likedIds: () => invoke<number[]>('liked_ids'),
   likeTrack: (id: number, like: boolean) => invoke<void>('like_track', { id, like }),

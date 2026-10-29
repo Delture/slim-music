@@ -1,8 +1,9 @@
 // 播放器：一个 <audio> + 队列。本地文件走 asset 协议，网易云按需取 URL。
+// 队列 / 当前曲 / 进度写入 playback.json（防抖），启动时恢复。
 import { reactive } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { api } from './api';
-import type { Track } from './types';
+import type { PlaybackSession, Track } from './types';
 
 export type Repeat = 'off' | 'all' | 'one';
 
@@ -35,7 +36,7 @@ function buildOrder(startIndex: number) {
     player.pos = startIndex;
     return;
   }
-  const rest = idx.filter(i => i !== startIndex);
+  const rest = idx.filter((i) => i !== startIndex);
   for (let i = rest.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [rest[i], rest[j]] = [rest[j], rest[i]];
@@ -56,22 +57,48 @@ async function resolveSrc(t: Track): Promise<string | null> {
 }
 
 let loadToken = 0;
-async function loadCurrent(autoplay = true) {
+let suppressPersist = false;
+
+async function loadCurrent(autoplay = true, seekTo?: number) {
   const t = current();
   if (!t) return;
   const token = ++loadToken;
   player.error = '';
   try {
     const src = await resolveSrc(t);
-    if (token !== loadToken) return; // 用户已切到别的歌
+    if (token !== loadToken) return;
     if (!src) {
       player.error = `无法播放「${t.title}」（无版权或需要 VIP），已跳过`;
       return next(true);
     }
     audio.src = src;
+    const target = seekTo != null && seekTo > 0 ? seekTo : 0;
+    if (target > 0) {
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          try {
+            audio.currentTime = Math.min(target, audio.duration || target);
+          } catch {
+            /* ignore */
+          }
+          audio.removeEventListener('loadedmetadata', done);
+          resolve();
+        };
+        if (audio.readyState >= 1) done();
+        else audio.addEventListener('loadedmetadata', done);
+      });
+      if (token !== loadToken) return;
+      player.currentTime = audio.currentTime;
+    }
     if (autoplay) await audio.play();
+    else {
+      // 预加载到可 seek，界面显示曲目与进度，等用户按播放
+      player.playing = false;
+    }
   } catch (e) {
     player.error = String(e);
+  } finally {
+    schedulePersist(400);
   }
 }
 
@@ -89,12 +116,16 @@ export function enqueue(t: Track) {
   if (player.pos < 0) {
     player.pos = player.order.length - 1;
     void loadCurrent();
+  } else {
+    schedulePersist(400);
   }
 }
 
 export function togglePlay() {
-  if (!audio.src) return void loadCurrent();
-  audio.paused ? void audio.play() : audio.pause();
+  if (!audio.src) return void loadCurrent(true);
+  if (audio.paused) void audio.play();
+  else audio.pause();
+  schedulePersist(300);
 }
 
 export function next(auto = false) {
@@ -105,19 +136,29 @@ export function next(auto = false) {
   }
   if (player.pos + 1 < player.order.length) player.pos++;
   else if (player.repeat !== 'off' || !auto) player.pos = 0;
-  else return void (player.playing = false);
+  else {
+    player.playing = false;
+    schedulePersist(300);
+    return;
+  }
   void loadCurrent();
 }
 
 export function prev() {
   if (!player.order.length) return;
-  if (audio.currentTime > 3) return void (audio.currentTime = 0);
+  if (audio.currentTime > 3) {
+    audio.currentTime = 0;
+    schedulePersist(300);
+    return;
+  }
   player.pos = player.pos > 0 ? player.pos - 1 : player.order.length - 1;
   void loadCurrent();
 }
 
 export function seek(sec: number) {
   audio.currentTime = sec;
+  player.currentTime = sec;
+  schedulePersist(400);
 }
 
 export function setVolume(v: number, opts?: { persist?: boolean }) {
@@ -145,6 +186,7 @@ export function toggleShuffle() {
     session.settings.shuffle = player.shuffle;
     persistPlaybackSettings();
   });
+  schedulePersist(400);
 }
 
 export function cycleRepeat() {
@@ -155,9 +197,70 @@ export function cycleRepeat() {
   });
 }
 
-audio.addEventListener('play', () => (player.playing = true));
-audio.addEventListener('pause', () => (player.playing = false));
-audio.addEventListener('timeupdate', () => (player.currentTime = audio.currentTime));
+function snapshot(): PlaybackSession {
+  return {
+    queue: player.queue.slice(0, 500),
+    order: [...player.order],
+    pos: player.pos,
+    currentTime: audio.currentTime || player.currentTime || 0,
+    wasPlaying: player.playing && !audio.paused,
+  };
+}
+
+let persistTimer: number | undefined;
+let lastTimePersist = 0;
+
+export function schedulePersist(delayMs = 800) {
+  if (suppressPersist) return;
+  if (persistTimer) window.clearTimeout(persistTimer);
+  persistTimer = window.setTimeout(() => {
+    void api.savePlaybackSession(snapshot()).catch(() => {});
+  }, delayMs);
+}
+
+/** 从 playback.json 恢复队列与进度；若上次在播则自动续播，否则停在进度处待按播放 */
+export async function restorePlaybackSession() {
+  suppressPersist = true;
+  try {
+    const snap = await api.getPlaybackSession();
+    if (!snap?.queue?.length) return;
+    player.queue = snap.queue;
+    const order = (snap.order ?? []).filter((i) => i >= 0 && i < player.queue.length);
+    if (order.length === player.queue.length) {
+      player.order = order;
+      player.pos =
+        snap.pos >= 0 && snap.pos < order.length ? snap.pos : 0;
+    } else {
+      buildOrder(Math.max(0, Math.min(snap.pos ?? 0, player.queue.length - 1)));
+    }
+    const seekTo = Math.max(0, Number(snap.currentTime) || 0);
+    const autoplay = !!snap.wasPlaying;
+    await loadCurrent(autoplay, seekTo);
+  } catch (e) {
+    console.warn('restore playback failed', e);
+  } finally {
+    suppressPersist = false;
+    schedulePersist(1000);
+  }
+}
+
+audio.addEventListener('play', () => {
+  player.playing = true;
+  schedulePersist(500);
+});
+audio.addEventListener('pause', () => {
+  player.playing = false;
+  schedulePersist(300);
+});
+audio.addEventListener('timeupdate', () => {
+  player.currentTime = audio.currentTime;
+  const now = Date.now();
+  // 进度约每 2s 落盘一次，避免狂写
+  if (now - lastTimePersist > 2000) {
+    lastTimePersist = now;
+    schedulePersist(1500);
+  }
+});
 audio.addEventListener('durationchange', () => (player.duration = audio.duration || 0));
 audio.addEventListener('ended', () => next(true));
 audio.addEventListener('error', () => {
@@ -165,7 +268,6 @@ audio.addEventListener('error', () => {
 });
 audio.volume = player.volume;
 
-// TODO: 系统媒体键 / 正在播放信息（navigator.mediaSession 在 WebView 中部分可用）
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', togglePlay);
   navigator.mediaSession.setActionHandler('pause', togglePlay);

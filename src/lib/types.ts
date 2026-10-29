@@ -55,6 +55,15 @@ export interface Settings {
   audioCacheMaxMb: number;
 }
 
+/** 上次播放会话（playback.json） */
+export interface PlaybackSession {
+  queue: Track[];
+  order: number[];
+  pos: number;
+  currentTime: number;
+  wasPlaying: boolean;
+}
+
 export interface CacheHit<T> {
   data: T;
   fromCache: boolean;

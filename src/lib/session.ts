@@ -1,7 +1,7 @@
 import { reactive } from 'vue';
 import { api } from './api';
 import type { Profile, Settings } from './types';
-import { applyPlaybackPrefs, setVolume } from './player';
+import { applyPlaybackPrefs, restorePlaybackSession, setVolume } from './player';
 import { refreshLocalPlaylists } from './localPlaylists';
 
 const defaultSettings = (): Settings => ({
@@ -37,6 +37,7 @@ export async function initSession() {
   };
   setVolume(session.settings.volume, { persist: false });
   applyPlaybackPrefs(session.settings.shuffle, session.settings.repeat);
+  await restorePlaybackSession().catch(console.warn);
   await refreshProfile();
   await refreshLocalPlaylists().catch(() => {});
 }
