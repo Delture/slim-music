@@ -5,6 +5,7 @@ import type { Track } from '../lib/types';
 import { current, enqueue, playList } from '../lib/player';
 import { fmtTime } from '../lib/format';
 import SourceBadge from './SourceBadge.vue';
+import Icon from './Icon.vue';
 
 /** 改成 true 即单击整行就播放 */
 const PLAY_ON_SINGLE_CLICK = false;
@@ -39,10 +40,10 @@ function copyName() {
       @contextmenu.prevent="openMenu($event, i)"
     >
       <button class="no" title="从这首开始播放" @click.stop="playAt(i)">
-        <span class="n">{{ i + 1 }}</span><span class="p">▶</span>
+        <span class="n">{{ i + 1 }}</span><span class="p"><Icon name="play" :size="12" /></span>
       </button>
       <img v-if="t.cover" :src="t.cover" class="cover" loading="lazy" @click.stop="playAt(i)" />
-      <div v-else class="cover ph" @click.stop="playAt(i)">♪</div>
+      <div v-else class="cover ph" @click.stop="playAt(i)"><Icon name="music" :size="16" /></div>
       <div class="main">
         <div class="title">{{ t.title }}</div>
         <div class="sub">{{ t.artists.join(' / ') || '未知歌手' }}</div>
@@ -65,10 +66,12 @@ function copyName() {
 .row { display: grid; grid-template-columns: 36px 40px 1fr 30% 56px 48px; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; user-select: none; }
 .row:hover { background: var(--hover); }
 .row.playing .title { color: var(--accent); font-weight: 600; }
-.no { background: none; border: 0; color: var(--muted); cursor: pointer; }
-.no .p { display: none; }
+.no { background: none; border: 0; color: var(--muted); cursor: pointer; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; line-height: 0; }
+.no .p { display: none; color: var(--accent); }
 .row:hover .no .n { display: none; }
-.row:hover .no .p { display: inline; color: var(--accent); }
+.row:hover .no .p { display: inline-flex; }
+.row:hover .no { background: var(--hover); }
+.ph { color: var(--muted); }
 .cover { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; cursor: pointer; }
 .ph { display: grid; place-items: center; background: var(--hover); color: var(--muted); }
 .title, .sub, .album { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

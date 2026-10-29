@@ -62,14 +62,48 @@ pub struct QrKey {
     pub svg: String,
 }
 
+
+fn normalize_qr_svg(raw: &str, size: u32) -> String {
+    // 覆盖 width/height，保留 viewBox，保证按正方形缩放
+    let mut tag_end = None;
+    let start = raw.find("<svg").unwrap_or(0);
+    for (i, ch) in raw[start..].char_indices() {
+        if ch == '>' {
+            tag_end = Some(start + i);
+            break;
+        }
+    }
+    let Some(end) = tag_end else { return raw.to_string() };
+    let mut tag = raw[start..=end].to_string();
+    for attr in ["width", "height"] {
+        let key = format!("{attr}=\"");
+        if let Some(a) = tag.find(&key) {
+            let val_start = a + key.len();
+            if let Some(rel) = tag[val_start..].find('"') {
+                tag.replace_range(a..val_start + rel + 1, &format!("{attr}=\"{size}\""));
+            }
+        } else {
+            tag = tag.replacen("<svg", &format!("<svg {attr}=\"{size}\""), 1);
+        }
+    }
+    format!("{}{}{}", &raw[..start], tag, &raw[end + 1..])
+}
+
 pub async fn qr_key() -> R<QrKey> {
     let c = create_client(None);
     let res = ok(c.login_qr_key(&Query::new()).await)?;
     let key = res.body.pointer("/unikey").or(res.body.pointer("/data/unikey")).and_then(Value::as_str).ok_or("未取得二维码 key")?.to_string();
     let url = format!("https://music.163.com/login?codekey={key}");
     let code = qrcode::QrCode::new(url.as_bytes()).map_err(|e| e.to_string())?;
-    let svg = code.render::<qrcode::render::svg::Color>().min_dimensions(200, 200).build();
-    Ok(QrKey { key, svg })
+    // quiet_zone + 固定正方形；前端白底也是正方，避免参差白边
+    let raw = code
+        .render::<qrcode::render::svg::Color>()
+        .quiet_zone(true)
+        .min_dimensions(180, 180)
+        .dark_color(qrcode::render::svg::Color("#000000"))
+        .light_color(qrcode::render::svg::Color("#ffffff"))
+        .build();
+    Ok(QrKey { key, svg: normalize_qr_svg(&raw, 180) })
 }
 
 /// 返回 (状态码, 登录成功时的 cookie)。800 过期 / 801 等待扫码 / 802 待确认 / 803 成功

@@ -2,6 +2,7 @@
 import { onMounted, ref, type Component } from 'vue';
 import { initSession, session } from './lib/session';
 import PlayerBar from './components/PlayerBar.vue';
+import Icon from './components/Icon.vue';
 import DailyView from './views/DailyView.vue';
 import SearchView from './views/SearchView.vue';
 import PlaylistsView from './views/PlaylistsView.vue';
@@ -9,12 +10,12 @@ import LocalView from './views/LocalView.vue';
 import SettingsView from './views/SettingsView.vue';
 
 // 页面注册表：增删页面只改这里
-const pages: { key: string; label: string; view: Component }[] = [
-  { key: 'daily', label: '每日推荐', view: DailyView },
-  { key: 'search', label: '搜索', view: SearchView },
-  { key: 'playlists', label: '我的歌单', view: PlaylistsView },
-  { key: 'local', label: '本地音乐', view: LocalView },
-  { key: 'settings', label: '设置', view: SettingsView },
+const pages: { key: string; label: string; icon: string; view: Component }[] = [
+  { key: 'daily', label: '每日推荐', icon: 'calendar', view: DailyView },
+  { key: 'search', label: '搜索', icon: 'search', view: SearchView },
+  { key: 'playlists', label: '我的歌单', icon: 'list', view: PlaylistsView },
+  { key: 'local', label: '本地音乐', icon: 'folder', view: LocalView },
+  { key: 'settings', label: '设置', icon: 'settings', view: SettingsView },
 ];
 const page = ref('daily');
 const ready = ref(false);
@@ -28,12 +29,23 @@ onMounted(async () => {
   <div class="app">
     <nav class="nav">
       <div class="logo">SlimMusic</div>
-      <a v-for="p in pages" :key="p.key" :class="{ on: page === p.key }" @click="page = p.key">{{ p.label }}</a>
+      <a
+        v-for="p in pages"
+        :key="p.key"
+        :class="{ on: page === p.key }"
+        @click="page = p.key"
+      >
+        <Icon :name="p.icon" :size="15" />
+        <span>{{ p.label }}</span>
+      </a>
       <div class="user muted">{{ session.profile ? session.profile.nickname : '未登录' }}</div>
     </nav>
     <main class="content">
       <KeepAlive v-if="ready">
-        <component :is="pages.find(p => p.key === page)!.view" :key="page + (session.profile?.userId ?? 0)" />
+        <component
+          :is="pages.find((p) => p.key === page)!.view"
+          :key="page + (session.profile?.userId ?? 0)"
+        />
       </KeepAlive>
     </main>
     <PlayerBar class="player" />

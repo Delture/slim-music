@@ -22,8 +22,10 @@ async function startLogin() {
   timer = window.setInterval(async () => {
     const code = await api.loginQrCheck(key).catch(() => -1);
     if (code === 802) qrMsg.value = '已扫码，请在手机上确认';
-    else if (code === 800) { qrMsg.value = '二维码已过期，请重新获取'; stopPoll(); }
-    else if (code === 803) {
+    else if (code === 800) {
+      qrMsg.value = '二维码已过期，请重新获取';
+      stopPoll();
+    } else if (code === 803) {
       stopPoll();
       qrSvg.value = '';
       qrMsg.value = '登录成功';
@@ -64,6 +66,7 @@ const qualities = Object.keys(QUALITY_LABELS) as Quality[];
     </div>
     <div v-else>
       <button @click="startLogin">扫码登录</button>
+      <!-- 正方白底 + 居中 SVG，避免 inline SVG 基线空隙造成参差白边 -->
       <div v-if="qrSvg" class="qr" v-html="qrSvg"></div>
       <p class="muted">{{ qrMsg }}</p>
     </div>
@@ -84,8 +87,39 @@ const qualities = Object.keys(QUALITY_LABELS) as Quality[];
 </template>
 
 <style scoped>
-.settings h3 { margin-top: 24px; }
-.row { display: flex; gap: 10px; align-items: center; margin: 6px 0; }
-.avatar { width: 32px; height: 32px; border-radius: 50%; }
-.qr { width: 200px; margin-top: 10px; background: #fff; padding: 8px; }
+.settings h3 {
+  margin-top: 24px;
+}
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 6px 0;
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+.qr {
+  width: 204px;
+  height: 204px;
+  margin-top: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  line-height: 0;
+}
+.qr :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
 </style>
