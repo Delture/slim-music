@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { playList } from '../lib/player';
+import { playList, player } from '../lib/player';
 import {
   createLocalPlaylist,
   deleteLocalPlaylist,
@@ -9,25 +9,46 @@ import {
   refreshLocalPlaylists,
   renameLocalPlaylist,
 } from '../lib/localPlaylists';
-import type { LocalPlaylist } from '../lib/types';
+import type { LocalPlaylist, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
 
-const activeId = ref<string | null>(null);
+/** 特殊 id：镜像当前播放队列，不落盘 */
+const NOW_PLAYING = '__now_playing__';
+
+const activeId = ref<string>(NOW_PLAYING);
 const err = ref('');
 
-const active = computed(
+const nowPlayingTracks = computed<Track[]>(() => {
+  // 按播放顺序展示队列（随机时跟 order）
+  if (!player.order.length) return [...player.queue];
+  return player.order.map((i) => player.queue[i]).filter(Boolean) as Track[];
+});
+
+const isNowPlaying = computed(() => activeId.value === NOW_PLAYING);
+
+const activeUser = computed(
   () => localPl.lists.find((p) => p.id === activeId.value) ?? null,
+);
+
+const activeTracks = computed(() =>
+  isNowPlaying.value ? nowPlayingTracks.value : activeUser.value?.tracks ?? [],
+);
+
+const activeTitle = computed(() =>
+  isNowPlaying.value ? '正在播放' : activeUser.value?.name ?? '',
 );
 
 async function ensure() {
   try {
     await refreshLocalPlaylists();
-    if (!activeId.value && localPl.lists[0]) activeId.value = localPl.lists[0].id;
   } catch (e) {
     err.value = String(e);
   }
 }
 
+function openNow() {
+  activeId.value = NOW_PLAYING;
+}
 function open(p: LocalPlaylist) {
   activeId.value = p.id;
 }
@@ -57,16 +78,16 @@ async function onDelete(p: LocalPlaylist) {
   if (!confirm(`确定删除播放列表「${p.name}」？歌曲文件不会被删除。`)) return;
   try {
     await deleteLocalPlaylist(p.id);
-    if (activeId.value === p.id) activeId.value = localPl.lists[0]?.id ?? null;
+    if (activeId.value === p.id) activeId.value = NOW_PLAYING;
   } catch (e) {
     alert(String(e));
   }
 }
 
 async function onReorder(e: { from: number; to: number }) {
-  if (!active.value) return;
+  if (isNowPlaying.value || !activeUser.value) return;
   try {
-    await moveLocalTrack(active.value.id, e.from, e.to);
+    await moveLocalTrack(activeUser.value.id, e.from, e.to);
   } catch (err) {
     alert(String(err));
   }
@@ -76,8 +97,11 @@ onMounted(ensure);
 watch(
   () => localPl.lists.map((p) => p.id).join(','),
   () => {
-    if (activeId.value && !localPl.lists.some((p) => p.id === activeId.value)) {
-      activeId.value = localPl.lists[0]?.id ?? null;
+    if (
+      activeId.value !== NOW_PLAYING &&
+      !localPl.lists.some((p) => p.id === activeId.value)
+    ) {
+      activeId.value = NOW_PLAYING;
     }
   },
 );
@@ -90,14 +114,19 @@ watch(
         <span>播放列表</span>
         <button class="link" title="新建" @click="onCreate">＋</button>
       </div>
-      <p class="hint muted">
-        本机列表（类 Walkman），可混入本地与网易云歌曲。从别处点歌只会改「正在播放」队列，不会改这些列表。
-      </p>
+
+      <div class="item" :class="{ on: isNowPlaying }" @click="openNow">
+        <span class="name">正在播放</span>
+        <small class="muted">{{ nowPlayingTracks.length }}</small>
+      </div>
+
+      <div class="sep"></div>
+
       <div
         v-for="p in localPl.lists"
         :key="p.id"
         class="item"
-        :class="{ on: active?.id === p.id }"
+        :class="{ on: activeId === p.id }"
         @click="open(p)"
       >
         <span class="name" :title="p.name" @dblclick.stop="onRename(p)">{{ p.name }}</span>
@@ -105,25 +134,32 @@ watch(
         <button class="mini" title="重命名" @click.stop="onRename(p)">✎</button>
         <button class="mini" title="删除" @click.stop="onDelete(p)">×</button>
       </div>
-      <div v-if="!localPl.lists.length" class="muted empty-side">还没有播放列表，点 ＋ 新建</div>
     </aside>
 
-    <div v-if="active" class="body">
+    <div class="body">
       <header class="head">
-        <h2 class="title-ellip">{{ active.name }}</h2>
-        <button :disabled="!active.tracks.length" @click="playList(active.tracks)">播放全部</button>
-        <button class="ghost" @click="onRename(active)">重命名</button>
-        <button class="ghost" @click="onDelete(active)">删除</button>
+        <h2 class="title-ellip">{{ activeTitle }}</h2>
+        <button
+          v-if="activeTracks.length && !isNowPlaying"
+          @click="playList(activeTracks)"
+        >
+          播放全部
+        </button>
+        <template v-if="activeUser">
+          <button class="ghost" @click="onRename(activeUser)">重命名</button>
+          <button class="ghost" @click="onDelete(activeUser)">删除</button>
+        </template>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
+      <p v-if="isNowPlaying && !activeTracks.length" class="muted">队列为空，去别处点一首歌开始听</p>
       <TrackList
-        :tracks="active.tracks"
-        :local-playlist-id="active.id"
-        :show-reorder="true"
+        v-else
+        :tracks="activeTracks"
+        :local-playlist-id="isNowPlaying ? null : activeUser?.id"
+        :show-reorder="!isNowPlaying && !!activeUser"
         @reorder="onReorder"
       />
     </div>
-    <div v-else class="body muted">选择或新建一个播放列表</div>
   </section>
 </template>
 
@@ -145,7 +181,7 @@ watch(
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 .link {
   background: none;
@@ -155,10 +191,10 @@ watch(
   color: var(--accent);
   padding: 0 6px;
 }
-.hint {
-  font-size: 12px;
-  margin: 0 0 10px;
-  line-height: 1.4;
+.sep {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
 }
 .item {
   display: grid;
@@ -189,10 +225,6 @@ watch(
 }
 .item:hover .mini {
   opacity: 1;
-}
-.empty-side {
-  padding: 12px 8px;
-  font-size: 13px;
 }
 .body {
   min-width: 0;

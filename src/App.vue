@@ -32,7 +32,6 @@ onMounted(async () => {
 <template>
   <div class="app">
     <nav class="nav">
-      <div class="logo">SlimMusic</div>
       <a
         v-for="p in pages"
         :key="p.key"

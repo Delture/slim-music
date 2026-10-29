@@ -1,4 +1,4 @@
-// 托盘 / 菜单栏标题：显示当前歌词行，没有歌词则显示歌名
+// 托盘 / 菜单栏：图标旁只显示当前歌词行（短截断）；无歌词则清空标题
 import { listen } from '@tauri-apps/api/event';
 import { api } from './api';
 import { current, next, player, prev, togglePlay } from './player';
@@ -20,45 +20,34 @@ export function clearTrayLyric() {
 
 function activeLine(ms: number): string {
   if (!lines.length) return '';
-  let text = lines[0]?.text ?? '';
+  let text = '';
   for (const l of lines) {
     if (l.timeMs <= ms) text = l.text;
     else break;
   }
-  return text;
+  return text.trim();
 }
 
 export function pushTray() {
-  const t = current();
-  const lyric = activeLine(player.currentTime * 1000);
-  const text = lyric || (t ? `${t.title} - ${t.artists.join('/')}` : 'SlimMusic');
+  // 只要歌词；没有就传空字符串让 Rust 清掉菜单栏标题
+  const text = activeLine(player.currentTime * 1000);
   if (text === lastEmit) return;
   lastEmit = text;
   void api.setTrayTitle(text).catch(() => {});
 }
 
-/** 在 App 挂载时调用一次 */
 export async function bindTrayBridge() {
-  // 时间更新节流推送
-  let tick = 0;
-  const onTime = () => {
-    if (++tick % 4 !== 0) return; // ~1s if 4Hz timeupdate bursts
-    pushTray();
-  };
-  // player.currentTime 由 audio timeupdate 写入；用 setInterval 更稳
   setInterval(() => {
     const t = current();
-    const title = t?.id ?? '';
-    if (title !== lastTitle) {
-      lastTitle = title;
+    const id = t?.id ?? '';
+    if (id !== lastTitle) {
+      lastTitle = id;
       lastEmit = '';
-      pushTray();
-    } else {
-      pushTray();
+      // 切歌时先清空，等歌词加载后再显示
+      void api.setTrayTitle('').catch(() => {});
     }
-  }, 800);
-
-  void onTime;
+    pushTray();
+  }, 500);
 
   await listen<string>('player-cmd', (e) => {
     switch (e.payload) {

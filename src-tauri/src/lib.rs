@@ -204,14 +204,23 @@ fn local_playlist_set_tracks(
 #[tauri::command]
 fn set_tray_title(app: AppHandle, text: String) -> R<()> {
     if let Some(tray) = app.tray_by_id("main") {
-        // macOS：标题会出现在图标旁；限制长度以免撑满菜单栏
-        let short = if text.chars().count() > 24 {
-            format!("{}…", text.chars().take(23).collect::<String>())
+        let t = text.trim();
+        // 菜单栏只显示短歌词；空则清掉标题，避免「白圈 + 截断歌名」的破版感
+        if t.is_empty() {
+            let _ = tray.set_title(None::<&str>);
+            let _ = tray.set_tooltip(Some("SlimMusic"));
         } else {
-            text.clone()
-        };
-        let _ = tray.set_title(Some(short));
-        let _ = tray.set_tooltip(Some(text));
+            let short: String = {
+                let chars: Vec<char> = t.chars().collect();
+                if chars.len() > 16 {
+                    format!("{}…", chars[..15].iter().collect::<String>())
+                } else {
+                    t.to_string()
+                }
+            };
+            let _ = tray.set_title(Some(short.as_str()));
+            let _ = tray.set_tooltip(Some(t));
+        }
     }
     Ok(())
 }
@@ -238,16 +247,16 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "退出 SlimMusic", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &play, &prev, &next, &quit])?;
 
-    let icon = app.default_window_icon().cloned().unwrap_or_else(|| {
-        Image::from_bytes(include_bytes!("../icons/32x32.png")).expect("tray icon")
-    });
+    // 菜单栏用透明底黑色音符模板图（不要用带色块的 app icon，否则会变成白圆坨）
+    let icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))
+        .expect("tray-template.png");
 
     let app_handle = app.clone();
     TrayIconBuilder::with_id("main")
         .icon(icon)
         .menu(&menu)
         .tooltip("SlimMusic")
-        .icon_as_template(true) // macOS 菜单栏：按模板着色
+        .icon_as_template(true) // macOS：按 alpha 作模板，系统绘成黑/白
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "show" => {
