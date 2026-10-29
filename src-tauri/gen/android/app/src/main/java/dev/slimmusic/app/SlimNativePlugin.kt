@@ -12,6 +12,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Base64
+import android.webkit.WebView
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -81,6 +84,28 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
     PlaybackBus.onRemote = { action ->
       main.post { emit(JSObject().put("type", "remote").put("action", action)) }
     }
+  }
+
+  override fun load(webView: WebView) {
+    // 后台时也保持渲染进程优先级，避免队列逻辑（JS）被系统回收
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+    }
+    // 返回键交给前端（关闭播放页等）；前端未接管时退到后台而不是销毁，播放继续
+    (activity as? ComponentActivity)?.onBackPressedDispatcher?.addCallback(
+      object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+          if (channel != null) emit(JSObject().put("type", "back"))
+          else activity.moveTaskToBack(true)
+        }
+      }
+    )
+  }
+
+  @Command
+  fun moveToBack(invoke: Invoke) {
+    main.post { activity.moveTaskToBack(true) }
+    invoke.resolve()
   }
 
   private fun emit(o: JSObject) {

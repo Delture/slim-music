@@ -12,7 +12,8 @@ export type NativeEvent =
   | { type: 'state'; playing: boolean; playWhenReady: boolean; buffering: boolean; position: number; duration: number }
   | { type: 'ended' }
   | { type: 'error'; message: string }
-  | { type: 'remote'; action: 'next' | 'prev' };
+  | { type: 'remote'; action: 'next' | 'prev' }
+  | { type: 'back' };
 
 export async function nativeListen(cb: (e: NativeEvent) => void) {
   const ch = new Channel<NativeEvent>();

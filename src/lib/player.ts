@@ -384,6 +384,13 @@ if (NATIVE) {
         if (e.action === 'next') next();
         else prev();
         break;
+      case 'back':
+        // 播放页打开时先关闭，否则退到后台（不销毁，播放继续）
+        void import('./session').then(({ session, closeNowPlaying }) => {
+          if (session.nowPlaying) closeNowPlaying();
+          else void nativeCall('moveToBack');
+        });
+        break;
     }
   }).catch((e) => console.warn('native player listen failed', e));
 } else if ('mediaSession' in navigator) {
