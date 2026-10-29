@@ -222,22 +222,9 @@ fn filetime_now() -> SystemTime {
     SystemTime::now()
 }
 
-fn set_file_times(path: &Path, t: SystemTime) {
-    // std only: recreate by reading? Use filetime crate? Keep simple — open write append empty.
-    // On Unix, libc utimes — avoid extra dep: rewrite same content is heavy.
-    // Use std::fs::File::open + set_modified via filetime not available.
-    // Best effort: copy mtime by appending zero bytes then truncate — skip.
-    let _ = (path, t);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        // touch via open write
-        let _ = fs::OpenOptions::new().append(true).open(path);
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = fs::OpenOptions::new().append(true).open(path);
-    }
+fn set_file_times(path: &Path, _t: SystemTime) {
+    // Best-effort touch so LRU can use mtime/atime.
+    let _ = fs::OpenOptions::new().append(true).open(path);
 }
 
 fn ext_from_ctype_or_url(ctype: &str, url: &str) -> &'static str {
