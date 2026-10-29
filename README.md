@@ -3,6 +3,8 @@
 自用的精简音乐播放器：**本地音乐 + 网易云（每日推荐 / 搜索 / 我的歌单）**。
 Tauri 2 + Rust + Vue 3，目标平台 macOS、Windows。没有 Node 侧车，也不打包 NeteaseCloudMusicApi，网易云接口直接在 Rust 里调用。
 
+> 作者：[Yuhua Zhang](https://github.com/Delture)（Delture）。本项目在 **Grok Bot** 辅助下开发完成。
+
 ## 功能
 
 | 页面 | 说明 |
