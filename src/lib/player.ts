@@ -203,7 +203,7 @@ function snapshot(): PlaybackSession {
     order: [...player.order],
     pos: player.pos,
     currentTime: audio.currentTime || player.currentTime || 0,
-    wasPlaying: player.playing && !audio.paused,
+    wasPlaying: false,
   };
 }
 
@@ -218,7 +218,7 @@ export function schedulePersist(delayMs = 800) {
   }, delayMs);
 }
 
-/** 从 playback.json 恢复队列与进度；若上次在播则自动续播，否则停在进度处待按播放 */
+/** 从 playback.json 恢复队列与进度；一律暂停在已存进度，不自动播放 */
 export async function restorePlaybackSession() {
   suppressPersist = true;
   try {
@@ -234,8 +234,7 @@ export async function restorePlaybackSession() {
       buildOrder(Math.max(0, Math.min(snap.pos ?? 0, player.queue.length - 1)));
     }
     const seekTo = Math.max(0, Number(snap.currentTime) || 0);
-    const autoplay = !!snap.wasPlaying;
-    await loadCurrent(autoplay, seekTo);
+    await loadCurrent(false, seekTo);
   } catch (e) {
     console.warn('restore playback failed', e);
   } finally {
