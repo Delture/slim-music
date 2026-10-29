@@ -195,7 +195,7 @@ async function onLike() {
         </button>
         <button title="上一首" @click="prev"><Icon name="previous" :size="16" /></button>
         <button class="big" :title="player.playing ? '暂停' : '播放'" @click="togglePlay">
-          <Icon :name="player.playing ? 'pause' : 'play'" :size="22" />
+          <Icon :name="player.playing ? 'pause' : 'play'" :size="22" :class="{ 'play-icon': !player.playing }" />
         </button>
         <button title="下一首" @click="next()"><Icon name="next" :size="16" /></button>
         <button
@@ -353,6 +353,14 @@ async function onLike() {
   width: 40px;
   height: 40px;
   background: var(--hover);
+}
+.ctrls .big :deep(svg),
+.ctrls .big > * {
+  display: block;
+}
+/* 三角形视觉重心偏左，右移/上移做光学居中 */
+.ctrls .big .play-icon {
+  transform: translate(2px, -1px);
 }
 .ctrls .big:hover {
   background: var(--border);
