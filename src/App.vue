@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, type Component } from 'vue';
-import { initSession, session } from './lib/session';
+import { closeNowPlaying, initSession, session } from './lib/session';
 import { bindTrayBridge } from './lib/tray';
 import PlayerBar from './components/PlayerBar.vue';
 import Icon from './components/Icon.vue';
@@ -22,6 +22,13 @@ const pages: { key: string; label: string; icon: string; view: Component }[] = [
 ];
 const page = ref('daily');
 const ready = ref(false);
+
+function go(key: string) {
+  page.value = key;
+  // 播放页是叠在内容区上的：切侧栏时先退出，再显示目标页
+  closeNowPlaying();
+}
+
 onMounted(async () => {
   await initSession().catch(console.error);
   await bindTrayBridge().catch(console.error);
@@ -36,7 +43,7 @@ onMounted(async () => {
         v-for="p in pages"
         :key="p.key"
         :class="{ on: page === p.key }"
-        @click="page = p.key"
+        @click="go(p.key)"
       >
         <Icon :name="p.icon" :size="15" />
         <span>{{ p.label }}</span>
