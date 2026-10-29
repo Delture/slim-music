@@ -80,6 +80,7 @@ src-tauri/src/
 
 - [x] 歌词播放页、红心、取消收藏歌单、托盘/关窗不停播、应用图标
 - [x] 本机播放列表（添加/删除/排序，与播放队列分离）
+- [x] 歌单元数据 stale-while-revalidate + 音频磁盘缓存（LRU）
 - [ ] 系统媒体键：目前有 `navigator.mediaSession` + 托盘控制，原生 media key 未验证
 - [ ] 本地歌曲封面 / 本地歌词
 - [ ] 本地扫描结果缓存

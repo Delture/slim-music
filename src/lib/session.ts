@@ -6,7 +6,7 @@ import { refreshLocalPlaylists } from './localPlaylists';
 
 export const session = reactive({
   profile: null as Profile | null,
-  settings: { quality: 'exhigh', localFolders: [], volume: 0.8 } as Settings,
+  settings: { quality: 'exhigh', localFolders: [], volume: 0.8, cacheEnabled: true, audioCacheMaxMb: 2048 } as Settings,
   /** 已红心的网易云歌曲 id */
   likedIds: new Set<number>(),
   /** 全屏播放页是否打开 */

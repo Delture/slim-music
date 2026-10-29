@@ -12,16 +12,26 @@ pub struct Settings {
     /// 本地音乐文件夹
     pub local_folders: Vec<String>,
     pub volume: f64,
+    /// 启用歌单/音频本地缓存
+    pub cache_enabled: bool,
+    /// 音频缓存上限（MB）
+    pub audio_cache_max_mb: u64,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { quality: "exhigh".into(), local_folders: vec![], volume: 0.8 }
+        Self {
+            quality: "exhigh".into(),
+            local_folders: vec![],
+            volume: 0.8,
+            cache_enabled: true,
+            audio_cache_max_mb: 2048,
+        }
     }
 }
 
 pub struct Store {
-    dir: PathBuf,
+    pub dir: PathBuf,
 }
 
 impl Store {
@@ -43,7 +53,9 @@ impl Store {
         fs::write(self.file("settings.json"), json).map_err(|e| e.to_string())
     }
     pub fn load_cookie(&self) -> Option<String> {
-        fs::read_to_string(self.file("cookie.txt")).ok().filter(|s| !s.trim().is_empty())
+        fs::read_to_string(self.file("cookie.txt"))
+            .ok()
+            .filter(|s| !s.trim().is_empty())
     }
     pub fn save_cookie(&self, cookie: Option<&str>) -> Result<(), String> {
         let p = self.file("cookie.txt");

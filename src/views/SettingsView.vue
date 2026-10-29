@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api } from '../lib/api';
 import { refreshProfile, saveSettings, session } from '../lib/session';
-import { QUALITY_LABELS, type Quality } from '../lib/types';
+import { QUALITY_LABELS, type CacheStats, type Quality } from '../lib/types';
 
 const qrSvg = ref('');
 const qrMsg = ref('');
@@ -52,6 +52,37 @@ async function removeFolder(i: number) {
   await saveSettings();
 }
 const qualities = Object.keys(QUALITY_LABELS) as Quality[];
+const stats = ref<CacheStats | null>(null);
+const cacheBusy = ref(false);
+
+function fmtBytes(n: number) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+  return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+async function refreshStats() {
+  try {
+    stats.value = await api.cacheStats();
+  } catch {
+    stats.value = null;
+  }
+}
+
+async function clearCache() {
+  if (!confirm('确定清空歌单与音频缓存？本地音乐文件不受影响。')) return;
+  cacheBusy.value = true;
+  try {
+    stats.value = await api.cacheClear();
+  } catch (e) {
+    alert(String(e));
+  } finally {
+    cacheBusy.value = false;
+  }
+}
+
+onMounted(refreshStats);
 </script>
 
 <template>
@@ -83,6 +114,36 @@ const qualities = Object.keys(QUALITY_LABELS) as Quality[];
       <button @click="removeFolder(i)">移除</button>
     </div>
     <button @click="addFolder">添加文件夹</button>
+
+    <h3>本地缓存</h3>
+    <label class="row">
+      <input
+        type="checkbox"
+        v-model="session.settings.cacheEnabled"
+        @change="saveSettings"
+      />
+      启用歌单与音频缓存（默认开）
+    </label>
+    <div class="row">
+      <span>音频缓存上限</span>
+      <input
+        type="number"
+        min="100"
+        step="100"
+        style="width: 100px"
+        v-model.number="session.settings.audioCacheMaxMb"
+        @change="saveSettings"
+      />
+      <span>MB</span>
+    </div>
+    <p class="muted" v-if="stats">
+      已用 {{ fmtBytes(stats.totalBytes) }}（元数据 {{ fmtBytes(stats.metaBytes) }} /
+      音频 {{ fmtBytes(stats.audioBytes) }}，{{ stats.audioFiles }} 个文件）
+    </p>
+    <div class="row">
+      <button :disabled="cacheBusy" @click="refreshStats">刷新用量</button>
+      <button :disabled="cacheBusy" @click="clearCache">清空缓存</button>
+    </div>
   </section>
 </template>
 

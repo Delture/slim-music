@@ -46,7 +46,12 @@ function buildOrder(startIndex: number) {
 
 async function resolveSrc(t: Track): Promise<string | null> {
   if (t.source === 'local' && t.path) return convertFileSrc(t.path);
-  if (t.source === 'netease' && t.ncmId != null) return api.songUrl(t.ncmId);
+  if (t.source === 'netease' && t.ncmId != null) {
+    const src = await api.songPlaySrc(t.ncmId);
+    if (!src) return null;
+    if (src.kind === 'file') return convertFileSrc(src.value);
+    return src.value;
+  }
   return null;
 }
 

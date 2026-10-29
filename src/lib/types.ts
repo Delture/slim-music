@@ -47,6 +47,27 @@ export interface Settings {
   quality: Quality;
   localFolders: string[];
   volume: number;
+  cacheEnabled: boolean;
+  audioCacheMaxMb: number;
+}
+
+export interface CacheHit<T> {
+  data: T;
+  fromCache: boolean;
+  ageSecs: number;
+}
+
+export interface PlaySrc {
+  kind: 'file' | 'url' | string;
+  value: string;
+  fromCache: boolean;
+}
+
+export interface CacheStats {
+  totalBytes: number;
+  metaBytes: number;
+  audioBytes: number;
+  audioFiles: number;
 }
 
 export const QUALITY_LABELS: Record<Quality, string> = {

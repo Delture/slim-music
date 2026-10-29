@@ -12,44 +12,65 @@ const tracks = ref<Track[]>([]);
 const err = ref('');
 const loading = ref(false);
 const busy = ref(false);
+const fromCache = ref(false);
 
 const canUnsubscribe = computed(
   () => !!active.value && active.value.subscribed && !active.value.isLiked,
 );
-/** 自己创建的歌单可删；「我喜欢的音乐」永久保护 */
 const canDelete = computed(
   () => !!active.value && active.value.owned && !active.value.isLiked,
 );
 
-async function loadLists() {
+async function loadLists(refresh = false) {
   err.value = '';
   try {
-    lists.value = await api.myPlaylists();
+    const hit = await api.myPlaylists(refresh);
+    lists.value = hit.data;
+    fromCache.value = hit.fromCache;
     const keep =
       lists.value.find((l) => l.id === active.value?.id) ||
       lists.value.find((l) => l.isLiked) ||
       lists.value[0];
-    if (keep) await open(keep);
+    if (keep) await open(keep, false);
     else {
       active.value = null;
       tracks.value = [];
+    }
+    // 后台刷新歌单列表
+    if (!refresh && hit.fromCache) {
+      void api.myPlaylists(true).then((h) => {
+        lists.value = h.data;
+        fromCache.value = false;
+      });
     }
   } catch (e) {
     err.value = String(e);
   }
 }
 
-async function open(p: Playlist) {
+async function open(p: Playlist, doBackgroundRefresh = true) {
   active.value = p;
-  tracks.value = [];
   loading.value = true;
   err.value = '';
   try {
-    tracks.value = await api.playlistTracks(p.id);
-  } catch (e) {
-    err.value = String(e);
-  } finally {
+    const hit = await api.playlistTracks(p.id, false);
+    if (active.value?.id !== p.id) return;
+    tracks.value = hit.data;
+    fromCache.value = hit.fromCache;
     loading.value = false;
+    if (doBackgroundRefresh && (hit.fromCache || hit.ageSecs > 0)) {
+      void api.playlistTracks(p.id, true).then((h) => {
+        if (active.value?.id === p.id) {
+          tracks.value = h.data;
+          fromCache.value = false;
+        }
+      });
+    }
+  } catch (e) {
+    if (active.value?.id === p.id) {
+      err.value = String(e);
+      loading.value = false;
+    }
   }
 }
 
@@ -59,7 +80,7 @@ async function unsubscribe() {
   busy.value = true;
   try {
     await api.playlistSubscribe(active.value.id, false);
-    await loadLists();
+    await loadLists(true);
   } catch (e) {
     alert(String(e));
   } finally {
@@ -80,7 +101,7 @@ async function removeOwned() {
   try {
     await api.playlistDelete(active.value.id);
     active.value = null;
-    await loadLists();
+    await loadLists(true);
   } catch (e) {
     alert(String(e));
   } finally {
@@ -88,7 +109,7 @@ async function removeOwned() {
   }
 }
 
-onMounted(() => session.profile && loadLists());
+onMounted(() => session.profile && loadLists(false));
 </script>
 
 <template>
@@ -109,11 +130,12 @@ onMounted(() => session.profile && loadLists());
     <div v-if="active" class="body">
       <header class="head">
         <h2>{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
+        <span v-if="fromCache" class="badge muted">缓存</span>
         <button :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
         <button v-if="canUnsubscribe" :disabled="busy" @click="unsubscribe">取消收藏</button>
         <button v-if="canDelete" :disabled="busy" class="danger" @click="removeOwned">删除歌单</button>
       </header>
-      <p v-if="loading" class="muted">加载中…</p>
+      <p v-if="loading && !tracks.length" class="muted">加载中…</p>
       <p v-if="err" class="error">{{ err }}</p>
       <TrackList :tracks="tracks" />
     </div>
@@ -153,6 +175,12 @@ onMounted(() => session.profile && loadLists());
 }
 .body {
   min-width: 0;
+}
+.badge {
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
 }
 .danger {
   color: #c62f2f;

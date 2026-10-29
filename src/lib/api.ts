@@ -1,5 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { LocalPlaylist, LyricPayload, Playlist, Profile, Settings, Track } from './types';
+import type {
+  CacheHit,
+  CacheStats,
+  LocalPlaylist,
+  LyricPayload,
+  Playlist,
+  PlaySrc,
+  Profile,
+  Settings,
+  Track,
+} from './types';
 
 export const api = {
   loginQrKey: () => invoke<{ key: string; svg: string }>('login_qr_key'),
@@ -8,9 +18,14 @@ export const api = {
   profile: () => invoke<Profile | null>('get_profile'),
   daily: () => invoke<Track[]>('daily_recommend'),
   search: (keywords: string, offset = 0) => invoke<Track[]>('search', { keywords, offset }),
-  myPlaylists: () => invoke<Playlist[]>('my_playlists'),
-  playlistTracks: (id: number) => invoke<Track[]>('playlist_tracks', { id }),
+  myPlaylists: (refresh = false) =>
+    invoke<CacheHit<Playlist[]>>('my_playlists', { refresh }),
+  playlistTracks: (id: number, refresh = false) =>
+    invoke<CacheHit<Track[]>>('playlist_tracks', { id, refresh }),
   songUrl: (id: number) => invoke<string | null>('song_url', { id }),
+  songPlaySrc: (id: number) => invoke<PlaySrc | null>('song_play_src', { id }),
+  cacheStats: () => invoke<CacheStats>('cache_stats'),
+  cacheClear: () => invoke<CacheStats>('cache_clear'),
   getSettings: () => invoke<Settings>('get_settings'),
   saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
   scanLocal: () => invoke<Track[]>('scan_local'),

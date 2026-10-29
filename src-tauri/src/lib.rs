@@ -1,4 +1,5 @@
 //! Tauri 入口：所有前端调用都经由这里的 #[tauri::command]。
+mod cache;
 mod local;
 mod local_playlists;
 mod model;
@@ -17,6 +18,7 @@ use tokio::sync::Mutex;
 
 struct AppState {
     store: Store,
+    cache: cache::NetCache,
     local_pls: local_playlists::LocalPlaylistStore,
     cookie: Mutex<Option<String>>,
     settings: Mutex<Settings>,
@@ -73,15 +75,72 @@ async fn search(state: State<'_, AppState>, keywords: String, offset: u32) -> R<
 }
 
 #[tauri::command]
-async fn my_playlists(state: State<'_, AppState>) -> R<Vec<Playlist>> {
+async fn my_playlists(
+    state: State<'_, AppState>,
+    refresh: Option<bool>,
+) -> R<cache::CacheHit<Vec<Playlist>>> {
+    let refresh = refresh.unwrap_or(false);
+    let enabled = state.settings.lock().await.cache_enabled;
+    if enabled && !refresh {
+        if let Some(hit) = state.cache.read_json::<Vec<Playlist>>("playlists") {
+            return Ok(hit);
+        }
+    }
     let c = cookie(&state).await;
     let p = ncm::profile(&c).await?.ok_or("请先登录")?;
-    ncm::user_playlists(&c, p.user_id).await
+    match ncm::user_playlists(&c, p.user_id).await {
+        Ok(list) => {
+            if enabled {
+                let _ = state.cache.write_json("playlists", &list);
+            }
+            Ok(cache::CacheHit {
+                data: list,
+                from_cache: false,
+                age_secs: 0,
+            })
+        }
+        Err(e) => {
+            if let Some(hit) = state.cache.read_json::<Vec<Playlist>>("playlists") {
+                return Ok(hit);
+            }
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
-async fn playlist_tracks(state: State<'_, AppState>, id: i64) -> R<Vec<Track>> {
-    ncm::playlist_tracks(&cookie(&state).await, id).await
+async fn playlist_tracks(
+    state: State<'_, AppState>,
+    id: i64,
+    refresh: Option<bool>,
+) -> R<cache::CacheHit<Vec<Track>>> {
+    let refresh = refresh.unwrap_or(false);
+    let key = format!("playlist_{id}");
+    let enabled = state.settings.lock().await.cache_enabled;
+    if enabled && !refresh {
+        if let Some(hit) = state.cache.read_json::<Vec<Track>>(&key) {
+            return Ok(hit);
+        }
+    }
+    let c = cookie(&state).await;
+    match ncm::playlist_tracks(&c, id).await {
+        Ok(tracks) => {
+            if enabled {
+                let _ = state.cache.write_json(&key, &tracks);
+            }
+            Ok(cache::CacheHit {
+                data: tracks,
+                from_cache: false,
+                age_secs: 0,
+            })
+        }
+        Err(e) => {
+            if let Some(hit) = state.cache.read_json::<Vec<Track>>(&key) {
+                return Ok(hit);
+            }
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -89,6 +148,58 @@ async fn song_url(state: State<'_, AppState>, id: i64) -> R<Option<String>> {
     let c = cookie(&state).await;
     let level = state.settings.lock().await.quality.clone();
     ncm::song_url(&c, id, &level).await
+}
+
+/// 播放地址：优先本地音频缓存，否则返回 URL 并后台下载
+#[tauri::command]
+async fn song_play_src(state: State<'_, AppState>, id: i64) -> R<Option<cache::PlaySrc>> {
+    let (enabled, quality, max_mb) = {
+        let s = state.settings.lock().await;
+        (s.cache_enabled, s.quality.clone(), s.audio_cache_max_mb)
+    };
+    let max_bytes = max_mb.saturating_mul(1024 * 1024);
+
+    if enabled {
+        if let Some(path) = state.cache.audio_cached_path(id, &quality) {
+            return Ok(Some(cache::PlaySrc {
+                kind: "file".into(),
+                value: path.to_string_lossy().into(),
+                from_cache: true,
+            }));
+        }
+    }
+
+    let c = cookie(&state).await;
+    let url = ncm::song_url(&c, id, &quality).await?;
+    let Some(url) = url else {
+        return Ok(None);
+    };
+
+    if enabled {
+        let cache = state.cache.clone();
+        let q = quality.clone();
+        let u = url.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = cache.download_audio(id, &q, &u, max_bytes).await;
+        });
+    }
+
+    Ok(Some(cache::PlaySrc {
+        kind: "url".into(),
+        value: url,
+        from_cache: false,
+    }))
+}
+
+#[tauri::command]
+fn cache_stats(state: State<'_, AppState>) -> R<cache::CacheStats> {
+    Ok(state.cache.stats())
+}
+
+#[tauri::command]
+fn cache_clear(state: State<'_, AppState>) -> R<cache::CacheStats> {
+    state.cache.clear()?;
+    Ok(state.cache.stats())
 }
 
 #[tauri::command]
@@ -310,11 +421,13 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             let local_pls = local_playlists::LocalPlaylistStore::new(dir.clone());
+            let cache = cache::NetCache::new(dir.clone());
             let store = Store::new(dir);
             let state = AppState {
                 cookie: Mutex::new(store.load_cookie()),
                 settings: Mutex::new(store.load_settings()),
                 local_pls,
+                cache,
                 store,
             };
             app.manage(state);
@@ -338,6 +451,9 @@ pub fn run() {
             my_playlists,
             playlist_tracks,
             song_url,
+            song_play_src,
+            cache_stats,
+            cache_clear,
             get_settings,
             save_settings,
             scan_local,
