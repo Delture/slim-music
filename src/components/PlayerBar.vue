@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import {
   current,
   cycleRepeat,
@@ -23,51 +23,87 @@ const repeatLabel = computed(
 const volumePct = computed(() => Math.round(player.volume * 100));
 const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'volume'));
 
-/** 进度条：拖动中不跟 timeupdate 抢值，避免拇指抖动 */
-const progressEl = ref<HTMLInputElement | null>(null);
-const seeking = ref(false);
-const displayTime = ref(0);
-let raf = 0;
+/**
+ * 自定义进度条：不用 <input type=range>（WebKit 填充轨会每帧重算导致整条左右抖）。
+ * 只通过 rAF 写 transform / textContent，拖动时 gated，无 CSS transition。
+ */
+const trackEl = ref<HTMLElement | null>(null);
+const fillEl = ref<HTMLElement | null>(null);
+const thumbEl = ref<HTMLElement | null>(null);
+const timeCurEl = ref<HTMLElement | null>(null);
+const timeDurEl = ref<HTMLElement | null>(null);
 
-function syncProgressDom() {
-  if (seeking.value) return;
-  displayTime.value = player.currentTime;
-  const el = progressEl.value;
-  if (el) {
-    const dur = player.duration || 0;
-    if (el.max !== String(dur)) el.max = String(dur);
-    // 直接写 DOM，避开 Vue 每帧重绑 :value 导致的拇指回弹
-    if (document.activeElement !== el) el.value = String(player.currentTime);
+let seeking = false;
+let seekRatio = 0;
+let raf = 0;
+let lastCurText = '';
+let lastDurText = '';
+
+function ratioNow(): number {
+  if (seeking) return seekRatio;
+  const d = player.duration;
+  if (!d || !isFinite(d) || d <= 0) return 0;
+  return Math.min(1, Math.max(0, player.currentTime / d));
+}
+
+function paint(r: number) {
+  // scaleX 不触发 layout；transform-origin:left
+  if (fillEl.value) fillEl.value.style.transform = `scaleX(${r})`;
+  if (thumbEl.value) thumbEl.value.style.left = `${r * 100}%`;
+  const cur = seeking ? r * (player.duration || 0) : player.currentTime;
+  const curT = fmtTime(cur);
+  const durT = fmtTime(player.duration);
+  if (timeCurEl.value && curT !== lastCurText) {
+    timeCurEl.value.textContent = curT;
+    lastCurText = curT;
+  }
+  if (timeDurEl.value && durT !== lastDurText) {
+    timeDurEl.value.textContent = durT;
+    lastDurText = durT;
   }
 }
 
 function tick() {
-  syncProgressDom();
+  paint(ratioNow());
   raf = requestAnimationFrame(tick);
+}
+
+function ratioFromEvent(e: PointerEvent): number {
+  const el = trackEl.value;
+  if (!el) return 0;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0) return 0;
+  return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+}
+
+function onPointerDown(e: PointerEvent) {
+  const el = trackEl.value;
+  if (!el) return;
+  el.setPointerCapture(e.pointerId);
+  seeking = true;
+  seekRatio = ratioFromEvent(e);
+  paint(seekRatio);
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!seeking) return;
+  seekRatio = ratioFromEvent(e);
+  paint(seekRatio);
+}
+
+function onPointerUp(e: PointerEvent) {
+  if (!seeking) return;
+  seekRatio = ratioFromEvent(e);
+  const dur = player.duration || 0;
+  seek(seekRatio * dur);
+  seeking = false;
+  paint(ratioNow());
 }
 
 onMounted(() => {
   raf = requestAnimationFrame(tick);
 });
 onUnmounted(() => cancelAnimationFrame(raf));
-
-watch(
-  () => player.duration,
-  () => syncProgressDom(),
-);
-
-function onSeekInput(e: Event) {
-  seeking.value = true;
-  displayTime.value = +(e.target as HTMLInputElement).value;
-}
-function onSeekCommit() {
-  const el = progressEl.value;
-  if (!el) { seeking.value = false; return; }
-  const v = +el.value;
-  seek(v);
-  displayTime.value = v;
-  seeking.value = false;
-}
 
 async function onLike() {
   const id = t.value?.ncmId;
@@ -120,19 +156,24 @@ async function onLike() {
         </button>
       </div>
       <div class="progress">
-        <span>{{ fmtTime(displayTime) }}</span>
-        <input
-          ref="progressEl"
+        <span ref="timeCurEl" class="time">0:00</span>
+        <div
+          ref="trackEl"
           class="seek"
-          type="range"
-          min="0"
-          step="0.05"
-          :max="player.duration || 0"
-          @input="onSeekInput"
-          @change="onSeekCommit"
-          @pointerup="onSeekCommit"
-        />
-        <span>{{ fmtTime(player.duration) }}</span>
+          role="slider"
+          :aria-valuenow="player.currentTime"
+          :aria-valuemax="player.duration || 0"
+          tabindex="0"
+          @pointerdown.prevent="onPointerDown"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+        >
+          <div class="seek-rail"></div>
+          <div ref="fillEl" class="seek-fill"></div>
+          <div ref="thumbEl" class="seek-thumb"></div>
+        </div>
+        <span ref="timeDurEl" class="time">0:00</span>
       </div>
       <div v-if="player.error" class="err">{{ player.error }}</div>
     </div>
@@ -264,16 +305,56 @@ async function onLike() {
   font-size: 12px;
   color: var(--muted);
 }
-.progress .seek {
+.time {
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: center;
+}
+.seek {
+  position: relative;
   flex: 1;
-  /* 播放过程中关掉拇指过渡，避免和 JS 更新打架 */
+  height: 16px;
+  cursor: pointer;
+  touch-action: none;
+  /* 禁止任何过渡，避免填充宽度动画造成左右抖 */
   transition: none;
 }
-.progress .seek::-webkit-slider-thumb {
+.seek-rail,
+.seek-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
   transition: none;
+  pointer-events: none;
 }
-.progress .seek::-moz-range-thumb {
+.seek-rail {
+  background: var(--border);
+}
+.seek-fill {
+  right: auto;
+  width: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+.seek-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+  left: 0%;
   transition: none;
+  pointer-events: none;
+  will-change: left;
 }
 .err {
   color: #c62f2f;
