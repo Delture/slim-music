@@ -2,18 +2,21 @@
 mod cache;
 mod local;
 mod local_playlists;
+mod mobile;
 mod model;
 mod ncm;
 mod settings;
 
 use model::{LyricPayload, Playlist, Profile, Track};
 use settings::{PlaybackSession, Settings, Store, QUALITY_LEVELS};
+#[cfg(desktop)]
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, State, WindowEvent,
+    Emitter, WindowEvent,
 };
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 struct AppState {
@@ -277,7 +280,24 @@ async fn get_lyric(state: State<'_, AppState>, id: i64) -> R<LyricPayload> {
 
 /// 本地音频旁同名 .lrc；结果可进磁盘缓存（key 含路径哈希）。
 #[tauri::command]
-async fn get_local_lyric(state: State<'_, AppState>, path: String) -> R<LyricPayload> {
+async fn get_local_lyric(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> R<LyricPayload> {
+    if path.starts_with("content://") {
+        let v = tauri::async_runtime::spawn_blocking(move || {
+            mobile::call(&app, "readLrc", serde_json::json!({ "uri": path }))
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        let raw = v.get("lrc").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        return Ok(local::lyric_from_raw(raw));
+    }
+    get_local_lyric_file(state, path).await
+}
+
+async fn get_local_lyric_file(state: State<'_, AppState>, path: String) -> R<LyricPayload> {
     let enabled = state.settings.lock().await.cache_enabled;
     let key = format!("lyric_local_{:x}", simple_hash(&path));
     if enabled {
@@ -379,6 +399,7 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+#[cfg(desktop)]
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
     let play = MenuItem::with_id(app, "play", "播放 / 暂停", true, None::<&str>)?;
@@ -438,13 +459,21 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(mobile::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
+            let _ = std::fs::create_dir_all(&dir);
             let local_pls = local_playlists::LocalPlaylistStore::new(dir.clone());
-            let cache = cache::NetCache::new(dir.clone());
+            // 移动端：网络/音频缓存放系统 cache 目录（空间不足时可被系统回收）
+            #[cfg(mobile)]
+            let cache_root = app.path().app_cache_dir().unwrap_or_else(|_| dir.clone());
+            #[cfg(desktop)]
+            let cache_root = dir.clone();
+            let cache = cache::NetCache::new(cache_root);
             let store = Store::new(dir);
             let state = AppState {
                 cookie: Mutex::new(store.load_cookie()),
@@ -454,20 +483,25 @@ pub fn run() {
                 store,
             };
             app.manage(state);
-            build_tray(app.handle())?;
-            // 托盘仅图标 + 菜单，不设标题（避免挤占右侧状态栏）
-            if let Some(tray) = app.handle().tray_by_id("main") {
-                let _ = tray.set_title(None::<&str>);
+            #[cfg(desktop)]
+            {
+                build_tray(app.handle())?;
+                // 托盘仅图标 + 菜单，不设标题（避免挤占右侧状态栏）
+                if let Some(tray) = app.handle().tray_by_id("main") {
+                    let _ = tray.set_title(None::<&str>);
+                }
             }
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            // 红灯 / 关闭：隐藏窗口，音频继续在后台播；真正退出走托盘「退出」
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
-            }
-        })
+        });
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(|window, event| {
+        // 红灯 / 关闭：隐藏窗口，音频继续在后台播；真正退出走托盘「退出」
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+    });
+    builder
         .invoke_handler(tauri::generate_handler![
             login_qr_key,
             login_qr_check,
@@ -502,7 +536,10 @@ pub fn run() {
             local_playlist_move_track,
             local_playlist_set_tracks,
             show_main_window,
-            quit_app
+            quit_app,
+            mobile::native_call,
+            mobile::native_listen,
+            mobile::platform_info
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 失败");

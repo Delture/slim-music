@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isMobile } from '../lib/native';
 // 通用歌曲列表。播放：把当前列表设为「播放队列」从该曲开始（不影响本机播放列表内容）。
 import { computed, reactive, ref } from 'vue';
 import type { Track } from '../lib/types';
@@ -14,7 +15,8 @@ import {
 import SourceBadge from './SourceBadge.vue';
 import Icon from './Icon.vue';
 
-const PLAY_ON_SINGLE_CLICK = false;
+// 触屏没有双击习惯：移动端单击即播放
+const PLAY_ON_SINGLE_CLICK = isMobile;
 
 const props = withDefaults(
   defineProps<{
@@ -358,5 +360,21 @@ function move(i: number, dir: -1 | 1) {
 }
 .menu .muted-item:hover {
   background: transparent;
+}
+
+@media (max-width: 700px) {
+  .row {
+    grid-template-columns: 44px minmax(0, 1fr) 40px;
+    gap: 8px;
+    padding: 8px 4px;
+    min-height: 56px;
+  }
+  .row .no,
+  .row .album,
+  .row .dur,
+  .row > .badge { display: none; }
+  .row:has(.ord) { grid-template-columns: 44px minmax(0, 1fr) 40px 72px; }
+  .cover { width: 44px; height: 44px; }
+  .heart { min-width: 40px; min-height: 40px; }
 }
 </style>

@@ -168,7 +168,7 @@ async function onLike() {
 </script>
 
 <template>
-  <footer class="bar">
+  <footer class="bar" :class="{ full: session.nowPlaying }">
     <div class="now" title="打开播放页" @click="openNp">
       <img v-if="t?.cover" :src="coverSrc(t.cover)" class="cover" />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
@@ -190,15 +190,16 @@ async function onLike() {
 
     <div class="center">
       <div class="ctrls">
-        <button :class="{ on: player.shuffle }" title="随机" @click="toggleShuffle">
+        <button class="opt" :class="{ on: player.shuffle }" title="随机" @click="toggleShuffle">
           <Icon name="shuffle" :size="15" />
         </button>
-        <button title="上一首" @click="prev"><Icon name="previous" :size="16" /></button>
+        <button class="opt" title="上一首" @click="prev"><Icon name="previous" :size="16" /></button>
         <button class="big" :title="player.playing ? '暂停' : '播放'" @click="togglePlay">
           <Icon :name="player.playing ? 'pause' : 'play'" :size="22" :class="{ 'play-icon': !player.playing }" />
         </button>
         <button title="下一首" @click="next()"><Icon name="next" :size="16" /></button>
         <button
+          class="opt"
           :class="{ on: player.repeat !== 'off' }"
           :title="repeatLabel"
           @click="cycleRepeat"
@@ -492,5 +493,32 @@ async function onLike() {
 .queue {
   min-width: 40px;
   text-align: right;
+}
+
+/* 手机：底部迷你播放条（封面+标题+播放/下一首）；播放页打开时展开完整控制 */
+@media (max-width: 700px) {
+  .bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .vol { display: none; }
+  .cover { width: 42px; height: 42px; }
+  .heart { padding: 10px; }
+  .center .progress, .ctrls .opt { display: none; }
+  .ctrls button { min-width: 44px; min-height: 44px; }
+  .ctrls .big { width: 44px; height: 44px; }
+  .err { display: none; }
+  .bar.full {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+  .bar.full .now { display: none; }
+  .bar.full .center .progress, .bar.full .ctrls .opt { display: flex; }
+  .bar.full .ctrls { gap: 18px; }
+  .bar.full .ctrls .big { width: 56px; height: 56px; }
+  .bar.full .err { display: block; }
+  .seek { height: 28px; }
+  .seek-thumb { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
 }
 </style>

@@ -116,3 +116,14 @@ pub fn load_sidecar_lrc(audio_path: &str) -> Result<LyricPayload, String> {
         translated: None,
     })
 }
+
+/// 由原始 LRC 文本构造歌词（Android 由原生层读取同名 .lrc）。
+pub fn lyric_from_raw(raw: String) -> LyricPayload {
+    let raw = raw.trim_start_matches('\u{feff}').to_string();
+    let lines = ncm::parse_lrc(&raw);
+    LyricPayload {
+        lines,
+        raw,
+        translated: None,
+    }
+}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isAndroid, openExternal, saveImage } from '../lib/native';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api } from '../lib/api';
@@ -8,6 +9,7 @@ import { clearLyricMemory } from '../lib/lyrics';
 import { QUALITY_LABELS, type CacheStats, type Quality } from '../lib/types';
 
 const qrSvg = ref('');
+const qrUrl = ref('');
 const qrMsg = ref('');
 let timer: number | undefined;
 
@@ -20,6 +22,8 @@ async function startLogin() {
   stopPoll();
   const { key, svg } = await api.loginQrKey();
   qrSvg.value = svg;
+  qrSaved.value = false;
+  qrUrl.value = `https://music.163.com/login?codekey=${key}`;
   qrMsg.value = '请用网易云音乐 App 扫码';
   timer = window.setInterval(async () => {
     const code = await api.loginQrCheck(key).catch(() => -1);
@@ -86,6 +90,32 @@ async function clearCache() {
 }
 
 onMounted(refreshStats);
+
+const qrSaved = ref(false);
+
+async function openInNcm() {
+  if (!qrUrl.value) return;
+  // 优先网易云 App 的 orpheus 协议，失败再交给系统（App Links / 浏览器）
+  const deep = `orpheus://open?url=${encodeURIComponent(qrUrl.value)}`;
+  if (!(await openExternal(deep).catch(() => false))) await openExternal(qrUrl.value).catch(() => false);
+}
+
+async function saveQr() {
+  const svg = qrSvg.value;
+  if (!svg) return;
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  const size = 720;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.drawImage(img, 0, 0, size, size);
+  await saveImage(canvas.toDataURL('image/png'), `slimmusic-login-${Date.now()}.png`);
+  qrSaved.value = true;
+}
 </script>
 
 <template>
@@ -102,6 +132,10 @@ onMounted(refreshStats);
       <button @click="startLogin">扫码登录</button>
       <!-- 正方白底 + 居中 SVG，避免 inline SVG 基线空隙造成参差白边 -->
       <div v-if="qrSvg" class="qr" v-html="qrSvg"></div>
+      <div v-if="qrSvg && isAndroid" class="row qr-actions">
+        <button @click="openInNcm">在网易云音乐中打开</button>
+        <button @click="saveQr">{{ qrSaved ? '已保存到相册' : '保存二维码' }}</button>
+      </div>
       <p class="muted">{{ qrMsg }}</p>
     </div>
 
@@ -111,12 +145,14 @@ onMounted(refreshStats);
     </select>
     <p class="muted">无损 / Hi-Res 需要对应会员；拿不到时网易云会返回较低音质或空地址。</p>
 
+    <template v-if="!isAndroid">
     <h3>本地音乐文件夹</h3>
     <div v-for="(f, i) in session.settings.localFolders" :key="f" class="row">
       <code>{{ f }}</code>
       <button @click="removeFolder(i)">移除</button>
     </div>
     <button @click="addFolder">添加文件夹</button>
+    </template>
 
     <h3>本地缓存</h3>
     <label class="row">

@@ -277,4 +277,17 @@ async function onLike() {
   color: var(--muted);
   text-align: center;
 }
+
+@media (max-width: 700px) {
+  .np { padding: 8px 16px 0; }
+  .back { min-height: 44px; font-size: 15px; }
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px;
+  }
+  .left { flex-direction: row; align-items: center; gap: 12px; }
+  .left .cover { width: 96px; height: 96px; flex-shrink: 0; }
+  .meta { text-align: left; min-width: 0; }
+}
 </style>

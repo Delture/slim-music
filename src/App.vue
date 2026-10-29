@@ -37,7 +37,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" :class="{ 'np-open': session.nowPlaying }">
     <nav class="nav">
       <a
         v-for="p in pages"

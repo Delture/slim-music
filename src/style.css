@@ -34,3 +34,44 @@ button, input, select { font: inherit; padding: 5px 12px; border: 1px solid var(
 button { cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 input[type='range'] { padding: 0; border: 0; accent-color: var(--accent); }
+
+/* ---------- 窄屏 / 手机：底部标签栏 + 紧凑播放条 ---------- */
+@media (max-width: 700px) {
+  html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+  }
+  .main-col { grid-row: 1; }
+  .player { grid-row: 2; }
+  .nav {
+    grid-row: 3;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 0;
+    padding: 2px 4px calc(2px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .nav a {
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 0;
+    min-height: 48px;
+    justify-content: center;
+    font-size: 10px;
+    border-radius: 6px;
+  }
+  .nav a:hover { background: none; }
+  .nav a.on { background: none; }
+  .nav .user { display: none; }
+  .app.np-open .nav { display: none; }
+  .content { padding: 12px 12px 16px; }
+  .head { flex-wrap: wrap; gap: 8px; }
+  .head h2 { font-size: 20px; flex-basis: 100%; }
+  button, input, select { min-height: 40px; font-size: 16px; }
+}

@@ -14,5 +14,10 @@
     "core:window:allow-close",
     "core:tray:default",
     "dialog:allow-open"
+  ],
+  "platforms": [
+    "macOS",
+    "windows",
+    "linux"
   ]
 }
