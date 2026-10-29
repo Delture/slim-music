@@ -219,6 +219,13 @@ pub async fn playlist_subscribe(cookie: &Option<String>, id: i64, subscribe: boo
     Ok(())
 }
 
+/// 删除自己创建的歌单（不要用于「我喜欢的音乐」）
+pub async fn playlist_delete(cookie: &Option<String>, id: i64) -> R<()> {
+    let query = q(cookie).param("id", &id.to_string());
+    ok(create_client(None).playlist_delete(&query).await)?;
+    Ok(())
+}
+
 fn parse_lrc(raw: &str) -> Vec<LyricLine> {
     let mut lines = Vec::new();
     // [mm:ss.xx]text 或 [mm:ss.xxx]

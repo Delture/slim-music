@@ -126,6 +126,12 @@ async fn like_track(state: State<'_, AppState>, id: i64, like: bool) -> R<()> {
     ncm::like_track(&cookie(&state).await, id, like).await
 }
 
+
+#[tauri::command]
+async fn playlist_delete(state: State<'_, AppState>, id: i64) -> R<()> {
+    ncm::playlist_delete(&cookie(&state).await, id).await
+}
+
 #[tauri::command]
 async fn playlist_subscribe(state: State<'_, AppState>, id: i64, subscribe: bool) -> R<()> {
     ncm::playlist_subscribe(&cookie(&state).await, id, subscribe).await
@@ -338,6 +344,7 @@ pub fn run() {
             liked_ids,
             like_track,
             playlist_subscribe,
+            playlist_delete,
             get_lyric,
             local_playlists_list,
             local_playlist_create,

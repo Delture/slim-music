@@ -18,6 +18,7 @@ export const api = {
   likeTrack: (id: number, like: boolean) => invoke<void>('like_track', { id, like }),
   playlistSubscribe: (id: number, subscribe: boolean) =>
     invoke<void>('playlist_subscribe', { id, subscribe }),
+  playlistDelete: (id: number) => invoke<void>('playlist_delete', { id }),
   lyric: (id: number) => invoke<LyricPayload>('get_lyric', { id }),
   setTrayTitle: (text: string) => invoke<void>('set_tray_title', { text }),
   showMainWindow: () => invoke<void>('show_main_window'),

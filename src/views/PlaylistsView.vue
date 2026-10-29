@@ -16,13 +16,16 @@ const busy = ref(false);
 const canUnsubscribe = computed(
   () => !!active.value && active.value.subscribed && !active.value.isLiked,
 );
+/** 自己创建的歌单可删；「我喜欢的音乐」永久保护 */
+const canDelete = computed(
+  () => !!active.value && active.value.owned && !active.value.isLiked,
+);
 
-async function loadLists(preferId?: number) {
+async function loadLists() {
   err.value = '';
   try {
     lists.value = await api.myPlaylists();
     const keep =
-      (preferId != null && lists.value.find((l) => l.id === preferId)) ||
       lists.value.find((l) => l.id === active.value?.id) ||
       lists.value.find((l) => l.isLiked) ||
       lists.value[0];
@@ -64,6 +67,27 @@ async function unsubscribe() {
   }
 }
 
+async function removeOwned() {
+  if (!active.value || !canDelete.value) return;
+  if (
+    !confirm(
+      `确定删除网易云歌单「${active.value.name}」？\n此操作不可恢复，歌单内歌曲不会从云盘删除。`,
+    )
+  ) {
+    return;
+  }
+  busy.value = true;
+  try {
+    await api.playlistDelete(active.value.id);
+    active.value = null;
+    await loadLists();
+  } catch (e) {
+    alert(String(e));
+  } finally {
+    busy.value = false;
+  }
+}
+
 onMounted(() => session.profile && loadLists());
 </script>
 
@@ -87,6 +111,7 @@ onMounted(() => session.profile && loadLists());
         <h2>{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
         <button :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
         <button v-if="canUnsubscribe" :disabled="busy" @click="unsubscribe">取消收藏</button>
+        <button v-if="canDelete" :disabled="busy" class="danger" @click="removeOwned">删除歌单</button>
       </header>
       <p v-if="loading" class="muted">加载中…</p>
       <p v-if="err" class="error">{{ err }}</p>
@@ -98,8 +123,9 @@ onMounted(() => session.profile && loadLists());
 <style scoped>
 .pl {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 16px;
+  min-width: 0;
 }
 .side {
   border-right: 1px solid var(--border);
@@ -119,6 +145,7 @@ onMounted(() => session.profile && loadLists());
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .item:hover,
 .item.on {
@@ -126,5 +153,8 @@ onMounted(() => session.profile && loadLists());
 }
 .body {
   min-width: 0;
+}
+.danger {
+  color: #c62f2f;
 }
 </style>
