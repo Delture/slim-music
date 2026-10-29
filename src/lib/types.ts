@@ -2,7 +2,7 @@
 export type Source = 'local' | 'netease';
 
 export interface Track {
-  id: string; // "ncm:123" | "local:/path"
+  id: string;
   source: Source;
   title: string;
   artists: string[];
@@ -19,6 +19,8 @@ export interface Playlist {
   cover: string | null;
   trackCount: number;
   isLiked: boolean;
+  owned: boolean;
+  subscribed: boolean;
   creatorId: number;
 }
 
@@ -26,6 +28,17 @@ export interface Profile {
   userId: number;
   nickname: string;
   avatar: string | null;
+}
+
+export interface LyricLine {
+  timeMs: number;
+  text: string;
+}
+
+export interface LyricPayload {
+  lines: LyricLine[];
+  raw: string;
+  translated: string | null;
 }
 
 export type Quality = 'standard' | 'higher' | 'exhigh' | 'lossless' | 'hires';

@@ -1,6 +1,5 @@
-// 所有后端调用集中在这里，方便替换/扩展
 import { invoke } from '@tauri-apps/api/core';
-import type { Playlist, Profile, Settings, Track } from './types';
+import type { LyricPayload, Playlist, Profile, Settings, Track } from './types';
 
 export const api = {
   loginQrKey: () => invoke<{ key: string; svg: string }>('login_qr_key'),
@@ -15,4 +14,12 @@ export const api = {
   getSettings: () => invoke<Settings>('get_settings'),
   saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
   scanLocal: () => invoke<Track[]>('scan_local'),
+  likedIds: () => invoke<number[]>('liked_ids'),
+  likeTrack: (id: number, like: boolean) => invoke<void>('like_track', { id, like }),
+  playlistSubscribe: (id: number, subscribe: boolean) =>
+    invoke<void>('playlist_subscribe', { id, subscribe }),
+  lyric: (id: number) => invoke<LyricPayload>('get_lyric', { id }),
+  setTrayTitle: (text: string) => invoke<void>('set_tray_title', { text }),
+  showMainWindow: () => invoke<void>('show_main_window'),
+  quitApp: () => invoke<void>('quit_app'),
 };

@@ -1,5 +1,5 @@
 //! 网易云接口封装：基于 crates.io 的 ncm-api-rs（WTFPL），只保留本应用需要的几个接口。
-use crate::model::{Playlist, Profile, Source, Track};
+use crate::model::{LyricLine, LyricPayload, Playlist, Profile, Source, Track};
 use ncm_api_rs::{create_client, ApiResponse, Query};
 use serde_json::Value;
 
@@ -151,12 +151,16 @@ pub async fn user_playlists(cookie: &Option<String>, uid: i64) -> R<Vec<Playlist
         .enumerate()
         .map(|(i, p)| {
             let creator_id = p.pointer("/creator/userId").and_then(Value::as_i64).unwrap_or(0);
+            let is_liked = p["specialType"].as_i64() == Some(5) || (i == 0 && creator_id == uid);
+            let owned = creator_id == uid;
             Playlist {
                 id: p["id"].as_i64().unwrap_or(0),
                 name: p["name"].as_str().unwrap_or("").into(),
                 cover: p["coverImgUrl"].as_str().map(|s| format!("{s}?param=200y200")),
                 track_count: p["trackCount"].as_i64().unwrap_or(0),
-                is_liked: p["specialType"].as_i64() == Some(5) || (i == 0 && creator_id == uid),
+                is_liked,
+                owned,
+                subscribed: !owned && !is_liked,
                 creator_id,
             }
         })
@@ -185,6 +189,93 @@ pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option
     let query = q(cookie).param("id", &id.to_string()).param("level", level);
     let res = ok(create_client(None).song_url_v1(&query).await)?;
     Ok(res.body.pointer("/data/0/url").and_then(Value::as_str).map(String::from))
+}
+
+/// 喜欢歌曲 id 列表（仅 id，不是详情）
+pub async fn liked_ids(cookie: &Option<String>, uid: i64) -> R<Vec<i64>> {
+    let query = q(cookie).param("uid", &uid.to_string());
+    let res = ok(create_client(None).likelist(&query).await)?;
+    Ok(res.body["ids"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_i64()).collect())
+        .unwrap_or_default())
+}
+
+/// like=true 红心；false 取消
+pub async fn like_track(cookie: &Option<String>, id: i64, like: bool) -> R<()> {
+    let query = q(cookie)
+        .param("id", &id.to_string())
+        .param("like", if like { "true" } else { "false" });
+    ok(create_client(None).like(&query).await)?;
+    Ok(())
+}
+
+/// t=1 收藏；t=2 取消收藏
+pub async fn playlist_subscribe(cookie: &Option<String>, id: i64, subscribe: bool) -> R<()> {
+    let query = q(cookie)
+        .param("id", &id.to_string())
+        .param("t", if subscribe { "1" } else { "2" });
+    ok(create_client(None).playlist_subscribe(&query).await)?;
+    Ok(())
+}
+
+fn parse_lrc(raw: &str) -> Vec<LyricLine> {
+    let mut lines = Vec::new();
+    // [mm:ss.xx]text 或 [mm:ss.xxx]
+    for line in raw.lines() {
+        let line = line.trim();
+        if !line.starts_with('[') {
+            continue;
+        }
+        let Some(end) = line.find(']') else { continue };
+        let tag = &line[1..end];
+        let text = line[end + 1..].trim().to_string();
+        // 跳过 meta：[ti:] [ar:] 等
+        if tag.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) == false {
+            continue;
+        }
+        let parts: Vec<&str> = tag.split(':').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let Ok(min) = parts[0].parse::<u64>() else { continue };
+        let sec_parts: Vec<&str> = parts[1].split('.').collect();
+        let Ok(sec) = sec_parts[0].parse::<u64>() else { continue };
+        let frac = sec_parts.get(1).copied().unwrap_or("0");
+        // 两位→百分之一秒；三位→毫秒
+        let ms = if frac.len() <= 2 {
+            frac.parse::<u64>().unwrap_or(0) * 10
+        } else {
+            frac.parse::<u64>().unwrap_or(0)
+        };
+        lines.push(LyricLine {
+            time_ms: min * 60_000 + sec * 1000 + ms,
+            text,
+        });
+    }
+    lines.sort_by_key(|l| l.time_ms);
+    lines
+}
+
+pub async fn lyric(cookie: &Option<String>, id: i64) -> R<LyricPayload> {
+    let query = q(cookie).param("id", &id.to_string());
+    let res = ok(create_client(None).lyric(&query).await)?;
+    let raw = res.body
+        .pointer("/lrc/lyric")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let translated = res
+        .body
+        .pointer("/tlyric/lyric")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .filter(|s| !s.is_empty());
+    Ok(LyricPayload {
+        lines: parse_lrc(&raw),
+        raw,
+        translated,
+    })
 }
 
 #[cfg(test)]

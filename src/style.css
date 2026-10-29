@@ -15,7 +15,7 @@ body { margin: 0; }
 .nav a:hover, .nav a.on { background: var(--hover); }
 .nav a.on { color: var(--accent); font-weight: 600; }
 .nav .user { margin-top: auto; padding: 0 8px; }
-.content { overflow: auto; padding: 16px 24px; }
+.content { position: relative; overflow: auto; padding: 16px 24px; }
 .player { grid-column: 1 / -1; }
 .head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
 .head h2 { margin: 0 8px 0 0; }

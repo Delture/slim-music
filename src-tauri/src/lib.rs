@@ -4,9 +4,14 @@ mod model;
 mod ncm;
 mod settings;
 
-use model::{Playlist, Profile, Track};
+use model::{LyricPayload, Playlist, Profile, Track};
 use settings::{Settings, Store, QUALITY_LEVELS};
-use tauri::{Manager, State};
+use tauri::{
+    image::Image,
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, State, WindowEvent,
+};
 use tokio::sync::Mutex;
 
 struct AppState {
@@ -23,13 +28,16 @@ struct QrKeyOut {
     svg: String,
 }
 
+fn cookie(state: &AppState) -> impl std::future::Future<Output = Option<String>> + '_ {
+    async { state.cookie.lock().await.clone() }
+}
+
 #[tauri::command]
 async fn login_qr_key() -> R<QrKeyOut> {
     let k = ncm::qr_key().await?;
     Ok(QrKeyOut { key: k.key, svg: k.svg })
 }
 
-/// 轮询扫码状态；803 时保存 cookie
 #[tauri::command]
 async fn login_qr_check(state: State<'_, AppState>, key: String) -> R<i64> {
     let (code, cookie) = ncm::qr_check(&key).await?;
@@ -49,39 +57,34 @@ async fn logout(state: State<'_, AppState>) -> R<()> {
 
 #[tauri::command]
 async fn get_profile(state: State<'_, AppState>) -> R<Option<Profile>> {
-    let c = state.cookie.lock().await.clone();
-    ncm::profile(&c).await
+    ncm::profile(&cookie(&state).await).await
 }
 
 #[tauri::command]
 async fn daily_recommend(state: State<'_, AppState>) -> R<Vec<Track>> {
-    let c = state.cookie.lock().await.clone();
-    ncm::daily(&c).await
+    ncm::daily(&cookie(&state).await).await
 }
 
 #[tauri::command]
 async fn search(state: State<'_, AppState>, keywords: String, offset: u32) -> R<Vec<Track>> {
-    let c = state.cookie.lock().await.clone();
-    ncm::search(&c, &keywords, offset).await
+    ncm::search(&cookie(&state).await, &keywords, offset).await
 }
 
 #[tauri::command]
 async fn my_playlists(state: State<'_, AppState>) -> R<Vec<Playlist>> {
-    let c = state.cookie.lock().await.clone();
+    let c = cookie(&state).await;
     let p = ncm::profile(&c).await?.ok_or("请先登录")?;
     ncm::user_playlists(&c, p.user_id).await
 }
 
 #[tauri::command]
 async fn playlist_tracks(state: State<'_, AppState>, id: i64) -> R<Vec<Track>> {
-    let c = state.cookie.lock().await.clone();
-    ncm::playlist_tracks(&c, id).await
+    ncm::playlist_tracks(&cookie(&state).await, id).await
 }
 
-/// 按设置里的音质取播放地址；无版权/无权限时返回 None
 #[tauri::command]
 async fn song_url(state: State<'_, AppState>, id: i64) -> R<Option<String>> {
-    let c = state.cookie.lock().await.clone();
+    let c = cookie(&state).await;
     let level = state.settings.lock().await.quality.clone();
     ncm::song_url(&c, id, &level).await
 }
@@ -101,13 +104,123 @@ async fn save_settings(state: State<'_, AppState>, settings: Settings) -> R<()> 
     Ok(())
 }
 
-/// 扫描设置中的本地文件夹（在阻塞线程中执行）
 #[tauri::command]
 async fn scan_local(state: State<'_, AppState>) -> R<Vec<Track>> {
     let folders = state.settings.lock().await.local_folders.clone();
     tauri::async_runtime::spawn_blocking(move || local::scan(&folders))
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn liked_ids(state: State<'_, AppState>) -> R<Vec<i64>> {
+    let c = cookie(&state).await;
+    let p = ncm::profile(&c).await?.ok_or("请先登录")?;
+    ncm::liked_ids(&c, p.user_id).await
+}
+
+#[tauri::command]
+async fn like_track(state: State<'_, AppState>, id: i64, like: bool) -> R<()> {
+    ncm::like_track(&cookie(&state).await, id, like).await
+}
+
+#[tauri::command]
+async fn playlist_subscribe(state: State<'_, AppState>, id: i64, subscribe: bool) -> R<()> {
+    ncm::playlist_subscribe(&cookie(&state).await, id, subscribe).await
+}
+
+#[tauri::command]
+async fn get_lyric(state: State<'_, AppState>, id: i64) -> R<LyricPayload> {
+    ncm::lyric(&cookie(&state).await, id).await
+}
+
+/// 更新菜单栏 / 托盘标题（macOS 上显示在刘海旁；其他平台多为 tooltip）
+#[tauri::command]
+fn set_tray_title(app: AppHandle, text: String) -> R<()> {
+    if let Some(tray) = app.tray_by_id("main") {
+        // macOS：标题会出现在图标旁；限制长度以免撑满菜单栏
+        let short = if text.chars().count() > 24 {
+            format!("{}…", text.chars().take(23).collect::<String>())
+        } else {
+            text.clone()
+        };
+        let _ = tray.set_title(Some(short));
+        let _ = tray.set_tooltip(Some(text));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn show_main_window(app: AppHandle) -> R<()> {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+    let play = MenuItem::with_id(app, "play", "播放 / 暂停", true, None::<&str>)?;
+    let prev = MenuItem::with_id(app, "prev", "上一首", true, None::<&str>)?;
+    let next = MenuItem::with_id(app, "next", "下一首", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出 SlimMusic", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &play, &prev, &next, &quit])?;
+
+    let icon = app.default_window_icon().cloned().unwrap_or_else(|| {
+        Image::from_bytes(include_bytes!("../icons/32x32.png")).expect("tray icon")
+    });
+
+    let app_handle = app.clone();
+    TrayIconBuilder::with_id("main")
+        .icon(icon)
+        .menu(&menu)
+        .tooltip("SlimMusic")
+        .icon_as_template(true) // macOS 菜单栏：按模板着色
+        .show_menu_on_left_click(false)
+        .on_menu_event(move |app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+            "play" => {
+                let _ = app.emit("player-cmd", "toggle");
+            }
+            "prev" => {
+                let _ = app.emit("player-cmd", "prev");
+            }
+            "next" => {
+                let _ = app.emit("player-cmd", "next");
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(move |_tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                if let Some(w) = app_handle.get_webview_window("main") {
+                    if w.is_visible().unwrap_or(false) {
+                        let _ = w.hide();
+                    } else {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                }
+            }
+        })
+        .build(app)?;
+    Ok(())
 }
 
 pub fn run() {
@@ -122,7 +235,15 @@ pub fn run() {
                 store,
             };
             app.manage(state);
+            build_tray(app.handle())?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 红灯 / 关闭：隐藏窗口，音频继续在后台播；真正退出走托盘「退出」
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             login_qr_key,
@@ -136,7 +257,14 @@ pub fn run() {
             song_url,
             get_settings,
             save_settings,
-            scan_local
+            scan_local,
+            liked_ids,
+            like_track,
+            playlist_subscribe,
+            get_lyric,
+            set_tray_title,
+            show_main_window,
+            quit_app
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 失败");

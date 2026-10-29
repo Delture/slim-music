@@ -33,8 +33,12 @@ pub struct Playlist {
     pub name: String,
     pub cover: Option<String>,
     pub track_count: i64,
-    /// 是否为“我喜欢的音乐”（用户创建的第一个歌单，specialType == 5）
+    /// 是否为“我喜欢的音乐”（specialType == 5）
     pub is_liked: bool,
+    /// 是否为自己创建（creator == 当前用户）
+    pub owned: bool,
+    /// 是否为收藏的别人的歌单（!owned && !is_liked）
+    pub subscribed: bool,
     pub creator_id: i64,
 }
 
@@ -44,4 +48,20 @@ pub struct Profile {
     pub user_id: i64,
     pub nickname: String,
     pub avatar: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricLine {
+    pub time_ms: u64,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricPayload {
+    pub lines: Vec<LyricLine>,
+    /// 原文 LRC（调试用）
+    pub raw: String,
+    pub translated: Option<String>,
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
   current,
   cycleRepeat,
@@ -12,6 +12,7 @@ import {
   toggleShuffle,
 } from '../lib/player';
 import { fmtTime } from '../lib/format';
+import { isLiked, openNowPlaying, session, toggleLike } from '../lib/session';
 import SourceBadge from './SourceBadge.vue';
 import Icon from './Icon.vue';
 
@@ -21,11 +22,67 @@ const repeatLabel = computed(
 );
 const volumePct = computed(() => Math.round(player.volume * 100));
 const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'volume'));
+
+/** 进度条：拖动中不跟 timeupdate 抢值，避免拇指抖动 */
+const progressEl = ref<HTMLInputElement | null>(null);
+const seeking = ref(false);
+const displayTime = ref(0);
+let raf = 0;
+
+function syncProgressDom() {
+  if (seeking.value) return;
+  displayTime.value = player.currentTime;
+  const el = progressEl.value;
+  if (el) {
+    const dur = player.duration || 0;
+    if (el.max !== String(dur)) el.max = String(dur);
+    // 直接写 DOM，避开 Vue 每帧重绑 :value 导致的拇指回弹
+    if (document.activeElement !== el) el.value = String(player.currentTime);
+  }
+}
+
+function tick() {
+  syncProgressDom();
+  raf = requestAnimationFrame(tick);
+}
+
+onMounted(() => {
+  raf = requestAnimationFrame(tick);
+});
+onUnmounted(() => cancelAnimationFrame(raf));
+
+watch(
+  () => player.duration,
+  () => syncProgressDom(),
+);
+
+function onSeekInput(e: Event) {
+  seeking.value = true;
+  displayTime.value = +(e.target as HTMLInputElement).value;
+}
+function onSeekCommit() {
+  const el = progressEl.value;
+  if (!el) { seeking.value = false; return; }
+  const v = +el.value;
+  seek(v);
+  displayTime.value = v;
+  seeking.value = false;
+}
+
+async function onLike() {
+  const id = t.value?.ncmId;
+  if (id == null || !session.profile) return;
+  try {
+    await toggleLike(id);
+  } catch (err) {
+    alert(String(err));
+  }
+}
 </script>
 
 <template>
   <footer class="bar">
-    <div class="now">
+    <div class="now" title="打开播放页" @click="t && openNowPlaying()">
       <img v-if="t?.cover" :src="t.cover" class="cover" />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
       <div v-if="t" class="info">
@@ -33,6 +90,15 @@ const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'vol
         <div class="sub">{{ t.artists.join(' / ') }}</div>
       </div>
       <div v-else class="sub">未在播放</div>
+      <button
+        v-if="t?.source === 'netease' && session.profile"
+        class="heart"
+        :class="{ on: isLiked(t.ncmId) }"
+        title="喜欢"
+        @click.stop="onLike"
+      >
+        <Icon :name="isLiked(t.ncmId) ? 'heart-solid' : 'heart'" :size="15" />
+      </button>
     </div>
 
     <div class="center">
@@ -54,14 +120,17 @@ const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'vol
         </button>
       </div>
       <div class="progress">
-        <span>{{ fmtTime(player.currentTime) }}</span>
+        <span>{{ fmtTime(displayTime) }}</span>
         <input
+          ref="progressEl"
+          class="seek"
           type="range"
           min="0"
+          step="0.05"
           :max="player.duration || 0"
-          step="0.5"
-          :value="player.currentTime"
-          @input="seek(+($event.target as HTMLInputElement).value)"
+          @input="onSeekInput"
+          @change="onSeekCommit"
+          @pointerup="onSeekCommit"
         />
         <span>{{ fmtTime(player.duration) }}</span>
       </div>
@@ -102,6 +171,12 @@ const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'vol
   gap: 10px;
   align-items: center;
   min-width: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 2px 4px;
+}
+.now:hover {
+  background: var(--hover);
 }
 .cover {
   width: 48px;
@@ -117,6 +192,7 @@ const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'vol
 }
 .info {
   min-width: 0;
+  flex: 1;
 }
 .title,
 .sub {
@@ -127,6 +203,17 @@ const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'vol
 .sub {
   color: var(--muted);
   font-size: 12px;
+}
+.heart {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px;
+  line-height: 0;
+}
+.heart.on {
+  color: var(--accent);
 }
 .center {
   display: flex;
@@ -177,8 +264,16 @@ const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'vol
   font-size: 12px;
   color: var(--muted);
 }
-.progress input {
+.progress .seek {
   flex: 1;
+  /* 播放过程中关掉拇指过渡，避免和 JS 更新打架 */
+  transition: none;
+}
+.progress .seek::-webkit-slider-thumb {
+  transition: none;
+}
+.progress .seek::-moz-range-thumb {
+  transition: none;
 }
 .err {
   color: #c62f2f;

@@ -10,15 +10,39 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "SlimMusic", "width": 1100, "height": 720, "minWidth": 800, "minHeight": 500 }],
+    "windows": [
+      {
+        "title": "SlimMusic",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 800,
+        "minHeight": 500
+      }
+    ],
     "security": {
       "csp": null,
-      "assetProtocol": { "enable": true, "scope": ["**"] }
-    }
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**"
+        ]
+      }
+    },
+    "macOSPrivateApi": false
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app", "nsis"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    "targets": [
+      "dmg",
+      "app",
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }
