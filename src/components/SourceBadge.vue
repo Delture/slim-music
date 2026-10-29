@@ -8,7 +8,7 @@ defineProps<{ source: Source }>();
 </template>
 
 <style scoped>
-.badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-weight: 600; }
+.badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-weight: 600; flex-shrink: 0; justify-self: start; }
 .local { background: #e3f4e8; color: #1f7a3a; }
 .netease { background: #fde4e4; color: #c62f2f; }
 </style>

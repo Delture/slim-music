@@ -56,3 +56,11 @@ export const QUALITY_LABELS: Record<Quality, string> = {
   lossless: '无损 (FLAC)',
   hires: 'Hi-Res',
 };
+
+/** 本机播放列表（非网易云歌单；与当前播放队列无关） */
+export interface LocalPlaylist {
+  id: string;
+  name: string;
+  tracks: Track[];
+  updatedAt: number;
+}

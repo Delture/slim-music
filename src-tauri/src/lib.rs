@@ -1,5 +1,6 @@
 //! Tauri 入口：所有前端调用都经由这里的 #[tauri::command]。
 mod local;
+mod local_playlists;
 mod model;
 mod ncm;
 mod settings;
@@ -16,6 +17,7 @@ use tokio::sync::Mutex;
 
 struct AppState {
     store: Store,
+    local_pls: local_playlists::LocalPlaylistStore,
     cookie: Mutex<Option<String>>,
     settings: Mutex<Settings>,
 }
@@ -134,6 +136,70 @@ async fn get_lyric(state: State<'_, AppState>, id: i64) -> R<LyricPayload> {
     ncm::lyric(&cookie(&state).await, id).await
 }
 
+
+#[tauri::command]
+fn local_playlists_list(state: State<'_, AppState>) -> R<Vec<local_playlists::LocalPlaylist>> {
+    Ok(state.local_pls.list())
+}
+
+#[tauri::command]
+fn local_playlist_create(state: State<'_, AppState>, name: String) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.create(name)
+}
+
+#[tauri::command]
+fn local_playlist_rename(state: State<'_, AppState>, id: String, name: String) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.rename(&id, name)
+}
+
+#[tauri::command]
+fn local_playlist_delete(state: State<'_, AppState>, id: String) -> R<()> {
+    state.local_pls.delete(&id)
+}
+
+#[tauri::command]
+fn local_playlist_get(state: State<'_, AppState>, id: String) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.get(&id)
+}
+
+#[tauri::command]
+fn local_playlist_add_track(
+    state: State<'_, AppState>,
+    id: String,
+    track: model::Track,
+) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.add_track(&id, track)
+}
+
+#[tauri::command]
+fn local_playlist_remove_track(
+    state: State<'_, AppState>,
+    id: String,
+    track_id: String,
+    index: Option<usize>,
+) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.remove_track(&id, &track_id, index)
+}
+
+#[tauri::command]
+fn local_playlist_move_track(
+    state: State<'_, AppState>,
+    id: String,
+    from: usize,
+    to: usize,
+) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.move_track(&id, from, to)
+}
+
+#[tauri::command]
+fn local_playlist_set_tracks(
+    state: State<'_, AppState>,
+    id: String,
+    tracks: Vec<model::Track>,
+) -> R<local_playlists::LocalPlaylist> {
+    state.local_pls.set_tracks(&id, tracks)
+}
+
 /// 更新菜单栏 / 托盘标题（macOS 上显示在刘海旁；其他平台多为 tooltip）
 #[tauri::command]
 fn set_tray_title(app: AppHandle, text: String) -> R<()> {
@@ -228,10 +294,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
+            let local_pls = local_playlists::LocalPlaylistStore::new(dir.clone());
             let store = Store::new(dir);
             let state = AppState {
                 cookie: Mutex::new(store.load_cookie()),
                 settings: Mutex::new(store.load_settings()),
+                local_pls,
                 store,
             };
             app.manage(state);
@@ -262,6 +330,15 @@ pub fn run() {
             like_track,
             playlist_subscribe,
             get_lyric,
+            local_playlists_list,
+            local_playlist_create,
+            local_playlist_rename,
+            local_playlist_delete,
+            local_playlist_get,
+            local_playlist_add_track,
+            local_playlist_remove_track,
+            local_playlist_move_track,
+            local_playlist_set_tracks,
             set_tray_title,
             show_main_window,
             quit_app

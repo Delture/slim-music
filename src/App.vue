@@ -7,6 +7,7 @@ import Icon from './components/Icon.vue';
 import DailyView from './views/DailyView.vue';
 import SearchView from './views/SearchView.vue';
 import PlaylistsView from './views/PlaylistsView.vue';
+import LocalPlaylistsView from './views/LocalPlaylistsView.vue';
 import LocalView from './views/LocalView.vue';
 import SettingsView from './views/SettingsView.vue';
 import NowPlayingView from './views/NowPlayingView.vue';
@@ -15,6 +16,7 @@ const pages: { key: string; label: string; icon: string; view: Component }[] = [
   { key: 'daily', label: '每日推荐', icon: 'calendar', view: DailyView },
   { key: 'search', label: '搜索', icon: 'search', view: SearchView },
   { key: 'playlists', label: '我的歌单', icon: 'list', view: PlaylistsView },
+  { key: 'localPlaylists', label: '播放列表', icon: 'music', view: LocalPlaylistsView },
   { key: 'local', label: '本地音乐', icon: 'folder', view: LocalView },
   { key: 'settings', label: '设置', icon: 'settings', view: SettingsView },
 ];

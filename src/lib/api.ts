@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { LyricPayload, Playlist, Profile, Settings, Track } from './types';
+import type { LocalPlaylist, LyricPayload, Playlist, Profile, Settings, Track } from './types';
 
 export const api = {
   loginQrKey: () => invoke<{ key: string; svg: string }>('login_qr_key'),
@@ -22,4 +22,19 @@ export const api = {
   setTrayTitle: (text: string) => invoke<void>('set_tray_title', { text }),
   showMainWindow: () => invoke<void>('show_main_window'),
   quitApp: () => invoke<void>('quit_app'),
+
+  localPlaylistsList: () => invoke<LocalPlaylist[]>('local_playlists_list'),
+  localPlaylistCreate: (name: string) => invoke<LocalPlaylist>('local_playlist_create', { name }),
+  localPlaylistRename: (id: string, name: string) =>
+    invoke<LocalPlaylist>('local_playlist_rename', { id, name }),
+  localPlaylistDelete: (id: string) => invoke<void>('local_playlist_delete', { id }),
+  localPlaylistGet: (id: string) => invoke<LocalPlaylist>('local_playlist_get', { id }),
+  localPlaylistAddTrack: (id: string, track: Track) =>
+    invoke<LocalPlaylist>('local_playlist_add_track', { id, track }),
+  localPlaylistRemoveTrack: (id: string, trackId: string, index?: number | null) =>
+    invoke<LocalPlaylist>('local_playlist_remove_track', { id, trackId, index: index ?? null }),
+  localPlaylistMoveTrack: (id: string, from: number, to: number) =>
+    invoke<LocalPlaylist>('local_playlist_move_track', { id, from, to }),
+  localPlaylistSetTracks: (id: string, tracks: Track[]) =>
+    invoke<LocalPlaylist>('local_playlist_set_tracks', { id, tracks }),
 };

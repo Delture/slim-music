@@ -2,6 +2,7 @@ import { reactive } from 'vue';
 import { api } from './api';
 import type { Profile, Settings } from './types';
 import { setVolume } from './player';
+import { refreshLocalPlaylists } from './localPlaylists';
 
 export const session = reactive({
   profile: null as Profile | null,
@@ -16,6 +17,7 @@ export async function initSession() {
   session.settings = await api.getSettings();
   setVolume(session.settings.volume);
   await refreshProfile();
+  await refreshLocalPlaylists().catch(() => {});
 }
 
 export async function refreshProfile() {
