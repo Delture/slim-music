@@ -22,6 +22,26 @@ fn q(cookie: &Option<String>) -> Query {
     }
 }
 
+/// 网易云 CDN / 试听地址常返回 http://。Tauri 正式包 webview 是 https 源，
+/// http 资源会被当成混合内容拦掉（封面蓝 ?、第一次播放失败）。统一升 https。
+pub fn ncm_https_url(raw: &str) -> String {
+    let s = raw.trim();
+    if let Some(rest) = s.strip_prefix("http://") {
+        format!("https://{rest}")
+    } else if let Some(rest) = s.strip_prefix("//") {
+        format!("https://{rest}")
+    } else {
+        s.to_string()
+    }
+}
+
+/// 封面图：升 https 并规范 ?param= 尺寸。
+pub fn ncm_img_url(raw: &str, param: &str) -> String {
+    let s = ncm_https_url(raw);
+    let base = s.split_once('?').map(|(b, _)| b).unwrap_or(s.as_str());
+    format!("{base}?param={param}")
+}
+
 /// 把网易云歌曲 JSON（song/detail、cloudsearch、推荐等通用格式）转换为 Track
 pub fn to_track(v: &Value) -> Option<Track> {
     let id = v.get("id")?.as_i64()?;
@@ -37,7 +57,11 @@ pub fn to_track(v: &Value) -> Option<Track> {
             .unwrap_or_default(),
         album: al.and_then(|a| a.get("name")).and_then(Value::as_str).unwrap_or("").to_string(),
         duration_ms: v.get("dt").or(v.get("duration")).and_then(Value::as_u64).unwrap_or(0),
-        cover: al.and_then(|a| a.get("picUrl")).and_then(Value::as_str).map(|s| format!("{s}?param=200y200")),
+        cover: al
+            .and_then(|a| a.get("picUrl"))
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(|s| ncm_img_url(s, "200y200")),
         path: None,
         ncm_id: Some(id),
     })
@@ -127,7 +151,7 @@ pub async fn profile(cookie: &Option<String>) -> R<Option<Profile>> {
     Ok(p.map(|p| Profile {
         user_id: p.get("userId").and_then(Value::as_i64).unwrap_or(0),
         nickname: p.get("nickname").and_then(Value::as_str).unwrap_or("").into(),
-        avatar: p.get("avatarUrl").and_then(Value::as_str).map(String::from),
+        avatar: p.get("avatarUrl").and_then(Value::as_str).filter(|s| !s.is_empty()).map(|s| ncm_img_url(s, "100y100")),
     }))
 }
 
@@ -156,7 +180,7 @@ pub async fn user_playlists(cookie: &Option<String>, uid: i64) -> R<Vec<Playlist
             Playlist {
                 id: p["id"].as_i64().unwrap_or(0),
                 name: p["name"].as_str().unwrap_or("").into(),
-                cover: p["coverImgUrl"].as_str().map(|s| format!("{s}?param=200y200")),
+                cover: p["coverImgUrl"].as_str().filter(|s| !s.is_empty()).map(|s| ncm_img_url(s, "200y200")),
                 track_count: p["trackCount"].as_i64().unwrap_or(0),
                 is_liked,
                 owned,
@@ -188,7 +212,12 @@ pub async fn playlist_tracks(cookie: &Option<String>, id: i64) -> R<Vec<Track>> 
 pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option<String>> {
     let query = q(cookie).param("id", &id.to_string()).param("level", level);
     let res = ok(create_client(None).song_url_v1(&query).await)?;
-    Ok(res.body.pointer("/data/0/url").and_then(Value::as_str).map(String::from))
+    Ok(res
+        .body
+        .pointer("/data/0/url")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(ncm_https_url))
 }
 
 /// 喜欢歌曲 id 列表（仅 id，不是详情）
@@ -226,7 +255,7 @@ pub async fn playlist_delete(cookie: &Option<String>, id: i64) -> R<()> {
     Ok(())
 }
 
-fn parse_lrc(raw: &str) -> Vec<LyricLine> {
+pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
     let mut lines = Vec::new();
     // [mm:ss.xx]text 或 [mm:ss.xxx]
     for line in raw.lines() {
@@ -318,6 +347,40 @@ pub async fn lyric(cookie: &Option<String>, id: i64) -> R<LyricPayload> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ncm_https_url_upgrades_http() {
+        assert_eq!(
+            super::ncm_https_url("http://m7.music.126.net/x.flac?vuutv=1"),
+            "https://m7.music.126.net/x.flac?vuutv=1"
+        );
+        assert_eq!(
+            super::ncm_https_url("//m7.music.126.net/x.mp3"),
+            "https://m7.music.126.net/x.mp3"
+        );
+    }
+
+    #[test]
+    fn ncm_img_url_upgrades_http_and_sets_param() {
+        assert_eq!(
+            super::ncm_img_url(
+                "http://p3.music.126.net/abc==/1.jpg",
+                "200y200"
+            ),
+            "https://p3.music.126.net/abc==/1.jpg?param=200y200"
+        );
+        assert_eq!(
+            super::ncm_img_url(
+                "https://p3.music.126.net/abc==/1.jpg?param=140y140",
+                "200y200"
+            ),
+            "https://p3.music.126.net/abc==/1.jpg?param=200y200"
+        );
+        assert_eq!(
+            super::ncm_img_url("//p1.music.126.net/x.jpg", "500y500"),
+            "https://p1.music.126.net/x.jpg?param=500y500"
+        );
+    }
+
     // 联网测试：cargo test -- --ignored
     #[tokio::test]
     #[ignore]

@@ -50,7 +50,7 @@ pub struct Profile {
     pub avatar: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LyricLine {
     pub time_ms: u64,
@@ -60,7 +60,7 @@ pub struct LyricLine {
     pub translation: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LyricPayload {
     pub lines: Vec<LyricLine>,

@@ -39,6 +39,7 @@ export const api = {
     invoke<void>('playlist_subscribe', { id, subscribe }),
   playlistDelete: (id: number) => invoke<void>('playlist_delete', { id }),
   lyric: (id: number) => invoke<LyricPayload>('get_lyric', { id }),
+  localLyric: (path: string) => invoke<LyricPayload>('get_local_lyric', { path }),
   showMainWindow: () => invoke<void>('show_main_window'),
   quitApp: () => invoke<void>('quit_app'),
 

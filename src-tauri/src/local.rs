@@ -1,10 +1,14 @@
-//! 本地音乐扫描：遍历文件夹，用 lofty 读取标签。
-use crate::model::{Source, Track};
+//! 本地音乐扫描：遍历文件夹，用 lofty 读取标签；同名 .lrc 作为歌词。
+use crate::model::{LyricPayload, Source, Track};
+use crate::ncm;
 use lofty::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-const EXTS: [&str; 9] = ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "aiff", "ape"];
+/// 常见有损/无损扩展名。wma 可扫到；WKWebView 未必能解码播放。
+const EXTS: [&str; 12] = [
+    "mp3", "flac", "m4a", "aac", "wav", "ogg", "opus", "aiff", "aif", "ape", "wma", "wv",
+];
 
 pub fn scan(folders: &[String]) -> Vec<Track> {
     let mut out = Vec::new();
@@ -47,7 +51,11 @@ fn read_track(p: &Path) -> Track {
                 t.title = v.to_string();
             }
             if let Some(v) = tag.artist() {
-                t.artists = v.split(['/', ';', '&']).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                t.artists = v
+                    .split(['/', ';', '&'])
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             if let Some(v) = tag.album() {
                 t.album = v.to_string();
@@ -55,4 +63,56 @@ fn read_track(p: &Path) -> Track {
         }
     }
     t
+}
+
+/// 音频同目录、同主文件名的 .lrc / .LRC（不做封面旁路）。
+fn sibling_lrc_path(audio: &Path) -> Option<PathBuf> {
+    let parent = audio.parent()?;
+    let stem = audio.file_stem()?.to_string_lossy();
+    for name in [format!("{stem}.lrc"), format!("{stem}.LRC")] {
+        let p = parent.join(&name);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    // 大小写不敏感再扫一遍同目录
+    let want = format!("{stem}.lrc").to_ascii_lowercase();
+    if let Ok(rd) = std::fs::read_dir(parent) {
+        for e in rd.flatten() {
+            let name = e.file_name();
+            let s = name.to_string_lossy();
+            if s.to_ascii_lowercase() == want && e.path().is_file() {
+                return Some(e.path());
+            }
+        }
+    }
+    None
+}
+
+/// 读取本地音频旁的 .lrc；没有则返回空 payload（不报错）。
+pub fn load_sidecar_lrc(audio_path: &str) -> Result<LyricPayload, String> {
+    let audio = Path::new(audio_path);
+    if !audio.is_file() {
+        return Err(format!("本地文件不存在: {audio_path}"));
+    }
+    let Some(lrc) = sibling_lrc_path(audio) else {
+        return Ok(LyricPayload {
+            lines: vec![],
+            raw: String::new(),
+            translated: None,
+        });
+    };
+    let bytes = std::fs::read(&lrc).map_err(|e| e.to_string())?;
+    // UTF-8 BOM
+    let raw = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        String::from_utf8_lossy(&bytes[3..]).into_owned()
+    } else {
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    let lines = ncm::parse_lrc(&raw);
+    Ok(LyricPayload {
+        lines,
+        raw,
+        translated: None,
+    })
 }

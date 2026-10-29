@@ -58,7 +58,20 @@ impl NetCache {
         let root = app_data.join("cache");
         let _ = fs::create_dir_all(root.join("meta"));
         let _ = fs::create_dir_all(root.join("audio"));
-        Self { root }
+        let cache = Self { root };
+        cache.purge_partial_downloads();
+        cache
+    }
+
+    /// 启动时清掉残留 *.part，避免半成品干扰下一次播放。
+    pub fn purge_partial_downloads(&self) {
+        let Ok(rd) = fs::read_dir(self.audio_dir()) else { return };
+        for e in rd.flatten() {
+            let path = e.path();
+            if path.extension().and_then(|x| x.to_str()) == Some("part") {
+                let _ = fs::remove_file(path);
+            }
+        }
     }
 
     fn meta_path(&self, key: &str) -> PathBuf {
@@ -90,7 +103,8 @@ impl NetCache {
         fs::write(self.meta_path(key), json).map_err(|e| e.to_string())
     }
 
-    /// 已缓存的音频文件路径（并 touch 访问时间做 LRU）
+    /// 已缓存的音频文件路径（并 touch 访问时间做 LRU）。
+    /// 忽略未下完的 `*.part`，否则第一次播放会把半成品当缓存，解码失败。
     pub fn audio_cached_path(&self, id: i64, quality: &str) -> Option<PathBuf> {
         let dir = self.audio_dir();
         let prefix = format!("{id}_{quality}.");
@@ -99,10 +113,14 @@ impl NetCache {
             for e in rd.flatten() {
                 let name = e.file_name();
                 let name = name.to_string_lossy();
-                if name.starts_with(&prefix) {
-                    found = Some(e.path());
-                    break;
+                if !name.starts_with(&prefix) {
+                    continue;
                 }
+                if name.ends_with(".part") {
+                    continue;
+                }
+                found = Some(e.path());
+                break;
             }
         }
         if let Some(ref p) = found {
@@ -145,13 +163,24 @@ impl NetCache {
             .await
             .map_err(|e| e.to_string())?;
         use tokio::io::AsyncWriteExt;
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| e.to_string())?;
-            file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+        let write_result: Result<(), String> = async {
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|e| e.to_string())?;
+                file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+            }
+            file.flush().await.map_err(|e| e.to_string())?;
+            Ok(())
         }
-        file.flush().await.map_err(|e| e.to_string())?;
+        .await;
         drop(file);
-        fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
+        if let Err(e) = write_result {
+            let _ = fs::remove_file(&tmp);
+            return Err(e);
+        }
+        fs::rename(&tmp, &dest).map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            e.to_string()
+        })?;
         self.enforce_audio_limit(max_bytes);
         Ok(dest)
     }

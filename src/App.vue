@@ -50,15 +50,18 @@ onMounted(async () => {
       </a>
       <div class="user muted">{{ session.profile ? session.profile.nickname : '未登录' }}</div>
     </nav>
-    <main class="content" :class="{ locked: session.nowPlaying }">
-      <KeepAlive v-if="ready">
-        <component
-          :is="pages.find((p) => p.key === page)!.view"
-          :key="page + (session.profile?.userId ?? 0)"
-        />
-      </KeepAlive>
+    <!-- 播放页必须放在「不滚动」的壳里：若放在 .content 内，列表滚动后 absolute 叠层会跑到视口外，看起来像打不开 -->
+    <div class="main-col">
+      <main class="content" :class="{ locked: session.nowPlaying }">
+        <KeepAlive v-if="ready">
+          <component
+            :is="pages.find((p) => p.key === page)!.view"
+            :key="page + (session.profile?.userId ?? 0)"
+          />
+        </KeepAlive>
+      </main>
       <NowPlayingView v-if="session.nowPlaying" />
-    </main>
+    </div>
     <PlayerBar class="player" />
   </div>
 </template>

@@ -3,6 +3,8 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api } from '../lib/api';
 import { refreshProfile, saveSettings, session } from '../lib/session';
+import { coverSrc } from '../lib/format';
+import { clearLyricMemory } from '../lib/lyrics';
 import { QUALITY_LABELS, type CacheStats, type Quality } from '../lib/types';
 
 const qrSvg = ref('');
@@ -71,10 +73,11 @@ async function refreshStats() {
 }
 
 async function clearCache() {
-  if (!confirm('确定清空歌单与音频缓存？本地音乐文件不受影响。')) return;
+  if (!confirm('确定清空歌单、歌词与音频缓存？本地音乐文件不受影响。')) return;
   cacheBusy.value = true;
   try {
     stats.value = await api.cacheClear();
+    clearLyricMemory();
   } catch (e) {
     alert(String(e));
   } finally {
@@ -91,7 +94,7 @@ onMounted(refreshStats);
 
     <h3>网易云账号</h3>
     <div v-if="session.profile" class="row">
-      <img v-if="session.profile.avatar" :src="session.profile.avatar" class="avatar" />
+      <img v-if="session.profile.avatar" :src="coverSrc(session.profile.avatar)" class="avatar" />
       <span>{{ session.profile.nickname }}</span>
       <button @click="logout">退出登录</button>
     </div>

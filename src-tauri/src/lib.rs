@@ -261,7 +261,44 @@ async fn playlist_subscribe(state: State<'_, AppState>, id: i64, subscribe: bool
 
 #[tauri::command]
 async fn get_lyric(state: State<'_, AppState>, id: i64) -> R<LyricPayload> {
-    ncm::lyric(&cookie(&state).await, id).await
+    let enabled = state.settings.lock().await.cache_enabled;
+    let key = format!("lyric_{id}");
+    if enabled {
+        if let Some(hit) = state.cache.read_json::<LyricPayload>(&key) {
+            return Ok(hit.data);
+        }
+    }
+    let payload = ncm::lyric(&cookie(&state).await, id).await?;
+    if enabled {
+        let _ = state.cache.write_json(&key, &payload);
+    }
+    Ok(payload)
+}
+
+/// 本地音频旁同名 .lrc；结果可进磁盘缓存（key 含路径哈希）。
+#[tauri::command]
+async fn get_local_lyric(state: State<'_, AppState>, path: String) -> R<LyricPayload> {
+    let enabled = state.settings.lock().await.cache_enabled;
+    let key = format!("lyric_local_{:x}", simple_hash(&path));
+    if enabled {
+        if let Some(hit) = state.cache.read_json::<LyricPayload>(&key) {
+            return Ok(hit.data);
+        }
+    }
+    let payload = local::load_sidecar_lrc(&path)?;
+    if enabled && !payload.raw.is_empty() {
+        let _ = state.cache.write_json(&key, &payload);
+    }
+    Ok(payload)
+}
+
+fn simple_hash(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in s.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
 }
 
 
@@ -454,6 +491,7 @@ pub fn run() {
             playlist_subscribe,
             playlist_delete,
             get_lyric,
+            get_local_lyric,
             local_playlists_list,
             local_playlist_create,
             local_playlist_rename,

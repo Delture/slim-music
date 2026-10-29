@@ -51,13 +51,21 @@ async function resolveSrc(t: Track): Promise<string | null> {
     const src = await api.songPlaySrc(t.ncmId);
     if (!src) return null;
     if (src.kind === 'file') return convertFileSrc(src.value);
-    return src.value;
+    // 防御：后端已升 https，这里再兜一层，避免旧会话/异常路径残留 http
+    return src.value.replace(/^http:\/\//i, 'https://');
   }
   return null;
 }
 
 let loadToken = 0;
 let suppressPersist = false;
+
+function isAbortError(e: unknown): boolean {
+  return (
+    (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError') ||
+    (!!e && typeof e === 'object' && 'name' in e && (e as { name: string }).name === 'AbortError')
+  );
+}
 
 async function loadCurrent(autoplay = true, seekTo?: number) {
   const t = current();
@@ -72,6 +80,8 @@ async function loadCurrent(autoplay = true, seekTo?: number) {
       return next(true);
     }
     audio.src = src;
+    // 显式 load，避免沿用上一曲缓冲状态
+    audio.load();
     const target = seekTo != null && seekTo > 0 ? seekTo : 0;
     if (target > 0) {
       await new Promise<void>((resolve) => {
@@ -90,15 +100,23 @@ async function loadCurrent(autoplay = true, seekTo?: number) {
       if (token !== loadToken) return;
       player.currentTime = audio.currentTime;
     }
-    if (autoplay) await audio.play();
-    else {
+    if (autoplay) {
+      try {
+        await audio.play();
+      } catch (e) {
+        // 切歌时前一次 play() 被 abort 是正常的，不当错误
+        if (token !== loadToken || isAbortError(e)) return;
+        throw e;
+      }
+    } else {
       // 预加载到可 seek，界面显示曲目与进度，等用户按播放
       player.playing = false;
     }
   } catch (e) {
+    if (token !== loadToken || isAbortError(e)) return;
     player.error = String(e);
   } finally {
-    schedulePersist(400);
+    if (token === loadToken) schedulePersist(400);
   }
 }
 
@@ -123,8 +141,11 @@ export function enqueue(t: Track) {
 
 export function togglePlay() {
   if (!audio.src) return void loadCurrent(true);
-  if (audio.paused) void audio.play();
-  else audio.pause();
+  if (audio.paused) {
+    void audio.play().catch((e) => {
+      if (!isAbortError(e)) player.error = String(e);
+    });
+  } else audio.pause();
   schedulePersist(300);
 }
 
@@ -132,7 +153,7 @@ export function next(auto = false) {
   if (!player.order.length) return;
   if (auto && player.repeat === 'one') {
     audio.currentTime = 0;
-    return void audio.play();
+    return void audio.play().catch(() => {});
   }
   if (player.pos + 1 < player.order.length) player.pos++;
   else if (player.repeat !== 'off' || !auto) player.pos = 0;
@@ -245,6 +266,7 @@ export async function restorePlaybackSession() {
 
 audio.addEventListener('play', () => {
   player.playing = true;
+  player.error = '';
   schedulePersist(500);
 });
 audio.addEventListener('pause', () => {
@@ -263,6 +285,9 @@ audio.addEventListener('timeupdate', () => {
 audio.addEventListener('durationchange', () => (player.duration = audio.duration || 0));
 audio.addEventListener('ended', () => next(true));
 audio.addEventListener('error', () => {
+  // 1 = MEDIA_ERR_ABORTED（切歌打断），忽略
+  const code = audio.error?.code;
+  if (code === 1) return;
   player.error = `播放出错：${current()?.title ?? ''}`;
 });
 audio.volume = player.volume;

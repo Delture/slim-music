@@ -11,7 +11,7 @@ import {
   togglePlay,
   toggleShuffle,
 } from '../lib/player';
-import { fmtTime } from '../lib/format';
+import { coverSrc, fmtTime } from '../lib/format';
 import { isLiked, openNowPlaying, session, toggleLike } from '../lib/session';
 import SourceBadge from './SourceBadge.vue';
 import Icon from './Icon.vue';
@@ -152,6 +152,10 @@ onMounted(() => {
 });
 onUnmounted(() => cancelAnimationFrame(raf));
 
+function openNp() {
+  if (t.value) openNowPlaying();
+}
+
 async function onLike() {
   const id = t.value?.ncmId;
   if (id == null || !session.profile) return;
@@ -165,8 +169,8 @@ async function onLike() {
 
 <template>
   <footer class="bar">
-    <div class="now" title="打开播放页" @click="t && openNowPlaying()">
-      <img v-if="t?.cover" :src="t.cover" class="cover" />
+    <div class="now" title="打开播放页" @click="openNp">
+      <img v-if="t?.cover" :src="coverSrc(t.cover)" class="cover" />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
       <div v-if="t" class="info">
         <div class="title">{{ t.title }} <SourceBadge :source="t.source" /></div>

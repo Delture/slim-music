@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { api } from '../lib/api';
 import { current, player, seek } from '../lib/player';
 import { closeNowPlaying, isLiked, session, toggleLike } from '../lib/session';
 import { setTrayLyricLines, clearTrayLyric } from '../lib/tray';
+import { coverSrc } from '../lib/format';
+import { loadLocalLyricCached, loadLyricCached, peekLyric, peekLyricForTrack } from '../lib/lyrics';
 import type { LyricLine } from '../lib/types';
 import Icon from '../components/Icon.vue';
 import SourceBadge from '../components/SourceBadge.vue';
@@ -24,15 +25,44 @@ const activeIdx = computed(() => {
   return idx;
 });
 
-async function loadLyric(id: number) {
-  loading.value = true;
+function applyLyric(payload: { lines: LyricLine[] }) {
+  lines.value = payload.lines.filter((l) => l.text.trim());
+  err.value = lines.value.length ? '' : '暂无歌词';
+  setTrayLyricLines(lines.value);
+}
+
+async function loadNeteaseLyric(ncmId: number) {
   err.value = '';
+  const warm = peekLyric(`ncm:${ncmId}`);
+  if (warm) {
+    applyLyric(warm);
+    loading.value = false;
+    return;
+  }
+  loading.value = true;
   lines.value = [];
   try {
-    const payload = await api.lyric(id);
-    lines.value = payload.lines.filter((l) => l.text.trim());
-    if (!lines.value.length) err.value = '暂无歌词';
-    setTrayLyricLines(lines.value);
+    applyLyric(await loadLyricCached(ncmId));
+  } catch (e) {
+    err.value = String(e);
+    clearTrayLyric();
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadLocalLyric(trackId: string, path: string) {
+  err.value = '';
+  const warm = peekLyric(trackId);
+  if (warm) {
+    applyLyric(warm);
+    loading.value = false;
+    return;
+  }
+  loading.value = true;
+  lines.value = [];
+  try {
+    applyLyric(await loadLocalLyricCached(trackId, path));
   } catch (e) {
     err.value = String(e);
     clearTrayLyric();
@@ -43,15 +73,32 @@ async function loadLyric(id: number) {
 
 watch(
   () => t.value?.id,
-  (id) => {
+  () => {
     const track = t.value;
-    if (!track || track.source !== 'netease' || track.ncmId == null) {
+    if (!track) {
       lines.value = [];
-      err.value = track?.source === 'local' ? '本地歌曲暂不支持在线歌词' : '无歌曲';
+      err.value = '无歌曲';
       clearTrayLyric();
       return;
     }
-    void loadLyric(track.ncmId);
+    if (track.source === 'netease' && track.ncmId != null) {
+      void loadNeteaseLyric(track.ncmId);
+      return;
+    }
+    if (track.source === 'local' && track.path) {
+      // 先 peek，有缓存则立刻显示（同曲重开无闪烁）
+      const warm = peekLyricForTrack(track);
+      if (warm) {
+        applyLyric(warm);
+        loading.value = false;
+        return;
+      }
+      void loadLocalLyric(track.id, track.path);
+      return;
+    }
+    lines.value = [];
+    err.value = '无歌词';
+    clearTrayLyric();
   },
   { immediate: true },
 );
@@ -82,14 +129,14 @@ async function onLike() {
     <button class="back" @click="closeNowPlaying"><Icon name="previous" :size="14" /> 返回</button>
     <div class="body">
       <div class="left">
-        <img v-if="t?.cover" :src="t.cover.replace('200y200', '500y500')" class="cover" />
+        <img v-if="t?.cover" :src="coverSrc(t.cover, '500y500')" class="cover" />
         <div v-else class="cover ph"><Icon name="music" :size="48" /></div>
         <div class="meta">
           <div class="title">
             {{ t?.title ?? '未在播放' }}
             <SourceBadge v-if="t" :source="t.source" />
           </div>
-          <div class="sub">{{ t?.artists.join(' / ') }}</div>
+          <div class="sub">{{ (t?.artists ?? []).join(' / ') }}</div>
           <button
             v-if="t?.source === 'netease' && session.profile"
             class="like"
@@ -123,7 +170,7 @@ async function onLike() {
 .np {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 40;
   background: var(--bg);
   display: flex;
   flex-direction: column;

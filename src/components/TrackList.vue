@@ -3,7 +3,7 @@
 import { computed, reactive, ref } from 'vue';
 import type { Track } from '../lib/types';
 import { current, enqueue, playList } from '../lib/player';
-import { fmtTime } from '../lib/format';
+import { coverSrc, fmtTime } from '../lib/format';
 import { isLiked, session, toggleLike } from '../lib/session';
 import {
   addTrackToLocal,
@@ -125,7 +125,7 @@ function move(i: number, dir: -1 | 1) {
       <button class="no" title="从这首开始播放" @click.stop="playAt(i)">
         <span class="n">{{ i + 1 }}</span><span class="p"><Icon name="play" :size="12" /></span>
       </button>
-      <img v-if="t.cover" :src="t.cover" class="cover" loading="lazy" @click.stop="playAt(i)" />
+      <img v-if="t.cover" :src="coverSrc(t.cover)" class="cover" loading="lazy" @click.stop="playAt(i)" />
       <div v-else class="cover ph" @click.stop="playAt(i)"><Icon name="music" :size="16" /></div>
       <div class="main">
         <div class="title">{{ t.title }}</div>
