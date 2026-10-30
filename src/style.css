@@ -1,52 +1,45 @@
 /* ==========================================================================
-   SlimMusic design tokens — Apple HIG / YesPlayMusic inspired.
-   Reference: https://github.com/qier222/YesPlayMusic (cloned under /workspace/YesPlayMusic)
-   Clean black/white + accent; SF-like system fonts; vibrancy blur on chrome;
-   large titles; soft materials. Not Claude terracotta chat aesthetic.
+   SlimMusic design tokens — Apple HIG / YesPlayMusic + macOS floating chrome.
+   Refs: YesPlayMusic, WWDC25 Liquid Glass sidebars, ChatGPT charcoal dark,
+   Claude-app display serif (Newsreader) + system UI sans.
    ========================================================================== */
 
 :root {
-  /* Cool system neutrals (Music.app / YesPlayMusic) */
+  /* Light neutrals */
   --sm-gray-0: #ffffff;
-  --sm-gray-10: #fafafa;
   --sm-gray-20: #f5f5f7;
   --sm-gray-30: #ebebed;
   --sm-gray-40: #e5e5ea;
-  --sm-gray-50: #d2d2d7;
-  --sm-gray-100: #c6c6c8;
-  --sm-gray-200: #98989d;
-  --sm-gray-400: #8e8e93;
-  --sm-gray-500: #6c6c70;
-  --sm-gray-600: #48484a;
-  --sm-gray-700: #3a3a3c;
-  --sm-gray-800: #2c2c2e;
-  --sm-gray-850: #1c1c1e;
-  --sm-gray-900: #000000;
   --sm-ink: #000000;
 
-  /* Accents (switchable via data-accent); default NetEase red */
+  /* Accents */
   --accent-red: #ec4141;
   --accent-red-hover: #d73737;
   --accent-clay: #d97757;
   --accent-clay-hover: #cc5a36;
   --accent: var(--accent-red);
   --accent-hover: var(--accent-red-hover);
-  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
-  --accent-soft-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-soft-strong: color-mix(in srgb, var(--accent) 26%, transparent);
 
-  /* Surface ladder */
-  --surface-0: rgba(245, 245, 247, 0.72); /* sidebar / chrome (under blur) */
-  --surface-0-solid: var(--sm-gray-20);
-  --surface-1: var(--sm-gray-0);          /* main canvas */
-  --surface-2: rgba(255, 255, 255, 0.72); /* player / elevated chrome */
-  --surface-2-solid: var(--sm-gray-0);
-  --surface-3: var(--sm-gray-0);
+  /* Layered surfaces — light (window ≠ chrome ≠ content ≠ player ≠ overlay) */
+  --bg-window: #e8e8ed;                 /* behind floating panels */
+  --surface-chrome: rgba(255, 255, 255, 0.78); /* sidebar / tab bar glass */
+  --surface-chrome-solid: #f5f5f7;
+  --surface-1: #ffffff;                 /* main content */
+  --surface-player: rgba(255, 255, 255, 0.82);
+  --surface-player-solid: #ffffff;
+  --surface-2: var(--surface-player);
+  --surface-2-solid: var(--surface-player-solid);
+  --surface-3: #ffffff;                 /* menus / cards */
+  --surface-0: var(--surface-chrome);
+  --surface-0-solid: var(--surface-chrome-solid);
   --bg: var(--surface-1);
-  --hover: rgba(0, 0, 0, 0.05);
-  --selected: rgba(0, 0, 0, 0.08);
-  --fill-secondary: rgba(209, 209, 214, 0.28); /* YesPlayMusic secondary-bg-for-transparent */
 
-  /* Hairlines & text */
+  --hover: rgba(0, 0, 0, 0.05);
+  --selected: rgba(0, 0, 0, 0.09);
+  --fill-secondary: rgba(209, 209, 214, 0.42);
+
   --border: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.14);
   --hairline: var(--sm-gray-40);
@@ -54,26 +47,28 @@
   --text-secondary: rgba(0, 0, 0, 0.58);
   --muted: rgba(0, 0, 0, 0.42);
 
-  /* Elevation — soft cover / card shadows (YesPlayMusic-like) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 12px 28px -6px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.06);
   --shadow-cover: 0 6px 12px -2px rgba(0, 0, 0, 0.16), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-bar: 0 -0.5px 0 var(--border);
+  --shadow-chrome: 0 8px 28px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --shadow-bar: var(--shadow-chrome);
 
-  /* Vibrancy (static panel blur — GPU-cheap; no continuous animated blur) */
   --vibrancy: saturate(180%) blur(22px);
   --vibrancy-strong: saturate(180%) blur(30px);
 
-  /* Radii — YesPlayMusic uses 6–12 */
   --radius-sm: 6px;
   --radius: 8px;
   --radius-md: 10px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+  --radius-chrome: 18px;
   --radius-pill: 999px;
 
-  /* Spacing (4px base) — more generous than v0.3 */
+  --chrome-inset: 12px;
+  --chrome-gap: 12px;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -81,7 +76,6 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  /* Motion */
   --ease-swift: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
@@ -89,13 +83,18 @@
   --dur: 200ms;
   --dur-slow: 320ms;
 
-  color: var(--text);
-  background: var(--bg);
-  /* SF-like system stack (YesPlayMusic + Apple HIG) */
-  font-family:
+  /* UI sans (system) + display serif (Claude-app style titles only) */
+  --font-ui:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
     'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI',
     'Microsoft YaHei', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
+  --font-display:
+    'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
+    'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', ui-serif, serif;
+
+  color: var(--text);
+  background: var(--bg-window);
+  font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -109,46 +108,61 @@
   --accent-hover: var(--accent-clay-hover);
 }
 
+/* ChatGPT classic charcoal — not OLED pure black; distinct layers */
 [data-theme='dark'] {
-  --surface-0: rgba(28, 28, 30, 0.72);
-  --surface-0-solid: var(--sm-gray-850);
-  --surface-1: var(--sm-gray-900);
-  --surface-2: rgba(28, 28, 30, 0.78);
-  --surface-2-solid: var(--sm-gray-850);
-  --surface-3: var(--sm-gray-800);
+  --bg-window: #181818;                 /* darkest dock behind panels */
+  --surface-chrome: rgba(37, 37, 36, 0.86); /* sidebar ~#252524 */
+  --surface-chrome-solid: #252524;
+  --surface-1: #212121;                 /* content canvas */
+  --surface-player: rgba(48, 48, 48, 0.9); /* #303030 raised */
+  --surface-player-solid: #303030;
+  --surface-2: var(--surface-player);
+  --surface-2-solid: var(--surface-player-solid);
+  --surface-3: #2a2a29;                 /* menus / elevated cards */
+  --surface-0: var(--surface-chrome);
+  --surface-0-solid: var(--surface-chrome-solid);
   --bg: var(--surface-1);
+
   --hover: rgba(255, 255, 255, 0.08);
   --selected: rgba(255, 255, 255, 0.12);
-  --fill-secondary: rgba(255, 255, 255, 0.08);
+  --fill-secondary: rgba(255, 255, 255, 0.1);
+
   --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --hairline: rgba(255, 255, 255, 0.12);
-  --text: #ffffff;
+  --text: #ededed;
   --text-secondary: rgba(255, 255, 255, 0.58);
   --muted: rgba(255, 255, 255, 0.42);
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.5);
   --shadow-cover: 0 8px 20px rgba(0, 0, 0, 0.45);
-  --shadow-bar: 0 -0.5px 0 var(--border);
-  --accent-soft: color-mix(in srgb, var(--accent) 24%, transparent);
-  --accent-soft-strong: color-mix(in srgb, var(--accent) 32%, transparent);
+  --shadow-chrome: 0 10px 32px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-bar: var(--shadow-chrome);
+
+  --accent-soft: color-mix(in srgb, var(--accent) 28%, transparent);
+  --accent-soft-strong: color-mix(in srgb, var(--accent) 38%, transparent);
+
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg-window);
 }
 
 @media (prefers-color-scheme: dark) {
   [data-theme-appearance='system']:not([data-theme='light']):not([data-theme='dark']),
   :root:not([data-theme]):not([data-theme-appearance]) {
-    /* fallback before JS — main.ts sets data-theme immediately */
   }
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-window);
+  color: var(--text);
+}
 #app { height: 100%; }
 
-/* ---------- Thin scrollbar (Windows + others) ---------- */
 * {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
@@ -167,7 +181,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   border: 2px solid transparent;
 }
 
-/* ---------- Motion keyframes (light) ---------- */
 @keyframes sm-fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -197,60 +210,72 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   animation: sm-fade-in var(--dur-slow) var(--ease-enter) both;
 }
 
-/* ---------- Shell layout ---------- */
+/* ---------- Floating chrome shell (macOS Liquid Glass–style inset panels) ---------- */
 .app {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
+  grid-template-columns: 212px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100vh;
   min-width: 0;
-  background: var(--bg);
+  gap: var(--chrome-gap);
+  padding: var(--chrome-inset);
+  background: var(--bg-window);
+  box-sizing: border-box;
 }
 .nav {
   grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: var(--space-4) var(--space-3);
-  background: var(--surface-0);
+  padding: var(--space-3);
+  background: var(--surface-chrome);
   -webkit-backdrop-filter: var(--vibrancy);
   backdrop-filter: var(--vibrancy);
-  border-right: 0.5px solid var(--border);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-chrome);
+  box-shadow: var(--shadow-chrome);
   z-index: 5;
+  min-height: 0;
+  overflow: auto;
 }
-/* Firefox / no-backdrop fallback */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav { background: var(--surface-0-solid); }
+  .nav { background: var(--surface-chrome-solid); }
   .player .bar,
-  footer.bar { background: var(--surface-2-solid); }
+  footer.bar { background: var(--surface-player-solid); }
 }
 .nav a {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  min-height: 40px;
+  min-height: 42px;
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 550;
   letter-spacing: -0.01em;
+  position: relative;
   transition:
     background var(--dur-fast) var(--ease-swift),
     color var(--dur-fast) var(--ease-swift),
-    transform var(--dur-fast) var(--ease-swift);
+    transform var(--dur-fast) var(--ease-swift),
+    box-shadow var(--dur-fast) var(--ease-swift);
 }
 .nav a:hover {
   background: var(--fill-secondary);
   color: var(--text);
 }
 .nav a:active { transform: scale(0.97); }
+/* Strong selected state — readable at a glance */
 .nav a.on {
-  background: var(--accent-soft);
+  background: var(--accent-soft-strong);
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 700;
+  box-shadow:
+    inset 3px 0 0 0 var(--accent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .nav .user {
   margin-top: auto;
@@ -258,8 +283,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font-size: 12px;
   color: var(--muted);
   border-top: 0.5px solid var(--border);
-  margin-left: 4px;
-  margin-right: 4px;
 }
 .main-col {
   grid-row: 1;
@@ -269,6 +292,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   display: flex;
   flex-direction: column;
   background: var(--surface-1);
+  border-radius: var(--radius-chrome);
+  border: 0.5px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 .content {
   flex: 1;
@@ -276,13 +303,23 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   overflow: auto;
   padding: var(--space-5) var(--space-6);
   min-width: 0;
+  background: var(--surface-1);
 }
 .content.locked { overflow: hidden; }
-.player { grid-column: 1 / -1; }
+.player {
+  grid-column: 1 / -1;
+  border-radius: var(--radius-chrome);
+  overflow: hidden;
+  border: 0.5px solid var(--border);
+  box-shadow: var(--shadow-chrome);
+  background: transparent;
+}
 
-/* 全屏播放：隐藏侧栏与底栏（桌面 / Windows / Android 一致） */
 .app.np-open .nav,
 .app.np-open .player {
+  display: none !important;
+}
+.app.np-open .main-col {
   display: none !important;
 }
 
@@ -295,9 +332,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 }
 .head h2 {
   margin: 0 8px 0 0;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text);
   line-height: 1.2;
 }
@@ -306,13 +344,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .error { color: #c62f2f; }
 [data-theme='dark'] .error { color: #ff6b6b; }
 
-/* ---------- Controls ---------- */
 button, input, select {
   font: inherit;
   padding: 8px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface-2-solid);
+  background: var(--surface-3);
   color: inherit;
   transition:
     background var(--dur-fast) var(--ease-swift),
@@ -377,7 +414,6 @@ input[type='checkbox'] {
   min-height: 0;
 }
 
-/* Segmented control (theme / accent) — iOS-like */
 .seg {
   display: inline-flex;
   padding: 3px;
@@ -397,19 +433,18 @@ input[type='checkbox'] {
   font-weight: 500;
 }
 .seg button.on {
-  background: var(--surface-2-solid);
+  background: var(--surface-3);
   color: var(--text);
   box-shadow: var(--shadow-sm);
-  font-weight: 600;
+  font-weight: 650;
 }
 .seg button:hover:not(.on):not(:disabled) {
   background: var(--hover);
   color: var(--text);
 }
 
-/* Settings panels */
 .settings-card {
-  background: var(--surface-2-solid);
+  background: var(--surface-3);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-xl);
   padding: var(--space-5);
@@ -419,8 +454,9 @@ input[type='checkbox'] {
 }
 .settings-card h3 {
   margin: 0 0 14px;
-  font-size: 15px;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
   letter-spacing: -0.015em;
 }
 .settings-card + .settings-card { margin-top: 14px; }
@@ -436,47 +472,50 @@ input[type='checkbox'] {
   box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3.5px var(--accent);
 }
 
-/* ---------- Mobile ---------- */
+/* ---------- Mobile: floating bottom tab bar ---------- */
 @media (max-width: 700px) {
   html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
   .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto auto;
     height: 100dvh;
-    padding-top: env(safe-area-inset-top);
+    padding: calc(8px + env(safe-area-inset-top)) 8px 0;
+    gap: 8px;
   }
-  .main-col { grid-row: 1; }
-  .player { grid-row: 2; }
+  .main-col { grid-row: 1; border-radius: 16px; }
+  .player { grid-row: 2; border-radius: 16px; }
   .nav {
     grid-row: 3;
     flex-direction: row;
     justify-content: space-around;
-    gap: 0;
-    padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
-    border-right: 0;
-    border-top: 0.5px solid var(--border);
-    background: var(--surface-0);
-    -webkit-backdrop-filter: var(--vibrancy);
-    backdrop-filter: var(--vibrancy);
-    box-shadow: none;
+    gap: 2px;
+    margin: 0 4px calc(8px + env(safe-area-inset-bottom));
+    padding: 6px 6px;
+    border-radius: 22px;
+    overflow: visible;
+    box-shadow: var(--shadow-chrome);
   }
   .nav a {
     flex: 1;
     flex-direction: column;
     gap: 3px;
-    padding: 6px 0;
+    padding: 8px 4px;
     min-height: 52px;
     justify-content: center;
     font-size: 10px;
-    font-weight: 500;
-    border-radius: var(--radius);
+    font-weight: 550;
+    border-radius: 16px;
   }
   .nav a:hover { background: none; }
-  .nav a.on { background: none; }
+  .nav a.on {
+    background: var(--accent-soft-strong);
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent);
+    /* no left inset bar on vertical tabs */
+  }
   .nav .user { display: none; }
   .content { padding: 16px 16px 20px; }
   .head { flex-wrap: wrap; gap: 10px; }
-  .head h2 { font-size: 24px; flex-basis: 100%; }
+  .head h2 { font-size: 26px; flex-basis: 100%; }
   button, input, select { min-height: 44px; font-size: 16px; }
   .seg button { min-height: 36px; font-size: 13px; }
 }

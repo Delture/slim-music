@@ -188,10 +188,11 @@ onUnmounted(() => {
 }
 .side-title {
   display: none;
-  font-weight: 700;
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 24px;
   margin-bottom: 14px;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 .item {
   display: flex;
@@ -217,9 +218,10 @@ onUnmounted(() => {
   background: var(--fill-secondary);
 }
 .item.on {
-  background: var(--accent-soft);
+  background: var(--accent-soft-strong);
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .body {
   min-width: 0;

@@ -165,7 +165,7 @@ async function saveQr() {
           </button>
         </div>
       </div>
-      <p class="muted tip">浅色 / 深色为干净的黑白系统色（参考 Music.app / YesPlayMusic）；强调色可切换。设置写入 settings.json。</p>
+      <p class="muted tip">浅色为浮动面板 + 系统灰；深色为 ChatGPT 式炭灰分层（非纯黑）。标题用衬线展示字体。强调色可切换。设置写入 settings.json。</p>
     </div>
 
     <div class="settings-card">

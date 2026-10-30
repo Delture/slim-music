@@ -210,9 +210,10 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: -0.015em;
   margin-bottom: 12px;
 }
 .link {
@@ -253,9 +254,10 @@ watch(
   background: var(--fill-secondary);
 }
 .item.on {
-  background: var(--accent-soft);
+  background: var(--accent-soft-strong);
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .mini {
   background: none;
@@ -308,8 +310,8 @@ watch(
     max-height: none;
   }
   .side-head {
-    font-size: 22px;
-    letter-spacing: -0.03em;
+    font-size: 24px;
+    letter-spacing: -0.02em;
   }
   .item {
     min-height: 48px;

@@ -266,11 +266,11 @@ async function onLike() {
   gap: 16px;
   padding: 10px 20px;
   min-height: 72px;
-  background: var(--surface-2);
+  background: var(--surface-player);
   -webkit-backdrop-filter: var(--vibrancy-strong);
   backdrop-filter: var(--vibrancy-strong);
-  box-shadow: var(--shadow-bar);
-  border-top: 0.5px solid var(--border);
+  box-shadow: none;
+  border: 0;
   z-index: 20;
 }
 .now {
@@ -459,7 +459,7 @@ async function onLike() {
   margin: -6px 0 0 -6px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 2px var(--surface-2-solid);
+  box-shadow: 0 0 0 2px var(--surface-player-solid);
   left: 0%;
   transition: none;
   pointer-events: none;
@@ -524,7 +524,7 @@ async function onLike() {
   margin: -6px 0 0 -6px;
   border-radius: 50%;
   background: var(--text);
-  box-shadow: 0 0 0 2px var(--surface-2-solid);
+  box-shadow: 0 0 0 2px var(--surface-player-solid);
   left: 0%;
   transition: none;
   pointer-events: none;

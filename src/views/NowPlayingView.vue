@@ -356,7 +356,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: var(--surface-1);
+  background: var(--bg-window);
   display: flex;
   flex-direction: column;
   padding: calc(16px + env(safe-area-inset-top)) 36px calc(20px + env(safe-area-inset-bottom));
@@ -441,9 +441,10 @@ onUnmounted(() => {
   width: 100%;
 }
 .title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   line-height: 1.25;
 }
 .sub {
@@ -509,11 +510,17 @@ onUnmounted(() => {
 }
 .dock {
   margin-top: 16px;
-  padding-top: 10px;
+  padding: 14px 18px 10px;
   max-width: 520px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
+  background: var(--surface-player);
+  -webkit-backdrop-filter: var(--vibrancy);
+  backdrop-filter: var(--vibrancy);
+  border-radius: var(--radius-chrome);
+  border: 0.5px solid var(--border);
+  box-shadow: var(--shadow-chrome);
 }
 .progress {
   display: flex;

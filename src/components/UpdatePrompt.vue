@@ -26,7 +26,7 @@ import { dismissUpdate, installUpdate, updater } from '../lib/updater';
   width: 240px;
   padding: 14px 16px;
   border-radius: var(--radius-lg);
-  background: var(--surface-2-solid);
+  background: var(--surface-3);
   border: 0.5px solid var(--border);
   color: inherit;
   box-shadow: var(--shadow-lg);

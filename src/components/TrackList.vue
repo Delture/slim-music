@@ -218,11 +218,12 @@ function move(i: number, dir: -1 | 1) {
   background: var(--fill-secondary);
 }
 .row.playing {
-  background: var(--accent-soft);
+  background: var(--accent-soft-strong);
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .row.playing .title {
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 700;
 }
 .no {
   background: none;
@@ -367,7 +368,7 @@ function move(i: number, dir: -1 | 1) {
 }
 .menu {
   position: fixed;
-  background: var(--surface-2-solid);
+  background: var(--surface-3);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 6px;

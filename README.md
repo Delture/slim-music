@@ -43,7 +43,7 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 
 ### v0.4.0 界面（Apple / YesPlayMusic）
 
-参照 [YesPlayMusic](https://github.com/qier222/YesPlayMusic) 与 macOS Music.app 重做视觉：系统字体栈（`-apple-system` / SF Pro）、干净黑白表面（去掉 Claude 暖纸色廉价感）、侧栏与播放条半透明 vibrancy 模糊、更大标题与行高、封面软阴影、播放主按钮实心圆、更清晰的列表层级。主题强制 + 强调色切换保留（默认网易云红）。v0.3.0 的修复仍在：全屏正在播放、窄屏歌单叠层、Dock 重开窗口、Windows 细滚动条与图标。
+参照 [YesPlayMusic](https://github.com/qier222/YesPlayMusic) 与 macOS Music.app / Liquid Glass 浮动 chrome 重做视觉：系统 UI 字体 + Newsreader 衬线大标题（Claude 展示字体感）、侧栏与底栏为圆角内缩浮动面板（非贴边通栏）、半透明 vibrancy、封面软阴影、实心播放钮。深色为 ChatGPT 经典炭灰分层（`#181818` 窗体 / `#212121` 内容 / `#303030` 播放条，非纯黑 OLED）。选中导航/列表有更强对比。主题强制 + 强调色保留（默认网易云红）。v0.3.0 修复仍在：全屏正在播放、窄屏歌单叠层、Dock 重开、Windows 细滚动条与图标。
 
 ### v0.3.0
 
