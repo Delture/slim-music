@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SlimMusic v0.7.0 design tokens — pen.dev philosophy (variables once,
+   SlimMusic v0.8.0 design tokens — pen.dev philosophy (variables once,
    components inherit). ONE spacing / radius / button / list-row / badge /
    header system. Charcoal layers + floating chrome. OPPO Sans 4.0.
    ========================================================================== */
@@ -90,13 +90,13 @@
   --content-radius: var(--chrome-radius);
   --content-shadow: var(--shadow-sm);
 
-  /* ONE panel token for co-visible panes (playlist list + tracks, etc.).
-     Hierarchy ≠ different surface when panes share the screen — same fill/rim.
-     Mature master-detail (Music.app / Finder): one canvas + hairline, not stacked cards. */
-  --panel-bg: var(--content-bg);
-  --panel-border: var(--content-border);
-  --panel-radius: var(--content-radius);
-  --panel-shadow: none; /* inset sibling panes: no extra elevation */
+  /* ONE panel token for EVERY floating pane (nav, playlist list, tracks, player).
+     Co-visible panels MUST share identical fill — hierarchy ≠ different surface.
+     Detached chrome: same radius / border / shadow as the sidebar. */
+  --panel-bg: var(--chrome-bg-solid);
+  --panel-border: var(--chrome-border);
+  --panel-radius: var(--chrome-radius);
+  --panel-shadow: var(--chrome-shadow);
   --panel-divider: 0.5px solid var(--border);
 
   /* ---- ONE spacing scale ---- */
@@ -138,7 +138,7 @@
   /* ---- ONE badge / chip ---- */
   --badge-h: 18px;
   --badge-px: 6px;
-  --badge-radius: var(--radius-pill);
+  --badge-radius: var(--radius); /* ~8px rounded-rect, match nav tab — not capsule */
   --badge-font: 10px;
   --badge-weight: 650;
 
@@ -289,13 +289,14 @@ html, body {
   box-sizing: border-box;
 }
 .nav,
-.player {
-  background: var(--chrome-bg-solid);
+.player,
+.float-panel {
+  background: var(--panel-bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border: var(--chrome-border);
-  border-radius: var(--chrome-radius);
-  box-shadow: var(--chrome-shadow);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
 }
 .nav {
   grid-row: 1;
@@ -309,7 +310,8 @@ html, body {
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .nav,
-  .player { background: var(--chrome-bg-solid); }
+  .player,
+  .float-panel { background: var(--panel-bg); }
   .player .bar,
   footer.bar { background: transparent; }
 }
@@ -362,10 +364,10 @@ html, body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--content-bg);
-  border-radius: var(--content-radius);
-  border: var(--content-border);
-  box-shadow: var(--content-shadow);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
+  border: var(--panel-border);
+  box-shadow: var(--panel-shadow);
   overflow: hidden;
 }
 .content {
@@ -374,12 +376,34 @@ html, body {
   overflow: auto;
   padding: var(--space-5) var(--space-6);
   min-width: 0;
-  background: var(--content-bg);
+  background: transparent;
+}
+/* Playlist pages: strip outer chrome so list + tracks are TWO floating panels */
+.app.split-main .main-col {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  border-radius: 0;
+}
+.app.split-main .content {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
 }
 .content.locked { overflow: hidden; }
 .player {
   grid-column: 1 / -1;
   overflow: hidden;
+  /* Detached floating bar — same --panel-* as sidebar (not flush to window edges;
+     .app padding + gap already inset it). */
+  background: var(--panel-bg);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
 }
 
 .app.np-open .nav,
@@ -738,7 +762,20 @@ input[type='checkbox'] {
     gap: var(--space-2);
   }
   .main-col { grid-row: 1; border-radius: var(--radius-chrome-mobile); }
-  .player { grid-row: 2; border-radius: var(--radius-chrome-mobile); }
+  .player {
+    grid-row: 2;
+    border-radius: var(--radius-chrome-mobile);
+    background: var(--panel-bg);
+    border: var(--panel-border);
+    box-shadow: var(--panel-shadow);
+  }
+  .app.split-main .main-col {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .app.split-main .content { padding: 0; }
   .nav {
     grid-row: 3;
     flex-direction: row;

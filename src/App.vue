@@ -39,7 +39,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app" :class="{ 'np-open': session.nowPlaying }">
+  <div
+    class="app"
+    :class="{
+      'np-open': session.nowPlaying,
+      'split-main': page === 'playlists' || page === 'localPlaylists',
+    }"
+  >
     <nav class="nav">
       <a
         v-for="p in pages"

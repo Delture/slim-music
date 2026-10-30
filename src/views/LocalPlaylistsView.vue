@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { playList, player } from '../lib/player';
 import {
   createLocalPlaylist,
@@ -23,6 +23,15 @@ const mobileDetail = ref(false);
 const narrow = ref(false);
 let mql: MediaQueryList | null = null;
 
+const menu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  /** null = 正在播放 row; otherwise a user playlist */
+  target: null as LocalPlaylist | null,
+  isNow: false,
+});
+
 const nowPlayingTracks = computed<Track[]>(() => {
   if (!player.order.length) return [...player.queue];
   return player.order.map((i) => player.queue[i]).filter(Boolean) as Track[];
@@ -36,10 +45,6 @@ const activeUser = computed(
 
 const activeTracks = computed(() =>
   isNowPlaying.value ? nowPlayingTracks.value : activeUser.value?.tracks ?? [],
-);
-
-const activeTitle = computed(() =>
-  isNowPlaying.value ? '正在播放' : activeUser.value?.name ?? '',
 );
 
 function syncNarrow() {
@@ -67,6 +72,28 @@ function backToLists() {
   mobileDetail.value = false;
 }
 
+function closeMenu() {
+  menu.show = false;
+  menu.target = null;
+  menu.isNow = false;
+}
+
+function openMenuNow(e: MouseEvent) {
+  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, target: null, isNow: true });
+}
+
+function openMenuPl(e: MouseEvent, p: LocalPlaylist) {
+  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, target: p, isNow: false });
+}
+
+function menuPlayAll() {
+  const tracks = menu.isNow
+    ? nowPlayingTracks.value
+    : menu.target?.tracks ?? [];
+  closeMenu();
+  if (tracks.length) playList(tracks);
+}
+
 async function onCreate() {
   const name = prompt('新建播放列表名称', '新播放列表');
   if (!name?.trim()) return;
@@ -79,7 +106,10 @@ async function onCreate() {
   }
 }
 
-async function onRename(p: LocalPlaylist) {
+async function menuRename() {
+  const p = menu.target;
+  closeMenu();
+  if (!p) return;
   const name = prompt('重命名', p.name);
   if (!name?.trim() || name.trim() === p.name) return;
   try {
@@ -89,7 +119,10 @@ async function onRename(p: LocalPlaylist) {
   }
 }
 
-async function onDelete(p: LocalPlaylist) {
+async function menuDelete() {
+  const p = menu.target;
+  closeMenu();
+  if (!p) return;
   if (!confirm(`确定删除播放列表「${p.name}」？歌曲文件不会被删除。`)) return;
   try {
     await deleteLocalPlaylist(p.id);
@@ -135,8 +168,8 @@ watch(
 </script>
 
 <template>
-  <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
-    <aside class="side panel">
+  <section class="pl" :class="{ 'mobile-detail': mobileDetail }" @click="closeMenu">
+    <aside class="side float-panel">
       <div class="side-head">
         <span>播放列表</span>
         <button class="btn-icon link" type="button" title="新建" @click="onCreate">
@@ -144,7 +177,12 @@ watch(
         </button>
       </div>
 
-      <div class="list-row item" :class="{ on: isNowPlaying }" @click="openNow">
+      <div
+        class="list-row item"
+        :class="{ on: isNowPlaying }"
+        @click="openNow"
+        @contextmenu.prevent="openMenuNow($event)"
+      >
         <span class="name">正在播放</span>
         <small class="muted count">{{ nowPlayingTracks.length }}</small>
       </div>
@@ -154,75 +192,84 @@ watch(
       <div
         v-for="p in localPl.lists"
         :key="p.id"
-        class="list-row item has-actions"
+        class="list-row item"
         :class="{ on: activeId === p.id }"
         @click="open(p)"
+        @contextmenu.prevent="openMenuPl($event, p)"
       >
-        <span class="name" :title="p.name" @dblclick.stop="onRename(p)">{{ p.name }}</span>
+        <span class="name" :title="p.name">{{ p.name }}</span>
         <small class="muted count">{{ p.tracks.length }}</small>
-        <button class="btn-icon mini" type="button" title="重命名" @click.stop="onRename(p)"><Icon name="pencil" :size="13" /></button>
-        <button class="btn-icon mini" type="button" title="删除" @click.stop="onDelete(p)"><Icon name="x" :size="14" /></button>
       </div>
     </aside>
 
-    <div class="body panel">
-      <header class="head">
-        <button v-if="narrow" class="back btn-ghost" type="button" @click="backToLists">
+    <div class="body float-panel">
+      <!-- Mobile only: back. No large title / action buttons — middle selection is enough. -->
+      <header v-if="narrow" class="mobile-bar">
+        <button class="back btn-ghost" type="button" @click="backToLists">
           <Icon name="chevron-left" :size="14" /> 列表
         </button>
-        <h2 class="head-title title-ellip">{{ activeTitle }}</h2>
-        <div class="head-actions">
-          <button
-            v-if="activeTracks.length && !isNowPlaying"
-            class="btn-primary"
-            @click="playList(activeTracks)"
-          >
-            播放全部
-          </button>
-          <template v-if="activeUser">
-            <button class="btn-ghost" @click="onRename(activeUser)">重命名</button>
-            <button class="btn-danger" @click="onDelete(activeUser)">删除</button>
-          </template>
-        </div>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
-      <p v-if="isNowPlaying && !activeTracks.length" class="muted">队列为空，去别处点一首歌开始听</p>
-      <TrackList
-        v-else
-        :tracks="activeTracks"
-        :local-playlist-id="isNowPlaying ? null : activeUser?.id"
-        :show-reorder="!isNowPlaying && !!activeUser"
-        @reorder="onReorder"
-      />
+      <p v-if="isNowPlaying && !activeTracks.length" class="muted empty-hint">队列为空，去别处点一首歌开始听</p>
+      <div v-else class="tracks-scroll">
+        <TrackList
+          :tracks="activeTracks"
+          :local-playlist-id="isNowPlaying ? null : activeUser?.id"
+          :show-reorder="!isNowPlaying && !!activeUser"
+          @reorder="onReorder"
+        />
+      </div>
+    </div>
+
+    <div
+      v-if="menu.show"
+      class="ctx"
+      :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
+      @click.stop
+    >
+      <div @click="menuPlayAll">播放全部</div>
+      <template v-if="menu.target">
+        <div @click="menuRename">重命名</div>
+        <div class="danger" @click="menuDelete">删除歌单</div>
+      </template>
     </div>
   </section>
 </template>
 
 <style scoped>
-/* Co-visible panes share ONE --panel-* token (same fill/rim). Divider only. */
+/* Four-panel shell: middle (list) + right (tracks) as TWO detached float panels. */
 .pl {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  gap: 0;
+  gap: var(--chrome-gap);
   min-width: 0;
-  background: var(--panel-bg);
-  border-radius: var(--panel-radius);
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+  background: transparent;
 }
-.panel {
+.float-panel {
   background: var(--panel-bg);
-  border: 0;
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
   min-width: 0;
+  min-height: 0;
 }
 .side {
-  border-right: var(--panel-divider);
-  padding: 0 var(--space-2) 0 0;
-  max-height: calc(100vh - 140px);
+  padding: var(--space-3);
   overflow: auto;
 }
 .body {
-  padding: 0 0 0 var(--space-4);
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4);
+  overflow: hidden;
+}
+.tracks-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 .side-head {
   display: flex;
@@ -250,39 +297,25 @@ watch(
   margin: var(--space-2) var(--row-px);
 }
 .item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-1);
-}
-.item.has-actions {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  justify-content: space-between;
 }
 .item .name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
+  flex: 1;
 }
 .item .count {
+  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
-.mini {
-  width: var(--icon-btn);
-  min-width: var(--icon-btn);
-  height: var(--icon-btn);
-  min-height: var(--icon-btn);
-  padding: 0;
-  color: var(--muted);
-  background: transparent;
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
-}
-.item:hover .mini {
-  opacity: 1;
-}
-.mini:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--text);
+.mobile-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  min-height: var(--btn-h);
 }
 .back {
   display: inline-flex;
@@ -291,25 +324,43 @@ watch(
   color: var(--muted);
   flex-shrink: 0;
 }
-.title-ellip {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  max-width: 40vw;
+.empty-hint {
+  padding: var(--space-5) var(--space-3);
+}
+.ctx {
+  position: fixed;
+  background: var(--surface-3);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 40;
+  min-width: 160px;
+  animation: sm-scale-in var(--dur) var(--ease-enter);
+  transform-origin: top left;
+}
+.ctx div {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-swift);
+}
+.ctx div:hover {
+  background: var(--fill-secondary);
+}
+.ctx .danger {
+  color: var(--btn-danger-fg);
 }
 
 @media (max-width: 700px) {
   .pl {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
   .side {
-    border-right: 0;
-    padding: 0;
     max-height: none;
-  }
-  .body {
-    padding: 0;
   }
   .side-head {
     font-size: 24px;
@@ -319,13 +370,6 @@ watch(
   .item {
     min-height: 48px;
     font-size: 15px;
-  }
-  .mini {
-    opacity: 1;
-  }
-  .title-ellip {
-    max-width: none;
-    flex: 1;
   }
   .pl:not(.mobile-detail) .body {
     display: none;

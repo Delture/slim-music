@@ -64,7 +64,8 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
 }
 
 function estimateRowSize() {
-  return window.matchMedia('(max-width: 700px)').matches ? 60 : 56;
+  /* cover + equal vertical padding — cover must not touch row bg edges */
+  return window.matchMedia('(max-width: 700px)').matches ? 64 : 60;
 }
 
 const virtualizer = useVirtualizer(
@@ -278,16 +279,17 @@ function move(i: number, dir: -1 | 1) {
 }
 .row {
   display: grid;
-  grid-template-columns: 40px 48px minmax(0, 1fr) minmax(0, 22%) 56px 32px 52px;
+  grid-template-columns: 40px 44px minmax(0, 1fr) minmax(0, 22%) 56px 32px 52px;
   gap: var(--row-gap);
   align-items: center;
-  padding: var(--row-py) var(--row-px);
+  /* Equal top/bottom padding so cover is optically centered and never clips row bg */
+  padding: 10px var(--row-px);
   border-radius: var(--row-radius);
   user-select: none;
   min-width: 0;
   box-sizing: border-box;
   content-visibility: auto;
-  contain-intrinsic-size: auto 56px;
+  contain-intrinsic-size: auto 60px;
   /* Avoid paint storms while scrolling long lists */
   will-change: transform;
   transition: background var(--dur-fast) var(--ease-swift);
@@ -337,13 +339,14 @@ function move(i: number, dir: -1 | 1) {
   opacity: 1;
 }
 .cover {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius);
   object-fit: cover;
   cursor: pointer;
   border: 0.5px solid rgba(0, 0, 0, 0.06);
   box-shadow: var(--shadow-sm);
+  /* 40 + 10+10 pad = 60 row — cover clears row background edges */
 }
 .ph {
   display: grid;
@@ -491,8 +494,8 @@ function move(i: number, dir: -1 | 1) {
   .row {
     grid-template-columns: 48px minmax(0, 1fr) 44px;
     gap: 10px;
-    padding: 8px 4px;
-    contain-intrinsic-size: auto 60px;
+    padding: 10px 4px;
+    contain-intrinsic-size: auto 64px;
   }
   .row .no,
   .row .album,
@@ -504,8 +507,8 @@ function move(i: number, dir: -1 | 1) {
     grid-template-columns: 48px minmax(0, 1fr) 44px 72px;
   }
   .cover {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
   }
   .heart {
     min-width: 44px;

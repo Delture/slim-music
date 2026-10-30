@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import { session } from '../lib/session';
@@ -19,11 +19,18 @@ const mobileDetail = ref(false);
 const narrow = ref(false);
 let mql: MediaQueryList | null = null;
 
-const canUnsubscribe = computed(
-  () => !!active.value && active.value.subscribed && !active.value.isLiked,
+const menu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  target: null as Playlist | null,
+});
+
+const menuCanUnsubscribe = computed(
+  () => !!menu.target && menu.target.subscribed && !menu.target.isLiked,
 );
-const canDelete = computed(
-  () => !!active.value && active.value.owned && !active.value.isLiked,
+const menuCanDelete = computed(
+  () => !!menu.target && menu.target.owned && !menu.target.isLiked,
 );
 
 function syncNarrow() {
@@ -91,13 +98,33 @@ function backToLists() {
   mobileDetail.value = false;
 }
 
-async function unsubscribe() {
-  if (!active.value || !canUnsubscribe.value) return;
-  if (!confirm(`确定取消收藏「${active.value.name}」？`)) return;
+function closeMenu() {
+  menu.show = false;
+  menu.target = null;
+}
+
+async function openMenu(e: MouseEvent, p: Playlist) {
+  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, target: p });
+}
+
+async function menuPlayAll() {
+  const p = menu.target;
+  closeMenu();
+  if (!p) return;
+  // Ensure tracks for that playlist
+  if (active.value?.id !== p.id) await open(p, false, false);
+  if (tracks.value.length) playList(tracks.value);
+}
+
+async function menuUnsubscribe() {
+  const p = menu.target;
+  closeMenu();
+  if (!p || !p.subscribed || p.isLiked) return;
+  if (!confirm(`确定取消收藏「${p.name}」？`)) return;
   busy.value = true;
   try {
-    await api.playlistSubscribe(active.value.id, false);
-    mobileDetail.value = false;
+    await api.playlistSubscribe(p.id, false);
+    if (active.value?.id === p.id) mobileDetail.value = false;
     await loadLists(true);
   } catch (e) {
     alert(String(e));
@@ -106,20 +133,24 @@ async function unsubscribe() {
   }
 }
 
-async function removeOwned() {
-  if (!active.value || !canDelete.value) return;
+async function menuDelete() {
+  const p = menu.target;
+  closeMenu();
+  if (!p || !p.owned || p.isLiked) return;
   if (
     !confirm(
-      `确定删除网易云歌单「${active.value.name}」？\n此操作不可恢复，歌单内歌曲不会从云盘删除。`,
+      `确定删除网易云歌单「${p.name}」？\n此操作不可恢复，歌单内歌曲不会从云盘删除。`,
     )
   ) {
     return;
   }
   busy.value = true;
   try {
-    await api.playlistDelete(active.value.id);
-    active.value = null;
-    mobileDetail.value = false;
+    await api.playlistDelete(p.id);
+    if (active.value?.id === p.id) {
+      active.value = null;
+      mobileDetail.value = false;
+    }
     await loadLists(true);
   } catch (e) {
     alert(String(e));
@@ -140,9 +171,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
-    <p v-if="!session.profile" class="muted">请先在「设置」中扫码登录网易云。</p>
-    <aside v-else class="side panel">
+  <section class="pl" :class="{ 'mobile-detail': mobileDetail }" @click="closeMenu">
+    <div v-if="!session.profile" class="float-panel login-hint muted">请先在「设置」中扫码登录网易云。</div>
+    <aside v-else class="side float-panel">
       <div class="side-title">我的歌单</div>
       <div
         v-for="p in lists"
@@ -150,56 +181,74 @@ onUnmounted(() => {
         class="list-row item"
         :class="{ on: active?.id === p.id }"
         @click="open(p)"
+        @contextmenu.prevent="openMenu($event, p)"
       >
         <span class="name">{{ p.isLiked ? '我喜欢的音乐' : p.name }}</span>
         <small class="muted count">{{ p.trackCount }}</small>
       </div>
     </aside>
-    <div v-if="active" class="body panel">
-      <header class="head">
-        <button v-if="narrow" class="back btn-ghost" type="button" @click="backToLists">
+    <div v-if="active" class="body float-panel">
+      <!-- Mobile only: back + tiny status. No large title / action buttons — selection in middle panel is enough. -->
+      <header v-if="narrow" class="mobile-bar">
+        <button class="back btn-ghost" type="button" @click="backToLists">
           <Icon name="chevron-left" :size="14" /> 歌单
         </button>
-        <h2 class="head-title">{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
-        <div class="head-actions">
-          <span v-if="fromCache" class="sm-badge muted-chip">缓存</span>
-          <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
-          <button v-if="canUnsubscribe" class="btn-ghost" :disabled="busy" @click="unsubscribe">取消收藏</button>
-          <button v-if="canDelete" class="btn-danger" :disabled="busy" @click="removeOwned">删除歌单</button>
-        </div>
+        <span v-if="fromCache" class="sm-badge muted-chip">缓存</span>
+        <span v-if="loading && !tracks.length" class="muted tiny">加载中…</span>
       </header>
-      <p v-if="loading && !tracks.length" class="muted">加载中…</p>
       <p v-if="err" class="error">{{ err }}</p>
-      <TrackList :tracks="tracks" />
+      <div class="tracks-scroll">
+        <TrackList :tracks="tracks" />
+      </div>
+    </div>
+
+    <div
+      v-if="menu.show && menu.target"
+      class="ctx"
+      :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
+      @click.stop
+    >
+      <div @click="menuPlayAll">播放全部</div>
+      <div v-if="menuCanUnsubscribe" :class="{ disabled: busy }" @click="menuUnsubscribe">取消收藏</div>
+      <div v-if="menuCanDelete" class="danger" :class="{ disabled: busy }" @click="menuDelete">删除歌单</div>
     </div>
   </section>
 </template>
 
 <style scoped>
-/* Co-visible panes share ONE --panel-* token (same fill/rim). Divider only. */
+/* Four-panel shell: this view owns middle (list) + right (tracks) as TWO detached float panels. */
 .pl {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 0;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--chrome-gap);
   min-width: 0;
-  background: var(--panel-bg);
-  border-radius: var(--panel-radius);
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+  background: transparent;
 }
-.panel {
+.float-panel {
   background: var(--panel-bg);
-  border: 0;
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
   min-width: 0;
+  min-height: 0;
 }
 .side {
-  border-right: var(--panel-divider);
-  padding: 0 var(--space-2) 0 0;
-  max-height: calc(100vh - 140px);
+  padding: var(--space-3);
   overflow: auto;
 }
 .body {
-  padding: 0 0 0 var(--space-4);
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4);
+  overflow: hidden;
+}
+.tracks-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 .side-title {
   display: none;
@@ -223,12 +272,58 @@ onUnmounted(() => {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
+.login-hint {
+  grid-column: 1 / -1;
+  padding: var(--space-5);
+  display: flex;
+  align-items: center;
+}
+.mobile-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  min-height: var(--btn-h);
+}
 .back {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   color: var(--muted);
   flex-shrink: 0;
+}
+.tiny {
+  font-size: 12px;
+}
+.ctx {
+  position: fixed;
+  background: var(--surface-3);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 40;
+  min-width: 160px;
+  animation: sm-scale-in var(--dur) var(--ease-enter);
+  transform-origin: top left;
+}
+.ctx div {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-swift);
+}
+.ctx div:hover {
+  background: var(--fill-secondary);
+}
+.ctx .danger {
+  color: var(--btn-danger-fg);
+}
+.ctx .disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 @media (max-width: 700px) {
@@ -237,12 +332,7 @@ onUnmounted(() => {
     gap: 0;
   }
   .side {
-    border-right: 0;
-    padding: 0;
     max-height: none;
-  }
-  .body {
-    padding: 0;
   }
   .side-title {
     display: block;
