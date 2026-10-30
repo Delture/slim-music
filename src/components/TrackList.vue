@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { isMobile } from '../lib/native';
 // 通用歌曲列表。播放：把当前列表设为「播放队列」从该曲开始（不影响本机播放列表内容）。
-import { computed, reactive, ref } from 'vue';
+// 虚拟列表：只渲染视口附近行，消除长歌单上下滚动卡顿。
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useVirtualizer } from '@tanstack/vue-virtual';
 import type { Track } from '../lib/types';
 import { current, enqueue, playList } from '../lib/player';
 import { coverSrc, fmtTime } from '../lib/format';
@@ -15,7 +17,6 @@ import {
 import SourceBadge from './SourceBadge.vue';
 import Icon from './Icon.vue';
 
-// 触屏没有双击习惯：移动端单击即播放
 const PLAY_ON_SINGLE_CLICK = isMobile;
 
 const props = withDefaults(
@@ -42,9 +43,57 @@ const menu = reactive({
 });
 
 const busy = ref(false);
+const rootEl = ref<HTMLElement | null>(null);
+const scrollEl = ref<HTMLElement | null>(null);
 
 const menuTrack = computed(() =>
   menu.index >= 0 ? props.tracks[menu.index] ?? null : null,
+);
+
+/** 只依赖当前曲 id，避免对每行调用 current() */
+const playingId = computed(() => current()?.id ?? null);
+
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let p = el?.parentElement ?? null;
+  while (p && p !== document.documentElement) {
+    const { overflowY } = getComputedStyle(p);
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return p;
+    p = p.parentElement;
+  }
+  return null;
+}
+
+function estimateRowSize() {
+  return window.matchMedia('(max-width: 700px)').matches ? 60 : 56;
+}
+
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: props.tracks.length,
+    getScrollElement: () => scrollEl.value,
+    estimateSize: estimateRowSize,
+    overscan: 12,
+    getItemKey: (i: number) => `${props.tracks[i]?.id ?? i}-${i}`,
+  })),
+);
+
+const virtualRows = computed(() => virtualizer.value.getVirtualItems());
+const totalSize = computed(() => virtualizer.value.getTotalSize());
+
+function refreshScrollParent() {
+  scrollEl.value = findScrollParent(rootEl.value);
+  virtualizer.value.measure();
+}
+
+onMounted(() => {
+  void nextTick(refreshScrollParent);
+  window.addEventListener('resize', refreshScrollParent);
+});
+onUnmounted(() => window.removeEventListener('resize', refreshScrollParent));
+
+watch(
+  () => props.tracks.length,
+  () => void nextTick(() => virtualizer.value.measure()),
 );
 
 function playAt(i: number) {
@@ -114,44 +163,71 @@ function move(i: number, dir: -1 | 1) {
 </script>
 
 <template>
-  <div class="list" @click="closeMenu">
-    <div
-      v-for="(t, i) in tracks"
-      :key="t.id + '-' + i"
-      class="row"
-      :class="{ playing: current()?.id === t.id }"
-      @click="PLAY_ON_SINGLE_CLICK && playAt(i)"
-      @dblclick="playAt(i)"
-      @contextmenu.prevent="openMenu($event, i)"
-    >
-      <button class="no" title="从这首开始播放" @click.stop="playAt(i)">
-        <span class="n">{{ i + 1 }}</span><span class="p"><Icon name="play" :size="12" /></span>
-      </button>
-      <img v-if="t.cover" :src="coverSrc(t.cover)" class="cover" loading="lazy" @click.stop="playAt(i)" />
-      <div v-else class="cover ph" @click.stop="playAt(i)"><Icon name="music" :size="16" /></div>
-      <div class="main">
-        <div class="title">{{ t.title }}</div>
-        <div class="sub">{{ t.artists.join(' / ') || '未知歌手' }}</div>
-      </div>
-      <div class="album">{{ t.album }}</div>
-      <SourceBadge :source="t.source" />
-      <button
-        v-if="t.source === 'netease'"
-        class="heart"
-        :class="{ on: isLiked(t.ncmId), hide: !session.profile }"
-        title="喜欢"
-        @click="onLike(t, $event)"
+  <div ref="rootEl" class="list" @click="closeMenu">
+    <div v-if="tracks.length" class="virt" :style="{ height: totalSize + 'px' }">
+      <div
+        v-for="vRow in virtualRows"
+        :key="String(vRow.key)"
+        class="row"
+        :class="{ playing: playingId === tracks[vRow.index]?.id }"
+        :data-index="vRow.index"
+        :style="{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: vRow.size + 'px',
+          transform: `translateY(${vRow.start}px)`,
+        }"
+        @click="PLAY_ON_SINGLE_CLICK && playAt(vRow.index)"
+        @dblclick="playAt(vRow.index)"
+        @contextmenu.prevent="openMenu($event, vRow.index)"
       >
-        <Icon :name="isLiked(t.ncmId) ? 'heart-solid' : 'heart'" :size="14" />
-      </button>
-      <span v-else class="heart spacer"></span>
-      <div class="dur">{{ fmtTime(t.durationMs / 1000) }}</div>
-      <div v-if="showReorder" class="ord">
-        <button :disabled="i === 0" title="上移" @click.stop="move(i, -1)">↑</button>
-        <button :disabled="i === tracks.length - 1" title="下移" @click.stop="move(i, 1)">↓</button>
+        <button class="no" title="从这首开始播放" @click.stop="playAt(vRow.index)">
+          <span class="n">{{ vRow.index + 1 }}</span
+          ><span class="p"><Icon name="play" :size="12" /></span>
+        </button>
+        <img
+          v-if="tracks[vRow.index]?.cover"
+          :src="coverSrc(tracks[vRow.index].cover)"
+          class="cover"
+          loading="lazy"
+          decoding="async"
+          @click.stop="playAt(vRow.index)"
+        />
+        <div v-else class="cover ph" @click.stop="playAt(vRow.index)">
+          <Icon name="music" :size="16" />
+        </div>
+        <div class="main">
+          <div class="title">{{ tracks[vRow.index].title }}</div>
+          <div class="sub">{{ tracks[vRow.index].artists.join(' / ') || '未知歌手' }}</div>
+        </div>
+        <div class="album">{{ tracks[vRow.index].album }}</div>
+        <SourceBadge :source="tracks[vRow.index].source" />
+        <button
+          v-if="tracks[vRow.index].source === 'netease'"
+          class="heart"
+          :class="{ on: isLiked(tracks[vRow.index].ncmId), hide: !session.profile }"
+          title="喜欢"
+          @click="onLike(tracks[vRow.index], $event)"
+        >
+          <Icon :name="isLiked(tracks[vRow.index].ncmId) ? 'heart-solid' : 'heart'" :size="14" />
+        </button>
+        <span v-else class="heart spacer"></span>
+        <div class="dur">{{ fmtTime(tracks[vRow.index].durationMs / 1000) }}</div>
+        <div v-if="showReorder" class="ord">
+          <button :disabled="vRow.index === 0" title="上移" @click.stop="move(vRow.index, -1)">↑</button>
+          <button
+            :disabled="vRow.index === tracks.length - 1"
+            title="下移"
+            @click.stop="move(vRow.index, 1)"
+          >
+            ↓
+          </button>
+        </div>
       </div>
     </div>
-    <div v-if="!tracks.length" class="empty">暂无歌曲</div>
+    <div v-else class="empty">暂无歌曲</div>
 
     <div
       v-if="menu.show"
@@ -170,12 +246,7 @@ function move(i: number, dir: -1 | 1) {
         </div>
         <div class="has-sub" @click="menu.sub = 'add'">添加到播放列表 ▸</div>
         <div class="has-sub" @click="menu.sub = 'remove'">从播放列表删除 ▸</div>
-        <div
-          v-if="localPlaylistId"
-          @click="removeFrom(localPlaylistId, true)"
-        >
-          从当前播放列表删除
-        </div>
+        <div v-if="localPlaylistId" @click="removeFrom(localPlaylistId, true)">从当前播放列表删除</div>
         <div @click="copyName(); closeMenu()">复制歌名</div>
       </template>
       <template v-else-if="menu.sub === 'add'">
@@ -198,6 +269,12 @@ function move(i: number, dir: -1 | 1) {
 .list {
   width: 100%;
   min-width: 0;
+  position: relative;
+}
+.virt {
+  width: 100%;
+  position: relative;
+  contain: layout style;
 }
 .row {
   display: grid;
@@ -208,7 +285,11 @@ function move(i: number, dir: -1 | 1) {
   border-radius: var(--radius-lg);
   user-select: none;
   min-width: 0;
-  min-height: 56px;
+  box-sizing: border-box;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+  /* Avoid paint storms while scrolling long lists */
+  will-change: transform;
   transition: background var(--dur-fast) var(--ease-swift);
 }
 .row:has(.ord) {
@@ -262,12 +343,7 @@ function move(i: number, dir: -1 | 1) {
   object-fit: cover;
   cursor: pointer;
   border: 0.5px solid rgba(0, 0, 0, 0.06);
-  transition: transform var(--dur) var(--ease-swift), box-shadow var(--dur) var(--ease-swift);
   box-shadow: var(--shadow-sm);
-}
-.row:hover .cover {
-  transform: scale(1.04);
-  box-shadow: var(--shadow-cover);
 }
 .ph {
   display: grid;
@@ -320,9 +396,11 @@ function move(i: number, dir: -1 | 1) {
   border-radius: 50%;
   min-width: 32px;
   min-height: 32px;
-  transition: opacity var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
+  transition:
+    opacity var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift),
+    background var(--dur-fast) var(--ease-swift);
 }
-.heart:active { transform: scale(0.9); }
 .row:hover .heart,
 .heart.on {
   opacity: 1;
@@ -379,8 +457,9 @@ function move(i: number, dir: -1 | 1) {
   overflow: auto;
   animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
-  -webkit-backdrop-filter: var(--vibrancy);
-  backdrop-filter: var(--vibrancy);
+  /* Solid menu — backdrop-filter while list scrolls is a major jank source */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .menu div {
   padding: 10px 14px;
@@ -411,15 +490,28 @@ function move(i: number, dir: -1 | 1) {
     grid-template-columns: 48px minmax(0, 1fr) 44px;
     gap: 10px;
     padding: 8px 4px;
-    min-height: 60px;
+    contain-intrinsic-size: auto 60px;
   }
   .row .no,
   .row .album,
   .row .dur,
-  .row > .badge { display: none; }
-  .row:has(.ord) { grid-template-columns: 48px minmax(0, 1fr) 44px 72px; }
-  .cover { width: 48px; height: 48px; }
-  .heart { min-width: 44px; min-height: 44px; opacity: 1; }
-  .title { font-size: 16px; }
+  .row > .badge {
+    display: none;
+  }
+  .row:has(.ord) {
+    grid-template-columns: 48px minmax(0, 1fr) 44px 72px;
+  }
+  .cover {
+    width: 48px;
+    height: 48px;
+  }
+  .heart {
+    min-width: 44px;
+    min-height: 44px;
+    opacity: 1;
+  }
+  .title {
+    font-size: 16px;
+  }
 }
 </style>

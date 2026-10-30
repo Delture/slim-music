@@ -1,7 +1,7 @@
 {
   "name": "slim-music",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,9 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@iconify-json/ph": "^1.2.2",
+    "@iconify/vue": "^5.0.4",
+    "@tanstack/vue-virtual": "^3.13.50",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-process": "^2.4.0",

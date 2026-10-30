@@ -41,10 +41,18 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 
 0.2.0 起支持应用内更新：启动时自动检查一次，也可在「设置 → 关于」手动检查。桌面端下载后自动安装并重启；Android 下载 APK 后调起系统安装器。v0.1.0 不含更新功能，需手动安装一次 0.2.0。
 
+### v0.6.0 图标 / 滚动 / 字体
+
+- 图标改用成熟开源 Phosphor（`@iconify-json/ph` 子集），统一字重；播放/暂停用 Fill，与实心播放钮匹配并光学居中
+- 歌单 `TrackList` 虚拟列表（`@tanstack/vue-virtual`），上下滚动不再整表重绘；去掉列表滚动路径上的 backdrop-filter / 封面缩放
+- 全文改用 **OPPO Sans 4.0**（官方免费可商用，应用内嵌字体；见 `src/assets/fonts/` 许可说明），去掉 Newsreader / Noto Serif SC
+- 侧栏与底栏改为实色 chrome，降低长列表滚动时的合成层开销
+- 保留 v0.5.0 界面精修（选中态、音质下拉、隐藏滚动条、NP 控制融入背景、按钮 token 等）
+
 ### v0.5.0 界面精修
 
 - 选中态去掉左侧强调条，改为 macOS 侧栏式略亮底 + 字重（导航 / 歌单 / 曲目一致）
-- 全文衬线：Newsreader（英）+ Noto Serif SC（中），标题与正文同一套
+- （已被 v0.6.0 的 OPPO Sans 取代）全文衬线：Newsreader + Noto Serif SC
 - 音质设置：自定义下拉（深色可读），不再用系统原生 `<select>`
 - 全平台隐藏滚动条（仍可滚动）
 - 正在播放控制条融入封面/歌词背景，不再浮成独立卡片
@@ -59,6 +67,10 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 ### v0.3.0
 
 主题 / 强调色、轻量动效、Windows 细滚动条与图标、macOS Dock 重开、手机歌单叠层、全屏正在播放。
+
+## 字体许可
+
+本软件界面使用 [OPPO Sans 4.0](https://open.oppomobile.com/new/developmentDoc/info?id=13223) 字体。版权归 OPPO 广东移动通信有限公司所有，按官方许可免费嵌入使用（含商用）；未对字体文件做改编。许可全文见 [`src/assets/fonts/OPPOSans-LICENSE.txt`](src/assets/fonts/OPPOSans-LICENSE.txt)。
 
 ## 开发与构建
 

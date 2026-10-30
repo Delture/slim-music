@@ -182,7 +182,7 @@ async function saveQr() {
           </button>
         </div>
       </div>
-      <p class="muted tip">浅色为浮动面板 + 系统灰；深色为 ChatGPT 式炭灰分层（非纯黑）。界面全文衬线（Newsreader + Noto Serif SC）。强调色可切换。设置写入 settings.json。</p>
+      <p class="muted tip">浅色为浮动面板 + 系统灰；深色为 ChatGPT 式炭灰分层（非纯黑）。界面字体为 OPPO Sans 4.0。强调色可切换。设置写入 settings.json。</p>
     </div>
 
     <div class="settings-card">
@@ -281,6 +281,9 @@ async function saveQr() {
         <span v-if="checked && !updater.checking && !updater.error && !updater.available" class="muted">已是最新</span>
         <span v-if="updater.error && !updater.prompt" class="muted">{{ updater.error }}</span>
       </div>
+      <p class="muted tip">
+        本软件使用 OPPO Sans 4.0 字体（© OPPO，免费可商用嵌入）。图标来自 Phosphor。
+      </p>
     </div>
   </section>
 </template>

@@ -1,8 +1,16 @@
 /* ==========================================================================
    SlimMusic design tokens — Apple HIG / YesPlayMusic + macOS floating chrome.
    Refs: YesPlayMusic, WWDC25 Liquid Glass sidebars, ChatGPT charcoal dark,
-   Full-UI Claude-like serif (Newsreader + Noto Serif SC); design-token buttons.
+   UI font: OPPO Sans 4.0 (bundled); design-token buttons.
    ========================================================================== */
+
+@font-face {
+  font-family: 'OPPO Sans';
+  src: url('./assets/fonts/OPPOSans-4.0.ttf') format('truetype');
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* Light neutrals */
@@ -95,13 +103,13 @@
   --dur: 200ms;
   --dur-slow: 320ms;
 
-  /* Full-UI Anthropic-adjacent serif (body + titles); ZH via Noto Serif SC */
-  --font-serif:
-    'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
-    'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong',
-    'SimSun', 'Noto Serif CJK SC', ui-serif, serif;
-  --font-ui: var(--font-serif);
-  --font-display: var(--font-serif);
+  /* OPPO Sans 4.0 (variable wght 100–700), free commercial embed — see assets/fonts */
+  --font-sans:
+    'OPPO Sans', 'OPPO Sans 4.0', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC',
+    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui: var(--font-sans);
+  --font-display: var(--font-sans);
 
   color: var(--text);
   background: var(--bg-window);
@@ -230,9 +238,10 @@ html, body {
 }
 .nav,
 .player {
-  background: var(--chrome-bg);
-  -webkit-backdrop-filter: var(--vibrancy);
-  backdrop-filter: var(--vibrancy);
+  /* Solid chrome: backdrop-filter over long scrolling lists caused bidirectional jank */
+  background: var(--chrome-bg-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: var(--chrome-border);
   border-radius: var(--chrome-radius);
   box-shadow: var(--chrome-shadow);

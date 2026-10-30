@@ -195,7 +195,11 @@ async function onLike() {
         </button>
         <button class="opt" title="上一首" @click="prev"><Icon name="previous" :size="16" /></button>
         <button class="big" :title="player.playing ? '暂停' : '播放'" @click="togglePlay">
-          <Icon :name="player.playing ? 'pause' : 'play'" :size="22" :class="{ 'play-icon': !player.playing }" />
+          <Icon
+            :name="player.playing ? 'pause' : 'play'"
+            :size="player.playing ? 20 : 22"
+            :class="{ 'play-icon': !player.playing }"
+          />
         </button>
         <button title="下一首" @click="next()"><Icon name="next" :size="16" /></button>
         <button
@@ -213,8 +217,7 @@ async function onLike() {
           ref="trackEl"
           class="seek"
           role="slider"
-          :aria-valuenow="player.currentTime"
-          :aria-valuemax="player.duration || 0"
+          aria-valuemin="0"
           tabindex="0"
           @pointerdown.prevent="onPointerDown"
           @pointermove="onPointerMove"
@@ -404,9 +407,9 @@ async function onLike() {
   display: block;
   color: inherit;
 }
-/* 三角形视觉重心偏左，右移/上移做光学居中 */
+/* Phosphor play-fill：光学居中（几何中心偏左） */
 .ctrls .big .play-icon {
-  transform: translate(2px, -1px);
+  transform: translate(1.5px, 0);
 }
 .ctrls .big:hover {
   background: var(--text);
