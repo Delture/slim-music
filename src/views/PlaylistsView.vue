@@ -220,12 +220,13 @@ onUnmounted(() => {
 .pl {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  gap: var(--chrome-gap);
+  gap: var(--chrome-gap); /* window bg must show between list + tracks */
   min-width: 0;
   min-height: 0;
   flex: 1;
   height: 100%;
   background: transparent;
+  overflow: visible; /* never square-clip child .float-panel radii */
 }
 .float-panel {
   background: var(--panel-bg);
@@ -234,10 +235,13 @@ onUnmounted(() => {
   box-shadow: var(--panel-shadow);
   min-width: 0;
   min-height: 0;
+  overflow: hidden; /* clip to own radius — parent must stay overflow:visible */
+  isolation: isolate;
 }
 .side {
   padding: var(--space-3);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto; /* scroll inside rounded panel */
 }
 .body {
   display: flex;
@@ -267,10 +271,15 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   min-width: 0;
   flex: 1;
+  transition: color var(--dur-fast) var(--ease-swift);
 }
 .item .count {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  transition: color var(--dur-fast) var(--ease-swift);
+}
+.item.on .count {
+  color: var(--text-secondary);
 }
 .login-hint {
   grid-column: 1 / -1;

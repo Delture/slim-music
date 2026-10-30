@@ -177,7 +177,7 @@ async function saveQr() {
             :class="{ on: session.settings.accent === a }"
             @click="setAppearance({ accent: a })"
           >
-            <span class="swatch" :class="{ on: session.settings.accent === a }" :style="{ background: ACCENT_COLORS[a] }" />
+            <span class="swatch" :style="{ background: ACCENT_COLORS[a] }" />
             {{ ACCENT_LABELS[a] }}
           </button>
         </div>
@@ -346,6 +346,16 @@ async function saveQr() {
 .seg button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  line-height: 1;
+}
+.seg button .swatch {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  /* no outer selection ring — button.on is the selected chrome */
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 </style>

@@ -292,7 +292,10 @@ function move(i: number, dir: -1 | 1) {
   contain-intrinsic-size: auto 60px;
   /* Avoid paint storms while scrolling long lists */
   will-change: transform;
-  transition: background var(--dur-fast) var(--ease-swift);
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift);
 }
 .row:has(.ord) {
   grid-template-columns: 40px 48px minmax(0, 1fr) minmax(0, 20%) 56px 32px 52px 40px;
@@ -307,6 +310,7 @@ function move(i: number, dir: -1 | 1) {
 .row.playing .title {
   color: var(--text);
   font-weight: 650;
+  transition: color var(--dur-fast) var(--ease-swift), font-weight var(--dur-fast) var(--ease-swift);
 }
 .no {
   background: none;

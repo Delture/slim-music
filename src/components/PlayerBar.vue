@@ -269,12 +269,16 @@ async function onLike() {
   gap: var(--space-4);
   padding: var(--space-2) var(--space-5);
   min-height: 72px;
-  /* Fill/rim/glass come from shared .player chrome — keep bar transparent */
-  background: transparent;
+  /* Own floating panel chrome (do NOT leave transparent — that made the bar
+     look full-bleed immersive and let square parents show through corners). */
+  background: var(--panel-bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow: none;
-  border: 0;
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
+  isolation: isolate;
   z-index: 20;
 }
 .now {

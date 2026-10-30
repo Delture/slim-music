@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SlimMusic v0.8.0 design tokens — pen.dev philosophy (variables once,
+   SlimMusic v0.8.1 design tokens — pen.dev philosophy (variables once,
    components inherit). ONE spacing / radius / button / list-row / badge /
    header system. Charcoal layers + floating chrome. OPPO Sans 4.0.
    ========================================================================== */
@@ -276,15 +276,20 @@ html, body {
   animation: sm-fade-in var(--dur-slow) var(--ease-enter) both;
 }
 
-/* ---------- Floating chrome shell ---------- */
+/* ---------- Floating chrome shell ----------
+   Four detached panels: nav | playlists | tracks | player.
+   Window bg (--bg-window) must show in EVERY gap. No full-bleed chrome.
+   overflow:hidden ONLY on rounded panels themselves — never on a square parent.
+   -------------------------------------------------------------------------- */
 .app {
   display: grid;
   grid-template-columns: 212px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100vh;
   min-width: 0;
+  /* Top inset only; L/R/B come from panel margins so .player can declare them explicitly */
   gap: var(--chrome-gap);
-  padding: var(--chrome-inset);
+  padding: var(--chrome-inset) 0 0;
   background: var(--bg-window);
   box-sizing: border-box;
 }
@@ -297,6 +302,9 @@ html, body {
   border: var(--panel-border);
   border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
+  /* Clip content to rounded corners; no square sibling may sit behind these */
+  overflow: hidden;
+  isolation: isolate;
 }
 .nav {
   grid-row: 1;
@@ -306,14 +314,15 @@ html, body {
   padding: var(--space-3);
   z-index: 5;
   min-height: 0;
-  overflow: auto;
+  margin-left: var(--chrome-gap);
+  /* overflow:hidden from shared rule — scroll via flex child if needed */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .nav,
   .player,
   .float-panel { background: var(--panel-bg); }
-  .player .bar,
-  footer.bar { background: transparent; }
 }
 
 /* Nav items = list-row tokens */
@@ -369,6 +378,8 @@ html, body {
   border: var(--panel-border);
   box-shadow: var(--panel-shadow);
   overflow: hidden;
+  isolation: isolate;
+  margin-right: var(--chrome-gap);
 }
 .content {
   flex: 1;
@@ -378,28 +389,40 @@ html, body {
   min-width: 0;
   background: transparent;
 }
-/* Playlist pages: strip outer chrome so list + tracks are TWO floating panels */
+/* Playlist pages: strip outer chrome so list + tracks are TWO floating panels
+   with window bg visible in the gap. Parent must NOT overflow:hidden (that
+   square-clips child border-radius → 直角裁剪痕迹). */
 .app.split-main .main-col {
   background: transparent;
   border: 0;
   box-shadow: none;
   overflow: visible;
   border-radius: 0;
+  isolation: auto;
 }
 .app.split-main .content {
   padding: 0;
-  overflow: hidden;
+  overflow: visible; /* critical: do not square-clip .float-panel radii */
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: transparent;
 }
+.app.split-main .content > * {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
 .content.locked { overflow: hidden; }
 .player {
   grid-column: 1 / -1;
+  /* Floating panel: L/R/B margins = panel gap; own radius on ALL corners.
+     No parent full-bleed bar — chrome lives on this element (and .bar fills it). */
+  margin-left: var(--chrome-gap);
+  margin-right: var(--chrome-gap);
+  margin-bottom: var(--chrome-gap);
   overflow: hidden;
-  /* Detached floating bar — same --panel-* as sidebar (not flush to window edges;
-     .app padding + gap already inset it). */
+  isolation: isolate;
   background: var(--panel-bg);
   border: var(--panel-border);
   border-radius: var(--panel-radius);
@@ -600,16 +623,19 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   padding: var(--row-py) var(--row-px);
   border-radius: var(--row-radius);
   cursor: pointer;
-  color: var(--text);
+  color: var(--text-secondary);
   font-weight: 500;
   min-height: var(--row-h);
   display: flex;
   align-items: center;
-  transition: background var(--dur-fast) var(--ease-swift);
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift);
 }
 .sm-select-menu li:hover,
 .sm-select-menu li:focus {
   background: var(--fill-secondary);
+  color: var(--text);
   outline: none;
 }
 .sm-select-menu li.on {
@@ -655,6 +681,12 @@ input[type='checkbox'] {
   min-height: 0;
   height: auto;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden; /* keep swatch inside the pill */
+  line-height: 1;
 }
 .seg button.on {
   background: var(--surface-3);
@@ -676,15 +708,23 @@ input[type='checkbox'] {
   min-height: var(--row-h);
   border-radius: var(--row-radius);
   cursor: pointer;
+  color: var(--text-secondary);
   font-size: var(--row-font);
   font-weight: var(--row-weight);
+  letter-spacing: -0.01em;
+  position: relative;
+  /* Same soft ease as .nav a — background/color, not a hard cut */
   transition:
     background var(--dur-fast) var(--ease-swift),
     color var(--dur-fast) var(--ease-swift),
-    transform var(--dur-fast) var(--ease-swift);
+    transform var(--dur-fast) var(--ease-swift),
+    font-weight var(--dur-fast) var(--ease-swift);
 }
-.list-row:hover { background: var(--fill-secondary); }
-.list-row:active { transform: scale(0.98); }
+.list-row:hover {
+  background: var(--fill-secondary);
+  color: var(--text);
+}
+.list-row:active { transform: scale(0.97); }
 .list-row.on {
   background: var(--selected);
   color: var(--text);
@@ -736,14 +776,25 @@ input[type='checkbox'] {
 .settings-card + .settings-card { margin-top: var(--space-3); }
 
 .swatch {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  border: 2px solid transparent;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+/* Selection chrome lives on the seg button (.on), not an outer ring on the swatch
+   (outer rings overflow / drop out of the pill). */
+.swatch.on {
   box-shadow: inset 0 0 0 1px var(--border-strong);
 }
-.swatch.on {
-  box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3.5px var(--accent);
+.seg .swatch,
+.seg button .swatch {
+  width: 12px;
+  height: 12px;
 }
 
 /* Play icon optical center helper */
@@ -758,33 +809,44 @@ input[type='checkbox'] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto auto;
     height: 100dvh;
-    padding: calc(var(--space-2) + env(safe-area-inset-top)) var(--space-2) 0;
+    padding: calc(var(--space-2) + env(safe-area-inset-top)) 0 0;
     gap: var(--space-2);
   }
-  .main-col { grid-row: 1; border-radius: var(--radius-chrome-mobile); }
+  .main-col {
+    grid-row: 1;
+    border-radius: var(--radius-chrome-mobile);
+    margin-left: var(--space-2);
+    margin-right: var(--space-2);
+  }
   .player {
     grid-row: 2;
     border-radius: var(--radius-chrome-mobile);
     background: var(--panel-bg);
     border: var(--panel-border);
     box-shadow: var(--panel-shadow);
+    margin-left: var(--space-2);
+    margin-right: var(--space-2);
+    margin-bottom: 0; /* tab bar sits below; gap from grid */
   }
   .app.split-main .main-col {
     background: transparent;
     border: 0;
     box-shadow: none;
     border-radius: 0;
+    margin-left: var(--space-2);
+    margin-right: var(--space-2);
   }
-  .app.split-main .content { padding: 0; }
+  .app.split-main .content { padding: 0; overflow: visible; }
   .nav {
     grid-row: 3;
     flex-direction: row;
     justify-content: space-around;
     gap: 2px;
-    margin: 0 var(--space-1) calc(var(--space-2) + env(safe-area-inset-bottom));
+    margin: 0 var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
+    margin-left: var(--space-2);
     padding: var(--space-1);
     border-radius: var(--radius-chrome-tab);
-    overflow: visible;
+    overflow: hidden;
     box-shadow: var(--shadow-chrome);
   }
   .nav a {
