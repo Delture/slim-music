@@ -1,7 +1,7 @@
 # SlimMusic
 
 自用的精简音乐播放器：**本地音乐 + 网易云（每日推荐 / 搜索 / 我的歌单）**。
-Tauri 2 + Rust + Vue 3，目标平台 macOS、Windows。没有 Node 侧车，也不打包 NeteaseCloudMusicApi，网易云接口直接在 Rust 里调用。
+Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实测可用）。没有 Node 侧车，也不打包 NeteaseCloudMusicApi，网易云接口直接在 Rust 里调用。
 
 > 作者：[Yuhua Zhang](https://github.com/Delture)（Delture）。本项目在 **Grok Bot** 辅助下开发完成。
 
@@ -22,11 +22,20 @@ Tauri 2 + Rust + Vue 3，目标平台 macOS、Windows。没有 Node 侧车，也
 - **记忆**：音量、随机、循环模式持久化；启动时恢复上次队列和进度（保持暂停）
 - **缓存**：歌单元数据 + 音频磁盘缓存（LRU），设置里可调
 - **关窗不停播**：点红灯隐藏窗口，托盘/菜单栏继续；托盘右键：显示、播放/暂停、上下首、退出。macOS 菜单栏可显示当前歌词
+- **Android**：后台播放、通知栏/锁屏媒体控制、耳机按键、读取系统媒体库中的本地音乐、手机专用布局、登录二维码可保存到相册或直接在网易云音乐中打开
 - 进度条用 rAF 写 DOM，拖动时不跟 timeupdate 抢
 
 播放规则：**双击行**、**单击序号 ▶ 或封面**、右键 **「从这首开始播放」**，都会把当前整张列表设为播放队列，从该曲开始往后播。
 右键「添加到播放队列末尾」可以把本地和网易云歌曲混在一个队列里。
 支持上一首 / 下一首 / 进度拖动 / 音量 / 随机 / 循环（列表、单曲）。每首歌在列表和播放条上都带「本地 / 网易云」来源标记。
+
+## 下载 / 安装
+
+到 [GitHub Releases](https://github.com/Delture/slim-music/releases) 下载对应安装包：
+
+- **macOS**（Apple Silicon）：`.dmg`。应用未签名，首次打开请在「应用程序」里右键 →「打开」，或执行 `xattr -cr /Applications/SlimMusic.app`
+- **Windows**（x64）：`-setup.exe`。若出现 SmartScreen 提示，点「更多信息」→「仍要运行」
+- **Android**（arm64）：`.apk`。安装时需允许「安装未知来源应用」
 
 ## 开发与构建
 
@@ -50,6 +59,8 @@ npm install
 npm run tauri dev        # 开发模式（Vite 热更新 + Rust）
 npm run tauri build      # 打包：macOS 生成 .app/.dmg，Windows 生成 NSIS 安装包
 ```
+Android 打包（需 Android SDK/NDK，并先 `npx tauri android init`）：`npx tauri android build --apk`
+
 其他命令：`npm run typecheck`（前端类型检查）；`cd src-tauri && cargo check`；`cargo test -- --ignored`（联网冒烟测试：匿名搜索 + 获取二维码 key）。
 
 数据保存在系统应用数据目录（identifier `dev.slimmusic.app`）：
@@ -83,10 +94,8 @@ src-tauri/src/
 
 ## TODO
 
-已完成：扫码登录、每日推荐、搜索、我的歌单（取消收藏 / 删除自建）、红心、本地扫描（mp3/flac/m4a/aac/wav/ogg/opus/aiff/aif/ape/wma/wv）+ 同名 .lrc、本机播放列表 +「正在播放」、从某首开始播放、播放页歌词 + 翻译 + 歌词缓存、托盘与右键菜单、关窗不停播、歌单/音频磁盘缓存（可在设置中调整）、音量/随机/循环持久化、恢复上次队列和进度（恢复后保持暂停）、封面/歌曲地址 https 修正、自绘进度条/音量条、应用图标。
+已完成：扫码登录、每日推荐、搜索、我的歌单（取消收藏 / 删除自建）、红心、本地扫描（mp3/flac/m4a/aac/wav/ogg/opus/aiff/aif/ape/wma/wv）+ 同名 .lrc、本机播放列表 +「正在播放」、从某首开始播放、播放页歌词 + 翻译 + 歌词缓存、托盘与右键菜单、关窗不停播、歌单/音频磁盘缓存（可在设置中调整）、音量/随机/循环持久化、恢复上次队列和进度（恢复后保持暂停）、封面/歌曲地址 https 修正、自绘进度条/音量条、应用图标、Windows 实测、Android 版（后台播放 / 通知栏与锁屏控制 / 耳机按键）。
 
-- [ ] 系统媒体键：目前有 `navigator.mediaSession` + 托盘控制，原生 media key 未验证
-- [ ] Windows 未实际测试
 - [ ] wma 等格式可扫描，但 WebView 未必能解码播放
 - [ ] 本地歌曲内嵌封面
 - [ ] 歌曲地址过期后的重取；列表循环空播上限
