@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { playList, player } from '../lib/player';
 import {
   createLocalPlaylist,
@@ -11,15 +11,19 @@ import {
 } from '../lib/localPlaylists';
 import type { LocalPlaylist, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
+import Icon from '../components/Icon.vue';
 
 /** 特殊 id：镜像当前播放队列，不落盘 */
 const NOW_PLAYING = '__now_playing__';
 
 const activeId = ref<string>(NOW_PLAYING);
 const err = ref('');
+/** 窄屏：列表 ↔ 详情 叠层导航 */
+const mobileDetail = ref(false);
+const narrow = ref(false);
+let mql: MediaQueryList | null = null;
 
 const nowPlayingTracks = computed<Track[]>(() => {
-  // 按播放顺序展示队列（随机时跟 order）
   if (!player.order.length) return [...player.queue];
   return player.order.map((i) => player.queue[i]).filter(Boolean) as Track[];
 });
@@ -38,6 +42,11 @@ const activeTitle = computed(() =>
   isNowPlaying.value ? '正在播放' : activeUser.value?.name ?? '',
 );
 
+function syncNarrow() {
+  narrow.value = !!mql?.matches;
+  if (!narrow.value) mobileDetail.value = false;
+}
+
 async function ensure() {
   try {
     await refreshLocalPlaylists();
@@ -48,9 +57,14 @@ async function ensure() {
 
 function openNow() {
   activeId.value = NOW_PLAYING;
+  if (narrow.value) mobileDetail.value = true;
 }
 function open(p: LocalPlaylist) {
   activeId.value = p.id;
+  if (narrow.value) mobileDetail.value = true;
+}
+function backToLists() {
+  mobileDetail.value = false;
 }
 
 async function onCreate() {
@@ -59,6 +73,7 @@ async function onCreate() {
   try {
     const pl = await createLocalPlaylist(name.trim());
     activeId.value = pl.id;
+    if (narrow.value) mobileDetail.value = true;
   } catch (e) {
     alert(String(e));
   }
@@ -78,7 +93,10 @@ async function onDelete(p: LocalPlaylist) {
   if (!confirm(`确定删除播放列表「${p.name}」？歌曲文件不会被删除。`)) return;
   try {
     await deleteLocalPlaylist(p.id);
-    if (activeId.value === p.id) activeId.value = NOW_PLAYING;
+    if (activeId.value === p.id) {
+      activeId.value = NOW_PLAYING;
+      if (narrow.value) mobileDetail.value = false;
+    }
   } catch (e) {
     alert(String(e));
   }
@@ -93,7 +111,15 @@ async function onReorder(e: { from: number; to: number }) {
   }
 }
 
-onMounted(ensure);
+onMounted(() => {
+  mql = window.matchMedia('(max-width: 700px)');
+  syncNarrow();
+  mql.addEventListener('change', syncNarrow);
+  void ensure();
+});
+onUnmounted(() => {
+  mql?.removeEventListener('change', syncNarrow);
+});
 watch(
   () => localPl.lists.map((p) => p.id).join(','),
   () => {
@@ -102,13 +128,14 @@ watch(
       !localPl.lists.some((p) => p.id === activeId.value)
     ) {
       activeId.value = NOW_PLAYING;
+      if (narrow.value) mobileDetail.value = false;
     }
   },
 );
 </script>
 
 <template>
-  <section class="pl">
+  <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
     <aside class="side">
       <div class="side-head">
         <span>播放列表</span>
@@ -138,6 +165,9 @@ watch(
 
     <div class="body">
       <header class="head">
+        <button v-if="narrow" class="back" type="button" @click="backToLists">
+          <Icon name="previous" :size="14" /> 列表
+        </button>
         <h2 class="title-ellip">{{ activeTitle }}</h2>
         <button
           v-if="activeTracks.length && !isNowPlaying"
@@ -204,9 +234,12 @@ watch(
   padding: 8px 10px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift);
 }
-.item:active { transform: scale(0.98); }
+.item:active {
+  transform: scale(0.98);
+}
 .item .name {
   overflow: hidden;
   white-space: nowrap;
@@ -228,12 +261,27 @@ watch(
   cursor: pointer;
   padding: 2px 4px;
   opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-swift);
 }
 .item:hover .mini {
   opacity: 1;
 }
 .body {
   min-width: 0;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+}
+.back:hover {
+  background: var(--hover);
+  color: inherit;
 }
 .title-ellip {
   overflow: hidden;
@@ -244,5 +292,44 @@ watch(
 }
 .ghost {
   background: transparent;
+}
+
+@media (max-width: 700px) {
+  .pl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .side {
+    border-right: 0;
+    padding-right: 0;
+    max-height: none;
+  }
+  .side-head {
+    font-size: 18px;
+    letter-spacing: -0.02em;
+  }
+  .item {
+    min-height: 48px;
+    padding: 12px 10px;
+    font-size: 15px;
+  }
+  .mini {
+    opacity: 1;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .title-ellip {
+    max-width: none;
+    flex: 1;
+  }
+  .pl:not(.mobile-detail) .body {
+    display: none;
+  }
+  .pl.mobile-detail .side {
+    display: none;
+  }
+  .pl.mobile-detail .body {
+    animation: sm-fade-in var(--dur) var(--ease-enter);
+  }
 }
 </style>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import { session } from '../lib/session';
 import type { Playlist, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
+import Icon from '../components/Icon.vue';
 
 const lists = ref<Playlist[]>([]);
 const active = ref<Playlist | null>(null);
@@ -13,6 +14,10 @@ const err = ref('');
 const loading = ref(false);
 const busy = ref(false);
 const fromCache = ref(false);
+/** 窄屏：列表 ↔ 详情 叠层导航 */
+const mobileDetail = ref(false);
+const narrow = ref(false);
+let mql: MediaQueryList | null = null;
 
 const canUnsubscribe = computed(
   () => !!active.value && active.value.subscribed && !active.value.isLiked,
@@ -20,6 +25,11 @@ const canUnsubscribe = computed(
 const canDelete = computed(
   () => !!active.value && active.value.owned && !active.value.isLiked,
 );
+
+function syncNarrow() {
+  narrow.value = !!mql?.matches;
+  if (!narrow.value) mobileDetail.value = false;
+}
 
 async function loadLists(refresh = false) {
   err.value = '';
@@ -31,12 +41,14 @@ async function loadLists(refresh = false) {
       lists.value.find((l) => l.id === active.value?.id) ||
       lists.value.find((l) => l.isLiked) ||
       lists.value[0];
-    if (keep) await open(keep, false);
-    else {
+    if (keep) {
+      // 窄屏只预选，不自动钻进详情，避免侧栏占满宽度
+      await open(keep, false, !narrow.value);
+    } else {
       active.value = null;
       tracks.value = [];
+      mobileDetail.value = false;
     }
-    // 后台刷新歌单列表
     if (!refresh && hit.fromCache) {
       void api.myPlaylists(true).then((h) => {
         lists.value = h.data;
@@ -48,8 +60,9 @@ async function loadLists(refresh = false) {
   }
 }
 
-async function open(p: Playlist, doBackgroundRefresh = true) {
+async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true) {
   active.value = p;
+  if (enterDetail && narrow.value) mobileDetail.value = true;
   loading.value = true;
   err.value = '';
   try {
@@ -74,12 +87,17 @@ async function open(p: Playlist, doBackgroundRefresh = true) {
   }
 }
 
+function backToLists() {
+  mobileDetail.value = false;
+}
+
 async function unsubscribe() {
   if (!active.value || !canUnsubscribe.value) return;
   if (!confirm(`确定取消收藏「${active.value.name}」？`)) return;
   busy.value = true;
   try {
     await api.playlistSubscribe(active.value.id, false);
+    mobileDetail.value = false;
     await loadLists(true);
   } catch (e) {
     alert(String(e));
@@ -101,6 +119,7 @@ async function removeOwned() {
   try {
     await api.playlistDelete(active.value.id);
     active.value = null;
+    mobileDetail.value = false;
     await loadLists(true);
   } catch (e) {
     alert(String(e));
@@ -109,13 +128,22 @@ async function removeOwned() {
   }
 }
 
-onMounted(() => session.profile && loadLists(false));
+onMounted(() => {
+  mql = window.matchMedia('(max-width: 700px)');
+  syncNarrow();
+  mql.addEventListener('change', syncNarrow);
+  if (session.profile) void loadLists(false);
+});
+onUnmounted(() => {
+  mql?.removeEventListener('change', syncNarrow);
+});
 </script>
 
 <template>
-  <section class="pl">
+  <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
     <p v-if="!session.profile" class="muted">请先在「设置」中扫码登录网易云。</p>
     <aside v-else class="side">
+      <div class="side-title">我的歌单</div>
       <div
         v-for="p in lists"
         :key="p.id"
@@ -129,6 +157,9 @@ onMounted(() => session.profile && loadLists(false));
     </aside>
     <div v-if="active" class="body">
       <header class="head">
+        <button v-if="narrow" class="back" type="button" @click="backToLists">
+          <Icon name="previous" :size="14" /> 歌单
+        </button>
         <h2>{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
         <span v-if="fromCache" class="badge muted">缓存</span>
         <button :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
@@ -155,6 +186,13 @@ onMounted(() => session.profile && loadLists(false));
   max-height: calc(100vh - 140px);
   overflow: auto;
 }
+.side-title {
+  display: none;
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 10px;
+  letter-spacing: -0.02em;
+}
 .item {
   display: flex;
   justify-content: space-between;
@@ -162,9 +200,12 @@ onMounted(() => session.profile && loadLists(false));
   padding: 8px 10px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift);
 }
-.item:active { transform: scale(0.98); }
+.item:active {
+  transform: scale(0.98);
+}
 .item span {
   overflow: hidden;
   white-space: nowrap;
@@ -182,6 +223,20 @@ onMounted(() => session.profile && loadLists(false));
 .body {
   min-width: 0;
 }
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+}
+.back:hover {
+  background: var(--hover);
+  color: inherit;
+}
 .badge {
   font-size: 12px;
   padding: 2px 6px;
@@ -190,5 +245,35 @@ onMounted(() => session.profile && loadLists(false));
 }
 .danger {
   color: #c62f2f;
+}
+
+@media (max-width: 700px) {
+  .pl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .side {
+    border-right: 0;
+    padding-right: 0;
+    max-height: none;
+  }
+  .side-title {
+    display: block;
+  }
+  .item {
+    min-height: 48px;
+    padding: 12px 10px;
+    font-size: 15px;
+  }
+  /* 窄屏：一次只显示一侧 */
+  .pl:not(.mobile-detail) .body {
+    display: none;
+  }
+  .pl.mobile-detail .side {
+    display: none;
+  }
+  .pl.mobile-detail .body {
+    animation: sm-fade-in var(--dur) var(--ease-enter);
+  }
 }
 </style>
