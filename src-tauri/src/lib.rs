@@ -545,6 +545,18 @@ pub fn run() {
             mobile::native_listen,
             mobile::platform_info
         ])
-        .run(tauri::generate_context!())
-        .expect("启动 Tauri 失败");
+        .build(tauri::generate_context!())
+        .expect("启动 Tauri 失败")
+        .run(|app, event| {
+            // macOS：关窗隐藏后点 Dock 图标会发 Reopened；显示并聚焦主窗口
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopened { .. } = event {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+            let _ = (app, event);
+        });
 }
