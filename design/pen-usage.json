@@ -1,0 +1,6 @@
+{
+  "agentType": "claude",
+  "model": "claude-opus-5-5",
+  "reason": "failed",
+  "usage": null
+}

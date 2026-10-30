@@ -26,9 +26,11 @@ onMounted(load);
 <template>
   <section>
     <header class="head">
-      <h2>每日推荐</h2>
-      <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
-      <button class="btn-secondary" @click="load">刷新</button>
+      <h2 class="head-title">每日推荐</h2>
+      <div class="head-actions">
+        <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
+        <button class="btn-secondary" @click="load">刷新</button>
+      </div>
     </header>
     <p v-if="loading" class="muted">加载中…</p>
     <p v-if="err" class="error">{{ err }}</p>

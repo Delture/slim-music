@@ -136,15 +136,17 @@ watch(
 
 <template>
   <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
-    <aside class="side">
+    <aside class="side panel">
       <div class="side-head">
         <span>播放列表</span>
-        <button class="link" title="新建" @click="onCreate">＋</button>
+        <button class="btn-icon link" type="button" title="新建" @click="onCreate">
+          <Icon name="plus" :size="16" />
+        </button>
       </div>
 
-      <div class="item" :class="{ on: isNowPlaying }" @click="openNow">
+      <div class="list-row item" :class="{ on: isNowPlaying }" @click="openNow">
         <span class="name">正在播放</span>
-        <small class="muted">{{ nowPlayingTracks.length }}</small>
+        <small class="muted count">{{ nowPlayingTracks.length }}</small>
       </div>
 
       <div class="sep"></div>
@@ -152,34 +154,36 @@ watch(
       <div
         v-for="p in localPl.lists"
         :key="p.id"
-        class="item"
+        class="list-row item has-actions"
         :class="{ on: activeId === p.id }"
         @click="open(p)"
       >
         <span class="name" :title="p.name" @dblclick.stop="onRename(p)">{{ p.name }}</span>
-        <small class="muted">{{ p.tracks.length }}</small>
-        <button class="mini" type="button" title="重命名" @click.stop="onRename(p)"><Icon name="pencil" :size="13" /></button>
-        <button class="mini" type="button" title="删除" @click.stop="onDelete(p)"><Icon name="x" :size="14" /></button>
+        <small class="muted count">{{ p.tracks.length }}</small>
+        <button class="btn-icon mini" type="button" title="重命名" @click.stop="onRename(p)"><Icon name="pencil" :size="13" /></button>
+        <button class="btn-icon mini" type="button" title="删除" @click.stop="onDelete(p)"><Icon name="x" :size="14" /></button>
       </div>
     </aside>
 
-    <div class="body">
+    <div class="body panel">
       <header class="head">
-        <button v-if="narrow" class="back" type="button" @click="backToLists">
+        <button v-if="narrow" class="back btn-ghost" type="button" @click="backToLists">
           <Icon name="chevron-left" :size="14" /> 列表
         </button>
-        <h2 class="title-ellip">{{ activeTitle }}</h2>
-        <button
-          v-if="activeTracks.length && !isNowPlaying"
-          class="btn-primary"
-          @click="playList(activeTracks)"
-        >
-          播放全部
-        </button>
-        <template v-if="activeUser">
-          <button class="btn-ghost" @click="onRename(activeUser)">重命名</button>
-          <button class="btn-danger" @click="onDelete(activeUser)">删除</button>
-        </template>
+        <h2 class="head-title title-ellip">{{ activeTitle }}</h2>
+        <div class="head-actions">
+          <button
+            v-if="activeTracks.length && !isNowPlaying"
+            class="btn-primary"
+            @click="playList(activeTracks)"
+          >
+            播放全部
+          </button>
+          <template v-if="activeUser">
+            <button class="btn-ghost" @click="onRename(activeUser)">重命名</button>
+            <button class="btn-danger" @click="onDelete(activeUser)">删除</button>
+          </template>
+        </div>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
       <p v-if="isNowPlaying && !activeTracks.length" class="muted">队列为空，去别处点一首歌开始听</p>
@@ -195,17 +199,30 @@ watch(
 </template>
 
 <style scoped>
+/* Co-visible panes share ONE --panel-* token (same fill/rim). Divider only. */
 .pl {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  gap: 16px;
+  gap: 0;
+  min-width: 0;
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
+}
+.panel {
+  background: var(--panel-bg);
+  border: 0;
+  box-shadow: var(--panel-shadow);
   min-width: 0;
 }
 .side {
-  border-right: 1px solid var(--border);
-  padding-right: 10px;
+  border-right: var(--panel-divider);
+  padding: 0 var(--space-2) 0 0;
   max-height: calc(100vh - 140px);
   overflow: auto;
+}
+.body {
+  padding: 0 0 0 var(--space-4);
+  min-width: 0;
 }
 .side-head {
   display: flex;
@@ -215,35 +232,30 @@ watch(
   font-weight: 500;
   font-size: 17px;
   letter-spacing: -0.015em;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
+  min-height: var(--btn-h);
+  padding: 0 var(--row-px);
 }
 .link {
-  background: none;
-  border: 0;
-  font-size: 18px;
-  cursor: pointer;
   color: var(--accent);
-  padding: 0 6px;
+  background: transparent;
+}
+.link:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--accent);
 }
 .sep {
-  height: 1px;
-  background: var(--border);
-  margin: 8px 0;
+  height: 0;
+  border-top: var(--panel-divider);
+  margin: var(--space-2) var(--row-px);
 }
 .item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  gap: 4px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: 500;
-  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
-    transform var(--dur-fast) var(--ease-swift);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1);
 }
-.item:active {
-  transform: scale(0.98);
+.item.has-actions {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
 .item .name {
   overflow: hidden;
@@ -251,43 +263,33 @@ watch(
   text-overflow: ellipsis;
   min-width: 0;
 }
-.item:hover {
-  background: var(--fill-secondary);
-}
-.item.on {
-  background: var(--selected);
-  color: var(--text);
-  font-weight: 650;
-  box-shadow: none;
+.item .count {
+  font-variant-numeric: tabular-nums;
 }
 .mini {
-  background: none;
-  border: 0;
+  width: var(--icon-btn);
+  min-width: var(--icon-btn);
+  height: var(--icon-btn);
+  min-height: var(--icon-btn);
+  padding: 0;
   color: var(--muted);
-  cursor: pointer;
-  padding: 2px 4px;
+  background: transparent;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-swift);
+  transition: opacity var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
 }
 .item:hover .mini {
   opacity: 1;
 }
-.body {
-  min-width: 0;
+.mini:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
 }
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: none;
-  border: 0;
+  gap: var(--space-1);
   color: var(--muted);
-  padding: 6px 10px;
-  border-radius: var(--radius-pill);
-}
-.back:hover {
-  background: var(--hover);
-  color: inherit;
+  flex-shrink: 0;
 }
 .title-ellip {
   overflow: hidden;
@@ -300,26 +302,26 @@ watch(
 @media (max-width: 700px) {
   .pl {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0;
   }
   .side {
     border-right: 0;
-    padding-right: 0;
+    padding: 0;
     max-height: none;
+  }
+  .body {
+    padding: 0;
   }
   .side-head {
     font-size: 24px;
     letter-spacing: -0.02em;
+    padding: 0;
   }
   .item {
     min-height: 48px;
-    padding: 12px 10px;
     font-size: 15px;
   }
   .mini {
     opacity: 1;
-    min-width: 36px;
-    min-height: 36px;
   }
   .title-ellip {
     max-width: none;

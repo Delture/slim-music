@@ -149,7 +149,7 @@ async function saveQr() {
 
 <template>
   <section class="settings">
-    <header class="head"><h2>设置</h2></header>
+    <header class="head"><h2 class="head-title">设置</h2></header>
 
     <div class="settings-card">
       <h3>外观</h3>
@@ -291,9 +291,9 @@ async function saveQr() {
 <style scoped>
 .row {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   align-items: center;
-  margin: 8px 0;
+  margin: var(--space-2) 0;
 }
 .row.wrap { flex-wrap: wrap; }
 .label {
@@ -301,7 +301,7 @@ async function saveQr() {
   color: var(--muted);
   font-size: 13px;
 }
-.tip { margin: 8px 0 0; font-size: 12px; }
+.tip { margin: var(--space-2) 0 0; font-size: 12px; }
 .avatar {
   width: 36px;
   height: 36px;
@@ -316,7 +316,7 @@ async function saveQr() {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   background: var(--hover);
   border-radius: var(--radius-sm);
 }

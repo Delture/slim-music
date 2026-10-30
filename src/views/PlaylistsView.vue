@@ -142,29 +142,31 @@ onUnmounted(() => {
 <template>
   <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
     <p v-if="!session.profile" class="muted">请先在「设置」中扫码登录网易云。</p>
-    <aside v-else class="side">
+    <aside v-else class="side panel">
       <div class="side-title">我的歌单</div>
       <div
         v-for="p in lists"
         :key="p.id"
-        class="item"
+        class="list-row item"
         :class="{ on: active?.id === p.id }"
         @click="open(p)"
       >
-        <span>{{ p.isLiked ? '我喜欢的音乐' : p.name }}</span>
-        <small class="muted">{{ p.trackCount }}</small>
+        <span class="name">{{ p.isLiked ? '我喜欢的音乐' : p.name }}</span>
+        <small class="muted count">{{ p.trackCount }}</small>
       </div>
     </aside>
-    <div v-if="active" class="body">
+    <div v-if="active" class="body panel">
       <header class="head">
-        <button v-if="narrow" class="back" type="button" @click="backToLists">
+        <button v-if="narrow" class="back btn-ghost" type="button" @click="backToLists">
           <Icon name="chevron-left" :size="14" /> 歌单
         </button>
-        <h2>{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
-        <span v-if="fromCache" class="badge muted">缓存</span>
-        <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
-        <button v-if="canUnsubscribe" class="btn-ghost" :disabled="busy" @click="unsubscribe">取消收藏</button>
-        <button v-if="canDelete" class="btn-danger" :disabled="busy" @click="removeOwned">删除歌单</button>
+        <h2 class="head-title">{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
+        <div class="head-actions">
+          <span v-if="fromCache" class="sm-badge muted-chip">缓存</span>
+          <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
+          <button v-if="canUnsubscribe" class="btn-ghost" :disabled="busy" @click="unsubscribe">取消收藏</button>
+          <button v-if="canDelete" class="btn-danger" :disabled="busy" @click="removeOwned">删除歌单</button>
+        </div>
       </header>
       <p v-if="loading && !tracks.length" class="muted">加载中…</p>
       <p v-if="err" class="error">{{ err }}</p>
@@ -174,77 +176,59 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Co-visible panes share ONE --panel-* token (same fill/rim). Divider only. */
 .pl {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
-  gap: 16px;
+  gap: 0;
+  min-width: 0;
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
+}
+.panel {
+  background: var(--panel-bg);
+  border: 0;
+  box-shadow: var(--panel-shadow);
   min-width: 0;
 }
 .side {
-  border-right: 1px solid var(--border);
-  padding-right: 8px;
+  border-right: var(--panel-divider);
+  padding: 0 var(--space-2) 0 0;
   max-height: calc(100vh - 140px);
   overflow: auto;
+}
+.body {
+  padding: 0 0 0 var(--space-4);
+  min-width: 0;
 }
 .side-title {
   display: none;
   font-family: var(--font-display);
   font-weight: 500;
   font-size: 24px;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-3);
   letter-spacing: -0.02em;
 }
 .item {
-  display: flex;
   justify-content: space-between;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: 500;
-  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
-    transform var(--dur-fast) var(--ease-swift);
 }
-.item:active {
-  transform: scale(0.98);
-}
-.item span {
+.item .name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
+  flex: 1;
 }
-.item:hover {
-  background: var(--fill-secondary);
-}
-.item.on {
-  background: var(--selected);
-  color: var(--text);
-  font-weight: 650;
-  box-shadow: none;
-}
-.body {
-  min-width: 0;
+.item .count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: none;
-  border: 0;
+  gap: var(--space-1);
   color: var(--muted);
-  padding: 6px 10px;
-  border-radius: var(--radius-pill);
-}
-.back:hover {
-  background: var(--hover);
-  color: inherit;
-}
-.badge {
-  font-size: 12px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  flex-shrink: 0;
 }
 
 @media (max-width: 700px) {
@@ -254,18 +238,19 @@ onUnmounted(() => {
   }
   .side {
     border-right: 0;
-    padding-right: 0;
+    padding: 0;
     max-height: none;
+  }
+  .body {
+    padding: 0;
   }
   .side-title {
     display: block;
   }
   .item {
     min-height: 48px;
-    padding: 12px 10px;
     font-size: 15px;
   }
-  /* 窄屏：一次只显示一侧 */
   .pl:not(.mobile-detail) .body {
     display: none;
   }

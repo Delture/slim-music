@@ -41,6 +41,14 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 
 0.2.0 起支持应用内更新：启动时自动检查一次，也可在「设置 → 关于」手动检查。桌面端下载后自动安装并重启；Android 下载 APK 后调起系统安装器。v0.1.0 不含更新功能，需手动安装一次 0.2.0。
 
+### v0.7.0 设计 token 统一 / 共现面板
+
+- 按 pen.dev「变量一次、组件继承」哲学重建 spacing / radius / button / list-row / badge / header token；扔掉各页 ad-hoc 内边距
+- **共现面板同一 chrome**：歌单列表 + 曲目列表等同屏浮层共用 `--panel-bg` / `--panel-border` / `--panel-divider`，层级靠字重与选中态，不靠不同底色
+- 播放三角光学居中改为 `--play-optical-x`（纠正偏右）
+- 页面标题与操作钮统一 `--head-*` 对齐；保留 Phosphor 图标、OPPO Sans、虚拟列表、炭灰分层、浮动侧栏与底栏（仅正在播放页控制融入背景）
+- pen.dev CLI 已登录；Claude Agent 需另 `/login`，故以 token 哲学落地（见 `design/PEN.md`）
+
 ### v0.6.0 图标 / 滚动 / 字体
 
 - 图标改用成熟开源 Phosphor（`@iconify-json/ph` 子集），统一字重；播放/暂停用 Fill，与实心播放钮匹配并光学居中

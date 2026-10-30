@@ -4,20 +4,19 @@ defineProps<{ source: Source }>();
 </script>
 
 <template>
-  <span class="badge" :class="source">{{ source === 'local' ? '本地' : '网易云' }}</span>
+  <span class="sm-badge badge" :class="source">{{ source === 'local' ? '本地' : '网易云' }}</span>
 </template>
 
 <style scoped>
 .badge {
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  white-space: nowrap;
-  font-weight: 650;
-  flex-shrink: 0;
-  justify-self: start;
+  height: var(--badge-h);
+  padding: 0 var(--badge-px);
+  border-radius: var(--badge-radius);
+  font-size: var(--badge-font);
+  font-weight: var(--badge-weight);
   letter-spacing: 0.01em;
   opacity: 0.92;
+  justify-self: start;
 }
 .local {
   background: color-mix(in srgb, #1f7a3a 14%, transparent);

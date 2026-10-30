@@ -266,8 +266,8 @@ async function onLike() {
   display: grid;
   grid-template-columns: 1fr 1.4fr 1fr;
   align-items: center;
-  gap: 16px;
-  padding: 10px 20px;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-5);
   min-height: 72px;
   /* Fill/rim/glass come from shared .player chrome — keep bar transparent */
   background: transparent;
@@ -339,8 +339,11 @@ async function onLike() {
   padding: 8px;
   line-height: 0;
   border-radius: 50%;
-  min-width: 36px;
-  min-height: 36px;
+  width: var(--icon-btn);
+  min-width: var(--icon-btn);
+  height: var(--icon-btn);
+  min-height: var(--icon-btn);
+  padding: 0;
   transition: color var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
 }
 .heart:hover { background: var(--hover); color: var(--text); }
@@ -370,8 +373,11 @@ async function onLike() {
   align-items: center;
   justify-content: center;
   line-height: 0;
-  min-width: 36px;
-  min-height: 36px;
+  width: var(--icon-btn);
+  min-width: var(--icon-btn);
+  height: var(--icon-btn);
+  min-height: var(--icon-btn);
+  padding: 0;
   transition: background var(--dur-fast) var(--ease-swift), opacity var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift);
 }
 .ctrls button:hover {
@@ -407,9 +413,9 @@ async function onLike() {
   display: block;
   color: inherit;
 }
-/* Phosphor play-fill：光学居中（几何中心偏左） */
+/* Phosphor play-fill：光学居中（token --play-optical-x；勿再硬编码） */
 .ctrls .big .play-icon {
-  transform: translate(1.5px, 0);
+  transform: translateX(var(--play-optical-x));
 }
 .ctrls .big:hover {
   background: var(--text);

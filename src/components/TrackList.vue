@@ -279,10 +279,10 @@ function move(i: number, dir: -1 | 1) {
 .row {
   display: grid;
   grid-template-columns: 40px 48px minmax(0, 1fr) minmax(0, 22%) 56px 32px 52px;
-  gap: 12px;
+  gap: var(--row-gap);
   align-items: center;
-  padding: 8px 10px;
-  border-radius: var(--radius-lg);
+  padding: var(--row-py) var(--row-px);
+  border-radius: var(--row-radius);
   user-select: none;
   min-width: 0;
   box-sizing: border-box;
@@ -339,7 +339,7 @@ function move(i: number, dir: -1 | 1) {
 .cover {
   width: 46px;
   height: 46px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   object-fit: cover;
   cursor: pointer;
   border: 0.5px solid rgba(0, 0, 0, 0.06);
@@ -390,12 +390,14 @@ function move(i: number, dir: -1 | 1) {
   border: 0;
   color: var(--muted);
   cursor: pointer;
-  padding: 6px;
+  padding: 0;
   line-height: 0;
   opacity: 0;
   border-radius: 50%;
-  min-width: 32px;
-  min-height: 32px;
+  width: var(--icon-btn);
+  min-width: var(--icon-btn);
+  height: var(--icon-btn);
+  min-height: var(--icon-btn);
   transition:
     opacity var(--dur-fast) var(--ease-swift),
     color var(--dur-fast) var(--ease-swift),

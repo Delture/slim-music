@@ -656,7 +656,7 @@ onUnmounted(() => {
   color: var(--bg);
 }
 .ctrls .big .play-icon {
-  transform: translate(1.5px, 0);
+  transform: translateX(var(--play-optical-x));
 }
 .err {
   color: #c62f2f;

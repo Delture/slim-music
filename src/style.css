@@ -1,7 +1,7 @@
 /* ==========================================================================
-   SlimMusic design tokens — Apple HIG / YesPlayMusic + macOS floating chrome.
-   Refs: YesPlayMusic, WWDC25 Liquid Glass sidebars, ChatGPT charcoal dark,
-   UI font: OPPO Sans 4.0 (bundled); design-token buttons.
+   SlimMusic v0.7.0 design tokens — pen.dev philosophy (variables once,
+   components inherit). ONE spacing / radius / button / list-row / badge /
+   header system. Charcoal layers + floating chrome. OPPO Sans 4.0.
    ========================================================================== */
 
 @font-face {
@@ -13,14 +13,14 @@
 }
 
 :root {
-  /* Light neutrals */
+  /* ---- Neutrals (light) ---- */
   --sm-gray-0: #ffffff;
   --sm-gray-20: #f5f5f7;
   --sm-gray-30: #ebebed;
   --sm-gray-40: #e5e5ea;
   --sm-ink: #000000;
 
-  /* Accents */
+  /* ---- Accents ---- */
   --accent-red: #ec4141;
   --accent-red-hover: #d73737;
   --accent-clay: #d97757;
@@ -30,16 +30,16 @@
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --accent-soft-strong: color-mix(in srgb, var(--accent) 26%, transparent);
 
-  /* Layered surfaces — light (window ≠ chrome ≠ content ≠ player ≠ overlay) */
-  --bg-window: #e8e8ed;                 /* behind floating panels */
-  --surface-chrome: rgba(255, 255, 255, 0.78); /* sidebar / tab bar glass */
+  /* ---- Surfaces (light) ---- */
+  --bg-window: #e8e8ed;
+  --surface-chrome: rgba(255, 255, 255, 0.78);
   --surface-chrome-solid: #f5f5f7;
-  --surface-1: #ffffff;                 /* main content */
+  --surface-1: #ffffff;
   --surface-player: var(--surface-chrome);
   --surface-player-solid: var(--surface-chrome-solid);
   --surface-2: var(--surface-player);
   --surface-2-solid: var(--surface-player-solid);
-  --surface-3: #ffffff;                 /* menus / cards */
+  --surface-3: #ffffff;
   --surface-0: var(--surface-chrome);
   --surface-0-solid: var(--surface-chrome-solid);
   --bg: var(--surface-1);
@@ -66,6 +66,7 @@
   --vibrancy: saturate(180%) blur(22px);
   --vibrancy-strong: saturate(180%) blur(30px);
 
+  /* ---- ONE radius scale ---- */
   --radius-sm: 6px;
   --radius: 8px;
   --radius-md: 10px;
@@ -76,9 +77,9 @@
   --radius-chrome-tab: 22px;
   --radius-pill: 999px;
 
+  /* ---- Floating chrome ---- */
   --chrome-inset: 12px;
   --chrome-gap: 12px;
-  /* One chrome system: nav + player share rim / radius / shadow / fill */
   --chrome-border: 0.5px solid var(--border);
   --chrome-radius: var(--radius-chrome);
   --chrome-shadow: var(--shadow-chrome);
@@ -89,12 +90,68 @@
   --content-radius: var(--chrome-radius);
   --content-shadow: var(--shadow-sm);
 
+  /* ONE panel token for co-visible panes (playlist list + tracks, etc.).
+     Hierarchy ≠ different surface when panes share the screen — same fill/rim.
+     Mature master-detail (Music.app / Finder): one canvas + hairline, not stacked cards. */
+  --panel-bg: var(--content-bg);
+  --panel-border: var(--content-border);
+  --panel-radius: var(--content-radius);
+  --panel-shadow: none; /* inset sibling panes: no extra elevation */
+  --panel-divider: 0.5px solid var(--border);
+
+  /* ---- ONE spacing scale ---- */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+
+  /* ---- ONE button system ---- */
+  --btn-h: 32px;
+  --btn-px: 14px;
+  --btn-gap: var(--space-2);
+  --btn-radius: var(--radius-pill);
+  --btn-font-weight: 550;
+  --btn-secondary-bg: var(--fill-secondary);
+  --btn-secondary-fg: var(--text);
+  --btn-secondary-hover: var(--selected);
+  --btn-primary-bg: var(--accent);
+  --btn-primary-fg: #fff;
+  --btn-primary-hover: var(--accent-hover);
+  --btn-danger-fg: #c62f2f;
+  --btn-danger-bg: color-mix(in srgb, #c62f2f 12%, transparent);
+  --btn-danger-hover: color-mix(in srgb, #c62f2f 20%, transparent);
+  --btn-ghost-hover: var(--hover);
+  --icon-btn: 36px;
+
+  /* ---- ONE list-row system (nav + playlist side + selectable rows) ---- */
+  --row-h: 40px;
+  --row-px: var(--space-3);
+  --row-py: var(--space-2);
+  --row-radius: var(--radius-md);
+  --row-gap: var(--space-3);
+  --row-font: 14px;
+  --row-weight: 550;
+  --row-weight-on: 650;
+
+  /* ---- ONE badge / chip ---- */
+  --badge-h: 18px;
+  --badge-px: 6px;
+  --badge-radius: var(--radius-pill);
+  --badge-font: 10px;
+  --badge-weight: 650;
+
+  /* ---- ONE page header ---- */
+  --head-gap: var(--space-3);
+  --head-mb: var(--space-4);
+  --head-title-size: 28px;
+  --head-title-weight: 500;
+  --head-title-lh: 32px; /* matches --btn-h for vertical align */
+  --head-actions-gap: var(--space-2);
+
+  /* Play triangle optical nudge (Phosphor play-fill; keep small — was over-nudged right) */
+  --play-optical-x: 0.75px;
 
   --ease-swift: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
@@ -103,7 +160,6 @@
   --dur: 200ms;
   --dur-slow: 320ms;
 
-  /* OPPO Sans 4.0 (variable wght 100–700), free commercial embed — see assets/fonts */
   --font-sans:
     'OPPO Sans', 'OPPO Sans 4.0', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC',
@@ -127,18 +183,17 @@
   --accent-hover: var(--accent-clay-hover);
 }
 
-/* ChatGPT classic charcoal — not OLED pure black; distinct layers */
+/* ChatGPT classic charcoal — layered, not OLED pure black */
 [data-theme='dark'] {
-  --bg-window: #181818;                 /* darkest dock behind panels */
-  --surface-chrome: rgba(37, 37, 36, 0.86); /* sidebar ~#252524 */
+  --bg-window: #181818;
+  --surface-chrome: rgba(37, 37, 36, 0.86);
   --surface-chrome-solid: #252524;
-  --surface-1: #212121;                 /* content canvas */
-  /* Same-level as sidebar chrome — not a separate raised card */
+  --surface-1: #212121;
   --surface-player: var(--surface-chrome);
   --surface-player-solid: var(--surface-chrome-solid);
   --surface-2: var(--surface-player);
   --surface-2-solid: var(--surface-player-solid);
-  --surface-3: #2a2a29;                 /* menus / elevated cards */
+  --surface-3: #2a2a29;
   --surface-0: var(--surface-chrome);
   --surface-0-solid: var(--surface-chrome-solid);
   --bg: var(--surface-1);
@@ -150,7 +205,7 @@
   --border: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.16);
   --hairline: rgba(255, 255, 255, 0.12);
-  --text: #ededed;
+  --text: #ededec;
   --text-secondary: rgba(255, 255, 255, 0.58);
   --muted: rgba(255, 255, 255, 0.42);
 
@@ -164,14 +219,12 @@
   --accent-soft: color-mix(in srgb, var(--accent) 28%, transparent);
   --accent-soft-strong: color-mix(in srgb, var(--accent) 38%, transparent);
 
+  --btn-danger-fg: #ff6b6b;
+  --btn-danger-bg: color-mix(in srgb, #ff6b6b 16%, transparent);
+  --btn-danger-hover: color-mix(in srgb, #ff6b6b 26%, transparent);
+
   color: var(--text);
   background: var(--bg-window);
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-theme-appearance='system']:not([data-theme='light']):not([data-theme='dark']),
-  :root:not([data-theme]):not([data-theme-appearance]) {
-  }
 }
 
 * { box-sizing: border-box; }
@@ -183,7 +236,6 @@ html, body {
 }
 #app { height: 100%; }
 
-/* Hide scrollbars everywhere; overflow remains scrollable */
 * {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -224,7 +276,7 @@ html, body {
   animation: sm-fade-in var(--dur-slow) var(--ease-enter) both;
 }
 
-/* ---------- Floating chrome shell (macOS Liquid Glass–style inset panels) ---------- */
+/* ---------- Floating chrome shell ---------- */
 .app {
   display: grid;
   grid-template-columns: 212px minmax(0, 1fr);
@@ -238,7 +290,6 @@ html, body {
 }
 .nav,
 .player {
-  /* Solid chrome: backdrop-filter over long scrolling lists caused bidirectional jank */
   background: var(--chrome-bg-solid);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -250,7 +301,7 @@ html, body {
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   padding: var(--space-3);
   z-index: 5;
   min-height: 0;
@@ -262,36 +313,36 @@ html, body {
   .player .bar,
   footer.bar { background: transparent; }
 }
+
+/* Nav items = list-row tokens */
 .nav a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  min-height: 42px;
-  border-radius: var(--radius-md);
+  gap: var(--row-gap);
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-h);
+  border-radius: var(--row-radius);
   cursor: pointer;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 14px;
-  font-weight: 550;
+  font-size: var(--row-font);
+  font-weight: var(--row-weight);
   letter-spacing: -0.01em;
   position: relative;
   transition:
     background var(--dur-fast) var(--ease-swift),
     color var(--dur-fast) var(--ease-swift),
-    transform var(--dur-fast) var(--ease-swift),
-    box-shadow var(--dur-fast) var(--ease-swift);
+    transform var(--dur-fast) var(--ease-swift);
 }
 .nav a:hover {
   background: var(--fill-secondary);
   color: var(--text);
 }
 .nav a:active { transform: scale(0.97); }
-/* Selected: macOS-sidebar fill + weight/color; no vertical accent stripe */
 .nav a.on {
   background: var(--selected);
   color: var(--text);
-  font-weight: 650;
+  font-weight: var(--row-weight-on);
   box-shadow: none;
 }
 [data-theme='dark'] .nav a.on {
@@ -299,7 +350,7 @@ html, body {
 }
 .nav .user {
   margin-top: auto;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--row-px);
   font-size: 12px;
   color: var(--muted);
   border-top: 0.5px solid var(--border);
@@ -329,7 +380,6 @@ html, body {
 .player {
   grid-column: 1 / -1;
   overflow: hidden;
-  /* rim / radius / shadow / fill come from shared .nav, .player rule */
 }
 
 .app.np-open .nav,
@@ -340,53 +390,46 @@ html, body {
   display: none !important;
 }
 
+/* ---------- ONE page header ---------- */
 .head {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 18px;
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--head-gap);
+  margin-bottom: var(--head-mb);
+  min-height: var(--btn-h);
 }
-.head h2 {
-  margin: 0 8px 0 0;
+.head h2,
+.head .head-title,
+.head .title-ellip {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 500;
+  font-size: var(--head-title-size);
+  font-weight: var(--head-title-weight);
   letter-spacing: -0.02em;
   color: var(--text);
-  line-height: 1.2;
+  line-height: var(--head-title-lh);
+  display: flex;
+  align-items: center;
+}
+.head .head-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--head-actions-gap);
+  flex: 0 0 auto;
 }
 .grow { flex: 1; min-width: 120px; }
 .muted { color: var(--muted); }
 .error { color: #c62f2f; }
 [data-theme='dark'] .error { color: #ff6b6b; }
 
-/* ---- Design-token buttons: primary / secondary / danger / ghost ---- */
-:root {
-  --btn-h: 34px;
-  --btn-px: 16px;
-  --btn-radius: var(--radius-pill);
-  --btn-font-weight: 550;
-  --btn-secondary-bg: var(--fill-secondary);
-  --btn-secondary-fg: var(--text);
-  --btn-secondary-hover: var(--selected);
-  --btn-primary-bg: var(--accent);
-  --btn-primary-fg: #fff;
-  --btn-primary-hover: var(--accent-hover);
-  --btn-danger-fg: #c62f2f;
-  --btn-danger-bg: color-mix(in srgb, #c62f2f 12%, transparent);
-  --btn-danger-hover: color-mix(in srgb, #c62f2f 20%, transparent);
-  --btn-ghost-hover: var(--hover);
-}
-[data-theme='dark'] {
-  --btn-danger-fg: #ff6b6b;
-  --btn-danger-bg: color-mix(in srgb, #ff6b6b 16%, transparent);
-  --btn-danger-hover: color-mix(in srgb, #ff6b6b 26%, transparent);
-}
-
+/* ---------- ONE button system ---------- */
 button, input, select, .sm-select-trigger {
   font: inherit;
-  padding: 8px var(--btn-px);
+  padding: 0 var(--btn-px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-3);
@@ -407,6 +450,13 @@ button {
   color: var(--btn-secondary-fg);
   font-weight: var(--btn-font-weight);
   min-height: var(--btn-h);
+  height: var(--btn-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  line-height: 1;
+  box-sizing: border-box;
 }
 button:hover:not(:disabled) {
   background: var(--btn-secondary-hover);
@@ -415,11 +465,6 @@ button:hover:not(:disabled) {
 button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled { opacity: 0.45; cursor: default; }
 
-/* secondary = default filled chip (播放全部 / 刷新 / 搜索) */
-button.btn-secondary,
-button.secondary { /* alias */ }
-
-/* primary = accent CTA */
 button.primary,
 button.btn-primary,
 button.btn-accent {
@@ -435,7 +480,6 @@ button.btn-accent:hover:not(:disabled) {
   border-color: var(--btn-primary-hover);
 }
 
-/* danger = destructive (删除 / 取消收藏 destructive path) */
 button.danger,
 button.btn-danger {
   background: var(--btn-danger-bg);
@@ -449,7 +493,6 @@ button.btn-danger:hover:not(:disabled) {
   color: var(--btn-danger-fg);
 }
 
-/* ghost = low-emphasis text actions (重命名) */
 button.ghost,
 button.btn-ghost {
   background: transparent;
@@ -463,18 +506,28 @@ button.btn-ghost:hover:not(:disabled) {
   color: var(--text);
 }
 
+button.btn-icon,
+button.icon-btn {
+  width: var(--icon-btn);
+  min-width: var(--icon-btn);
+  height: var(--icon-btn);
+  min-height: var(--icon-btn);
+  padding: 0;
+  border-radius: 50%;
+}
+
 input, select, .sm-select-trigger {
   border-radius: var(--radius-md);
   background: var(--fill-secondary);
   border-color: transparent;
   min-height: var(--btn-h);
+  height: var(--btn-h);
 }
 input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-/* Custom dropdown (replaces native <select> — readable on dark / Windows) */
 .sm-select {
   position: relative;
   display: inline-block;
@@ -485,14 +538,14 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
   cursor: pointer;
   text-align: left;
   color: var(--text);
   font-weight: 550;
   border-radius: var(--radius-md);
-  padding: 8px 14px;
+  padding: 0 var(--btn-px);
 }
 .sm-select-trigger .chev {
   opacity: 0.55;
@@ -509,7 +562,7 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   right: 0;
   top: calc(100% + 6px);
   margin: 0;
-  padding: 6px;
+  padding: var(--space-1);
   list-style: none;
   background: var(--surface-3);
   border: 0.5px solid var(--border);
@@ -520,11 +573,14 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   animation: sm-scale-in var(--dur-fast) var(--ease-enter) both;
 }
 .sm-select-menu li {
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
+  padding: var(--row-py) var(--row-px);
+  border-radius: var(--row-radius);
   cursor: pointer;
   color: var(--text);
   font-weight: 500;
+  min-height: var(--row-h);
+  display: flex;
+  align-items: center;
   transition: background var(--dur-fast) var(--ease-swift);
 }
 .sm-select-menu li:hover,
@@ -535,7 +591,7 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
 .sm-select-menu li.on {
   background: var(--selected);
   color: var(--text);
-  font-weight: 650;
+  font-weight: var(--row-weight-on);
 }
 input[type='range'] {
   padding: 0;
@@ -543,6 +599,7 @@ input[type='range'] {
   accent-color: var(--accent);
   box-shadow: none;
   min-height: 0;
+  height: auto;
   background: transparent;
 }
 input[type='checkbox'] {
@@ -552,33 +609,88 @@ input[type='checkbox'] {
   min-height: 0;
 }
 
+/* Segmented control — same padding language as buttons */
 .seg {
   display: inline-flex;
-  padding: 3px;
+  padding: var(--space-1);
   gap: 2px;
   border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   border: 0;
+  height: var(--btn-h);
+  align-items: stretch;
+  box-sizing: border-box;
 }
 .seg button {
   border: 0;
   background: transparent;
   border-radius: var(--radius-pill);
-  padding: 6px 14px;
+  padding: 0 var(--btn-px);
   color: var(--muted);
   font-size: 13px;
-  min-height: 30px;
+  min-height: 0;
+  height: auto;
   font-weight: 500;
 }
 .seg button.on {
   background: var(--surface-3);
   color: var(--text);
   box-shadow: var(--shadow-sm);
-  font-weight: 650;
+  font-weight: var(--row-weight-on);
 }
 .seg button:hover:not(.on):not(:disabled) {
   background: var(--hover);
   color: var(--text);
+}
+
+/* ---------- ONE list-row utility (playlist sidebars, etc.) ---------- */
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--row-gap);
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-h);
+  border-radius: var(--row-radius);
+  cursor: pointer;
+  font-size: var(--row-font);
+  font-weight: var(--row-weight);
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift);
+}
+.list-row:hover { background: var(--fill-secondary); }
+.list-row:active { transform: scale(0.98); }
+.list-row.on {
+  background: var(--selected);
+  color: var(--text);
+  font-weight: var(--row-weight-on);
+  box-shadow: none;
+}
+[data-theme='dark'] .list-row.on {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ---------- ONE badge / chip ---------- */
+.sm-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--badge-h);
+  padding: 0 var(--badge-px);
+  border-radius: var(--badge-radius);
+  font-size: var(--badge-font);
+  font-weight: var(--badge-weight);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.sm-badge.muted-chip {
+  background: var(--fill-secondary);
+  color: var(--muted);
+  border: 0;
 }
 
 .settings-card {
@@ -591,13 +703,13 @@ input[type='checkbox'] {
   animation: sm-fade-in var(--dur) var(--ease-enter) both;
 }
 .settings-card h3 {
-  margin: 0 0 14px;
+  margin: 0 0 var(--space-3);
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.015em;
 }
-.settings-card + .settings-card { margin-top: 14px; }
+.settings-card + .settings-card { margin-top: var(--space-3); }
 
 .swatch {
   width: 18px;
@@ -610,6 +722,11 @@ input[type='checkbox'] {
   box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3.5px var(--accent);
 }
 
+/* Play icon optical center helper */
+.play-icon {
+  transform: translateX(var(--play-optical-x));
+}
+
 /* ---------- Mobile: floating bottom tab bar ---------- */
 @media (max-width: 700px) {
   html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
@@ -617,8 +734,8 @@ input[type='checkbox'] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto auto;
     height: 100dvh;
-    padding: calc(8px + env(safe-area-inset-top)) 8px 0;
-    gap: 8px;
+    padding: calc(var(--space-2) + env(safe-area-inset-top)) var(--space-2) 0;
+    gap: var(--space-2);
   }
   .main-col { grid-row: 1; border-radius: var(--radius-chrome-mobile); }
   .player { grid-row: 2; border-radius: var(--radius-chrome-mobile); }
@@ -627,8 +744,8 @@ input[type='checkbox'] {
     flex-direction: row;
     justify-content: space-around;
     gap: 2px;
-    margin: 0 4px calc(8px + env(safe-area-inset-bottom));
-    padding: 6px 6px;
+    margin: 0 var(--space-1) calc(var(--space-2) + env(safe-area-inset-bottom));
+    padding: var(--space-1);
     border-radius: var(--radius-chrome-tab);
     overflow: visible;
     box-shadow: var(--shadow-chrome);
@@ -637,27 +754,48 @@ input[type='checkbox'] {
     flex: 1;
     flex-direction: column;
     gap: 3px;
-    padding: 8px 4px;
+    padding: var(--space-2) var(--space-1);
     min-height: 52px;
     justify-content: center;
     font-size: 10px;
-    font-weight: 550;
+    font-weight: var(--row-weight);
     border-radius: var(--radius-chrome-mobile);
   }
   .nav a:hover { background: none; }
   .nav a.on {
     background: var(--selected);
     color: var(--text);
-    font-weight: 650;
+    font-weight: var(--row-weight-on);
     box-shadow: none;
   }
   [data-theme='dark'] .nav a.on {
     background: rgba(255, 255, 255, 0.14);
   }
   .nav .user { display: none; }
-  .content { padding: 16px 16px 20px; }
-  .head { flex-wrap: wrap; gap: 10px; }
-  .head h2 { font-size: 26px; flex-basis: 100%; }
-  button, input, select { min-height: 44px; font-size: 16px; }
-  .seg button { min-height: 36px; font-size: 13px; }
+  .content { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .head { flex-wrap: wrap; gap: var(--space-2); }
+  .head h2,
+  .head .head-title,
+  .head .title-ellip {
+    font-size: 24px;
+    line-height: 1.2;
+    flex-basis: 100%;
+  }
+  button, input, select {
+    min-height: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+  .seg {
+    height: 44px;
+  }
+  .seg button {
+    min-height: 0;
+    height: auto;
+    font-size: 13px;
+  }
+  :root {
+    --icon-btn: 44px;
+    --btn-h: 44px;
+  }
 }

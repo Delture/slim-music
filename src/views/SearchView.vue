@@ -27,9 +27,11 @@ async function run(more = false) {
 <template>
   <section>
     <header class="head">
-      <h2>搜索</h2>
+      <h2 class="head-title">搜索</h2>
       <input v-model="kw" class="grow" placeholder="歌名 / 歌手 / 专辑" @keydown.enter="run()" />
-      <button class="btn-primary" @click="run()">搜索</button>
+      <div class="head-actions">
+        <button class="btn-primary" @click="run()">搜索</button>
+      </div>
     </header>
     <p v-if="err" class="error">{{ err }}</p>
     <TrackList :tracks="tracks" />

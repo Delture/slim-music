@@ -1,0 +1,510 @@
+[INFO] Starting pen.dev (headless)...
+[INFO] Ready.
+
+[1mpen.dev Interactive Shell[22m
+[2mFile: /workspace/slim-music/design/probe.pen[22m
+[2mType tool calls like: read_skill({ path: "pen-schema.md" })[22m
+[2mType save() to save, exit() to quit.[22m
+
+[36mpen[39m [2m>[22m ---
+name: pen-dev
+description: Create high-quality visual designs — websites, app screens, dashboards, slides, marketing materials, social media graphics on the pen.dev canvas — or use the canvas as a whiteboard to research, plan, and compare with live browser nodes. Use when the task involves generating designs or working out a task on the canvas.
+---
+
+# pen.dev
+
+pen.dev is an infinite canvas design tool with nested object hierarchy.
+
+## Quick reference
+
+| Topic | When to use | Reference |
+| --- | --- | --- |
+| `.pen schema` | Learn the .pen schema that is used to represent. Required to read. | [pen-schema.md](./pen-schema.md) |
+| `execute` | Learn how to use the `execute` MCP tool to generating designs on the canvas. Required to read. | [execute.md](./execute.md) |
+| `generate` | Using the `Generate` function: AI and stock images, SVG artwork, and transforming an image already in the document. | [generate.md](./generate.md) |
+| `components` | Learn how to use components and instances in .pen files. | [components.md](./guide/components.md) |
+| `scripts-and-shaders` | Learn how to use scripts and shaders on the pen.dev canvas. | [scripts-and-shaders.md](./scripts-and-shaders.md) |
+| `whiteboard` | Research, evaluation, and planning work done on the canvas with live `browser` nodes: competitor and vendor comparisons, meeting prep, briefs, schedules. The deliverable is information for the user, not a product design. Required when the user asks you to research, compare, evaluate, plan, or prep something. | [whiteboard.md](./whiteboard.md) |
+| `code` | Generating code from .pen files. | [code.md](./guide/code.md) |
+| `design-system` | Composing screens with design system components. | [design-system.md](./guide/design-system.md) |
+| `landing-page` | Designing landing pages and promotional websites. | [landing-page.md](./guide/landing-page.md) |
+| `mobile-app` | Designing mobile apps. | [mobile-app.md](./guide/mobile-app.md) |
+| `slides` | Designing presentation slides. | [slides.md](./guide/slides.md) |
+| `table` | Working with tables and dashboards. | [table.md](./guide/table.md) |
+| `tailwind` | Tailwind CSS v4 implementation. | [tailwind.md](./guide/tailwind.md) |
+| `web-app` | Designing web apps. | [web-app.md](./guide/web-app.md) |
+
+## General instructions
+
+- Favor copying existing content and updating the copied content later, rather than generating new content.
+- When creating new variables make sure you are not accidentally overwriting any existing design.
+- User may ask for technical modifications like removing, moving, re-ordering, clearing, and copying objects/variables, or just ask questions. Only do what's requested and nothing more.
+- When the user asks you to research, compare, evaluate, plan, or prep something (competitors, vendors, a meeting, a schedule, a trip), the deliverable is information laid out for them, not an app or website about the topic. Read [whiteboard.md](./whiteboard.md) and work with live `browser` nodes instead of designing a product.
+- pen.dev is a collaborative multiplayer environment: the document can change while you work, so the state you remember may be stale. If a node is missing or no longer matches what you expected, re-read instead of recreating it, and don't undo changes the user made in the meantime.
+- When adding more content to a frame make sure the frame has the right layout, or is big enough to fit the new content. Resize the frame if necessary. There is no scrolling and the entire content should always be visible on the canvas.
+- Place components at the top and your screens below, growing to the right and down.
+- When creating new screens, represent each one as a top-level frame in `document`. Use `clip: true` on screen frames to prevent content overflow.
+- Keep the document root clean: only page/screen frames, reusable component frames, other major container frames, and `browser` nodes belong directly under `document`. Never place text, icons, buttons, cards, rows, images, or decorative shapes directly in `document`. A `browser` node may also sit directly inside a top-level frame, but never inside a nested frame.
+- When the design has repeated UI, consider building those as reusable components first and then instancing them, so edits to the component propagate to every instance.
+- Changes in the document are presented in real-time to the user. Make the changes in a logical order as a designer would.
+- Minimize the time between the user requests and showing something on the screen. Users don't want to wait a long time before they see the progress.
+- Answers support Markdown links to websites and local output files. Use absolute paths for local files and angle brackets for paths with spaces, for example `[Preview](http://localhost:3000)` or `[Notes](</Users/name/project/image prompts.txt>)`.
+- Use the canvas as part of your thinking. You don't need to preplan every little detail. Iteratively design using the document.
+
+- Do NOT use or think in CSS/HTML properties or behavior. pen.dev uses a custom format and has its own layout, rendering, and canvas behavior. pen.dev has similar concepts and naming, but it's not the same as CSS/HTML.
+- If a property is not present in the .pen schema, it's not supported. Find a different way to achieve the same visual effect.
+- Do NOT use: alignItems baseline/stretch, margin, percentage size. These values are not supported and will cause an error.
+
+Verify each section immediately after you are done with it. Don't wait until the end of the whole generation.
+Create a checklist to evaluate the design after you create it. Make sure to check for the following:
+- Layout it not collapsed or broken.
+- Content is not clipped outside the frame. Resize the container frames to fit the content if necessary.
+- Color contrast on text, objects, and background is sufficient.
+- Objects are properly aligned and spaced.
+- Intention and understanding of the pen.dev schema matches the visuals.
+After reviewing the design, do NOT delete it to make changes. If you want to fix it, always make direct updates to the existing objects.
+
+### Style
+
+- Don't create repetitive styles and grids. Add some unique elements and layout to make the design feel more interesting.
+- Avoid wrapping every element in its own box or card. This is a common AI habit that makes designs look generic. Use a container only when it has a real structural or functional purpose.
+- Avoid excessive gradients, shadows, and rounded corners unless requested or when part of the brand identity. Be refined and intentional with effects and decorations
+- All Google fonts are available.
+- Never draw logos, illustrations, or mascots yourself out of paths and shapes - hand-built drawings always look bad. When a design genuinely calls for one, use the `Generate` function with `type: "svg"` on a frame.
+- Most designs need no custom artwork at all. Use `icon` nodes for iconography, frames/shapes/gradient fills for decoration and backgrounds, and image fills for photography. Reserve SVG generation for artwork none of those can express.
+
+#### Style archetypes
+
+The `get_style` MCP tool provides ready-made visual style archetypes with configurable fonts, colors, and imagery. Use one when the user has no specific brand or style direction. Load a style with `get_style({ name: "..." })`; if the style requires params, the tool returns the options to choose from — call it again with all params filled in.
+
+Available styles:
+
+- Aerial Gravitas
+- Anchored Ribbon Grid
+- Artisan Editorial
+- Blueprint Technical
+- Centered Device Cascade
+- Centered Serif List
+- Cinematic Alternating
+- Cinematic Device Column
+- Color Block Stack
+- Dark Centered Platform
+- Editorial Landscape Stack
+- Editorial Scientific
+- Gradient Prompt Stack
+- Illustrated Ribbon Stack
+- Illustrated Warm
+- Inline Friendly
+- Modular Bento Showcase
+- Monumental Editorial
+- Narrative Illustrated
+- Product Data Grid
+- Product Demo
+- Saturated Code Bridge
+- Soft Bento
+- Spatial Plus
+- Split Inverse Showcase
+- Zigzag Bold Split
+
+### Objects
+
+- All object coordinates are defined relative to the parent’s top-left corner.
+- Use a coordinate system where `x` increases to the right and `y` increases downward.
+- Objects rotate counter-clockwise around the top-left corner of their bounding box.
+- Only `frame` and `group` types can have children. Shapes, text, and other nodes cannot have children.
+
+- Properties do not cascade from parents to children. Every node is independent and must have all necessary properties specified.
+- Exclude default property values unless they are overriding a non-default value inside an instance.
+
+- Avoid duplicating the same dimension value across multiple sibling elements. If several children need to match their parent's width or height, use `fill_container` on each rather than hardcoding the parent's size repeatedly.
+- Explicitly specify `width` and `height` for shapes and other nodes whose size is not otherwise determined by layout or text behavior.
+- For layout-driven nodes, prefer `fit_content` and `fill_container` when appropriate instead of hardcoded numeric sizes.
+- Set children to `fill_container` to distribute them evenly within their parent. Use the `gap` property on the parent to add gaps between children.
+
+- Use `justifyContent: "center"` and `alignItems: "center"` on the parent to center its children both vertically and horizontally.
+- For text, follow `textGrowth` rules: do not set `width` or `height` unless `textGrowth` requires them.
+- Use `textAlign` or `textAlignVertical` to align the text within the text bounding box. `textAlign` has a visible effect when `textGrowth` is `fixed-width` or `fixed-width-height`. `textAlignVertical` has a visible effect only when `textGrowth` is `fixed-width-height`.
+- Setting `textAlign` or `textAlignVertical` will not change the position of the text bounding box. Use flexbox layout to align the object.
+- Use `textGrowth` to define text wrapping and bounding box sizing. When not specified, the default value is `"auto"`.
+- Possible `textGrowth` values:
+  - `auto`: `width` and `height` are always derived from the text content, any `width` or `height` you set is ignored. Never does line wrapping, text will always be on a single line.
+  - `fixed-width`: the `width` node property MUST be specified, `height` is calculated from the text content. Does line wrapping based on the object's bounding box width.
+  - `fixed-width-height`: both `width` and `height` node property MUST be specified. Does line wrapping based on the object's bounding box width. Text content will vertically overflow.
+- Only use `fixed-width-height` when you need to override the height of the text box. Prefer `fixed-width` with `fill_container` for text that needs to adapt to the parent container size.
+- If you want to wrap lines, you HAVE TO set the `textGrowth` to either `fixed-width` or `fixed-width-height`.
+- Never guess text dimensions, always rely on text wrapping and flexbox layout to size and position text. Any dimension guess for text will result in visual bugs.
+- Use the `lineHeight` property on text as a ratio relative to the font size: `0.0` means 0%, and `1.0` means 100%. If not specified, the font’s default line height will be applied.
+
+- Text has no `fill` by default and will be invisible. You MUST set the `fill` property on text objects to make them visible. Emoji requires `fill` as well.
+- To reference a variable, use a string value with a `$` prefix (`fill: "$primary-color"`, `gap: "$spacing-small"`)
+- `width` and `height` do not support percentage or viewport CSS values. Never use values like `"70%"`, `"100%"`, `"50vh"`, or `"calc(...)"` or even `value + "%"`. If you need proportion-based sizing that's not uniform from the layout, you need to use fixed pixel values.
+- `fill` can be set on wrapping containers to add a background color, gradient, or an image.
+
+### Flexbox Layout
+
+- `layout` and `padding` is only accessible on `frame` type. Do NOT set `layout` and `padding` on other types of nodes.
+- **Prefer dynamic sizing over hardcoded values.** Use `fill_container` or `fit_content`, rather than repeating the parent's or children's pixel value. This makes designs more maintainable.
+- Always prefer flexbox layout; only use `layout: "none"` when truly necessary.
+- x and y properties are completely ignored when the node is in layout. Do NOT set x/y on a child unless the parent has layout: "none" or the node has layoutPosition: "absolute"
+- Only use explicit numerical sizes in rare cases when it cannot be inferred from the layout.
+- To align and distribute objects within a container with flexbox, wrap them in a parent object that has a `layout` property.
+- Frames always default to `horizontal` direction and `fit_content` sizing.
+- Padding affects ALL children uniformly - it creates space between the container's edges and its children.
+- To offset an individual child in flexbox, wrap it in a flexbox frame with padding.
+- Flexbox layout is single-axis only with no item wrapping. For grid-like layouts, manually create separate row frames.
+- A parent cannot be sized by its children using `fit_content` if all direct children are sized by the parent using `fill_container`. This creates circular dependency. Don't rely on the fallback value to resolve circular dependency.
+
+**Antipattern**
+```js
+// WRONG: percentage values are not supported
+Insert(parent,{type:"frame",width:"100%",height:`${100/count}%`})
+
+// WRONG: padding on text is not supported, use a wrapping frame instead
+Insert(parent,{type:"text",content:"text",fontSize:12,padding:12})
+
+// WRONG: Collapses to 0 width. Parent defaults to fit_content. Child tries to fill it.
+badParentId = Insert(screen, {type: "frame", layout: "vertical"});
+Insert(badParentId, {type: "text", textGrowth: "fixed-width", width: "fill_container", content: "..."});
+```
+
+#### Text Sizing
+
+Text sizing depends on whether the parent or the text content controls the size.
+
+**Parent defines size** - parent must have flexbox layout and determines the size. Use `textGrowth:"fixed-width"` + `fill_container` (headings, descriptions, paragraphs):
+
+```js
+sectionId=Insert(parent,{type:"frame",name:"Header",layout:"vertical",width:400,gap:12,x:200,y:200})
+Insert(sectionId,{type:"text",name:"Title",textGrowth:"fixed-width",width:"fill_container",fontFamily:"Inter",content:"Dashboard",fontSize:24,fill:"$text-primary"})
+Insert(sectionId,{type:"text",name:"Subtitle",textGrowth:"fixed-width",width:"fill_container",fontFamily:"Inter",content:"Manage your account settings",fontSize:14,fill:"$text-secondary"})
+```
+
+**Text defines size** - default `auto`, no width/height (button labels, tags, badges):
+
+```js
+btnId=Insert(parent,{type:"frame",name:"Button",padding:12,gap:8})
+Insert(btnId,{type:"text",name:"Label",fontFamily:"Inter",content:"Submit",fontSize:14,fill:"$text-primary"})
+```
+
+**Antipattern** - using pixel dimensions when layout can handle it:
+
+```js
+containerId=Insert(parent,{type:"frame",name:"Button",width:200,height:100,padding:12})
+// WRONG: parent has layout, use fill_container instead of pixel width
+Insert(containerId,{type:"text",content:"abc",textGrowth:"fixed-width",width:320,fontSize:14})
+// WRONG: missing textGrowth after specifying width
+Insert(containerId,{type:"text",content:"abc",width:100,fontSize:14})
+```
+
+### Using placeholders
+
+- Any new, copied, or modified root frame MUST have `placeholder: true` for the entire duration of the work on it.
+- Once you start working inside a placeholder node, finish it before unsetting the flag.
+- Remove `placeholder: true` as soon as the frame is done - don't wait until all screens are finished.
+
+### SVG Path
+
+- Always set an explicit `viewBox: [x, y, width, height]` on a path. It defines the region of the SVG coordinate space that maps onto the node's full box, and lets you keep the path's raw coordinates while still controlling placement via the node's `x`/`y`/`width`/`height`.
+- The viewBox region is stretched to fill the node's width/height.
+
+### Graphs
+
+- Always prefer bar charts and charts that can be built with simple layout configurations that the .pen format supports.
+- Don't use absolutely positioned elements over the chart, as they won't align correctly.
+- Don't manually match labels to bar positions and sizes. Rely on layout to position labels and bars correctly.
+- When creating donut charts, always use `fill` color with `innerRadius` size to create the donut shape.
+- Line charts cannot be easily built because the layout system cannot position individual points.
+
+
+# .pen File Schema
+
+```typescript
+/** Theme axis -> axis value. E.g. { 'device': 'phone' } */
+export interface Theme { [key: string]: string; }
+/** Dollar-prefixed variable name; binds the property to that variable. */
+export type Variable = string;
+export type NumberOrVariable = number | Variable;
+/** Hex color: #RGB, #RRGGBB, or #RRGGBBAA. */
+export type Color = string;
+export type ColorOrVariable = Color | Variable;
+export type BooleanOrVariable = boolean | Variable;
+export type StringOrVariable = string | Variable;
+export interface Layout {
+  /** Flex layout direction. 'none'=absolutely positioned children. */
+  layout?: "none" | "vertical" | "horizontal";
+  /** Main-axis gap between children. Default 0. */
+  gap?: NumberOrVariable;
+  layoutIncludeStroke?: boolean;
+  /** Inside padding. */
+  padding?: /** all sides */ NumberOrVariable | /** [vertical, horizontal] */ [NumberOrVariable, NumberOrVariable] | /** [top, right, bottom, left] */ [NumberOrVariable, NumberOrVariable, NumberOrVariable, NumberOrVariable];
+  /** Main-axis alignment. Default 'start'. */
+  justifyContent?: "start" | "center" | "end" | "space_between" | "space_around";
+  /** Cross-axis alignment. Default 'start'. */
+  alignItems?: "start" | "center" | "end";
+}
+/** Dynamic layout size:
+- fit_content: combined size of children, requires layout on the node (fallback when no children).
+- fill_container: parent size, requires layout on the parent (fallback when not in a layout or when using absolute position).
+Optional fallback in parens, e.g. 'fit_content(100)'. */
+export type SizingBehavior = string;
+/** Position relative to parent. X right, Y down. IGNORED when parent uses flex layout. */
+export interface Position { x?: number; y?: number; }
+export interface Size { width?: NumberOrVariable | SizingBehavior; height?: NumberOrVariable | SizingBehavior; }
+/** Affine matrix [a, b, c, d, tx, ty]. */
+export type AffineTransform = [number, number, number, number, number, number];
+/** Override values for shader uniforms, keyed by uniform name. Uniforms annotated with `@resolution` or `@time` must not appear here. Allowed value shapes: number (float/int), boolean (bool), hex color string like `#RRGGBB[AA]` (color), array of 2-4 numbers (vec2/3/4), image URL or `pencil:object`/`pencil:background` string (sampler2D), or a variable reference `$name` (numeric uniforms accept number variables; color uniforms accept color variables). */
+export interface ShaderUniforms { [key: string]: number | boolean | string | number[]; }
+export type BlendMode = 'normal' | 'darken' | 'multiply' | 'linearBurn' | 'colorBurn' | 'light' | 'screen' | 'linearDodge' | 'colorDodge' | 'overlay' | 'softLight' | 'hardLight' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity';
+export type Fill = ColorOrVariable | {
+type: "color";
+enabled?: BooleanOrVariable;
+blendMode?: BlendMode;
+/** Fill opacity can only be set via the hex alpha channel. */
+color: ColorOrVariable;
+} | {
+type: "gradient";
+enabled?: BooleanOrVariable;
+blendMode?: BlendMode;
+gradientType?: "linear" | "radial" | "angular";
+opacity?: NumberOrVariable;
+/** Normalized to bbox. Default 0.5,0.5. */
+center?: Position;
+/** Normalized to bbox. Default 1,1. Linear: height = gradient length, width ignored. Radial/Angular: ellipse diameters. */
+size?: { width?: NumberOrVariable; height?: NumberOrVariable };
+/** Degrees CCW (0° up, 90° left, 180° down). */
+rotation?: NumberOrVariable;
+colors?: { color: ColorOrVariable; position: NumberOrVariable }[];
+} | /** Image fill. URL is relative to the .pen file, e.g. `./image.jpg`. */ {
+type: "image";
+enabled?: BooleanOrVariable;
+blendMode?: BlendMode;
+opacity?: NumberOrVariable;
+url?: string;
+/** Default 'cover'. */
+mode?: "cover" | "contain" | "stretch";
+/** Crops the image. Maps normalized image coordinates (0..1 across its width and height) into the crop's 0..1 box, so [2, 0, 0, 1, -1, 0] is the right half. The mode fits the crop into the shape like a whole image, and cover keeps it inside the image. Defaults to identity, no crop. */
+transform?: AffineTransform;
+} | /** Shader fill. URL points to a WebGL 1.0 (#version 100) fragment shader file, relative to the .pen file, e.g. `./effect.glsl`. Uniforms are described via `@directive` annotations inside block comments in the shader source. A `vec2` uniform annotated with `@resolution` is auto-bound to the fill size in pixels. Other uniforms' user-set values are stored in `uniforms`. */ { type: "shader"; enabled?: BooleanOrVariable; blendMode?: BlendMode; opacity?: NumberOrVariable; url: string; uniforms?: ShaderUniforms } | /** Bezier-interpolated color grid, row-major. Keep edge points at default positions. */ {
+type: "mesh_gradient";
+enabled?: BooleanOrVariable;
+blendMode?: BlendMode;
+opacity?: NumberOrVariable;
+columns?: number;
+rows?: number;
+/** Color per vertex. */
+colors?: ColorOrVariable[];
+/** columns * rows points in [0,1]. */
+points?: (/** Auto-generated handles. */ [number, number] | /** Optional bezier handles (relative offsets); omitted = auto. */ { position: [number, number]; leftHandle?: [number, number]; rightHandle?: [number, number]; topHandle?: [number, number]; bottomHandle?: [number, number] })[];
+};
+export type Fills = Fill | Fill[];
+export interface CanHaveStroke {
+  stroke?: Fills;
+  /** Stroke thickness, uniform or per side. */
+  strokeWidth?: NumberOrVariable | { top?: NumberOrVariable; right?: NumberOrVariable; bottom?: NumberOrVariable; left?: NumberOrVariable };
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "bevel" | "round";
+  strokeAlignment?: "inner" | "center" | "outer";
+}
+export type Effect = /** Blurs the entire node. */ { enabled?: BooleanOrVariable; type: "blur"; radius?: NumberOrVariable } | /** Blurs the backdrop behind the node. */ { enabled?: BooleanOrVariable; type: "background_blur"; radius?: NumberOrVariable } | /** Inner or outer drop shadow. */ { type: "shadow"; enabled?: BooleanOrVariable; shadowType?: "inner" | "outer"; offset?: { x: NumberOrVariable; y: NumberOrVariable }; blur?: NumberOrVariable; color?: ColorOrVariable; blendMode?: BlendMode } | /** Post-processes the rendered node with a fragment shader. Same shader format as the shader fill. A `sampler2D` uniform set to `pencil:object` is bound to the rendered node. `@resolution` is the size of the node's visual bounds. */ { type: "shader"; enabled?: BooleanOrVariable; url: string; uniforms?: ShaderUniforms };
+export type Effects = Effect | Effect[];
+export interface CanHaveEffects { effect?: Effects; }
+export interface CanHaveGraphics extends CanHaveEffects, CanHaveStroke { fill?: Fills; }
+export interface Entity extends Position {
+  /** Unique string; MUST NOT contain '/'. Auto-generated if omitted. */
+  id: string;
+  name?: string;
+  context?: string;
+  /** When true, can be duplicated via `ref` objects. Default false. */
+  reusable?: boolean;
+  theme?: Theme;
+  enabled?: BooleanOrVariable;
+  opacity?: NumberOrVariable;
+  flipX?: BooleanOrVariable;
+  flipY?: BooleanOrVariable;
+  /** Absolute position detaches the object from parent's layout and can be absolute positioned. Default auto */
+  layoutPosition?: "auto" | "absolute";
+  metadata?: { type: string; [key: string]: any };
+  /** Degrees CCW around top-left corner. */
+  rotation?: NumberOrVariable;
+}
+export interface Rectangleish extends Entity, Size, CanHaveGraphics { cornerRadius?: NumberOrVariable | [NumberOrVariable, NumberOrVariable, NumberOrVariable, NumberOrVariable]; }
+/** Position is the top-left corner. */
+export interface Rectangle extends Rectangleish { type: "rectangle"; }
+/** Defined by its bounding rectangle. */
+export interface Ellipse extends Entity, Size, CanHaveGraphics {
+  type: "ellipse";
+  /** Ring inner/outer radius ratio. 0=solid, 1=hollow. Default 0. */
+  innerRadius?: NumberOrVariable;
+  /** Arc start angle, degrees CCW from right. Default 0. */
+  startAngle?: NumberOrVariable;
+  /** Arc length from startAngle. Positive=CCW, negative=CW. Range -360..360. Default 360. */
+  sweepAngle?: NumberOrVariable;
+}
+/** Defined by its bounding rectangle. */
+export interface Polygon extends Entity, Size, CanHaveGraphics { type: "polygon"; polygonCount?: NumberOrVariable; cornerRadius?: NumberOrVariable; }
+export interface Path extends Entity, Size, CanHaveGraphics {
+  /** Default 'nonzero'. */
+  fillRule?: "nonzero" | "evenodd";
+  /** SVG path. */
+  geometry?: string;
+  /** SVG coord-space [x,y,w,h] mapping onto the node box. Default: tight bbox of geometry. */
+  viewBox?: [number, number, number, number];
+  type: "path";
+}
+export interface TextStyle {
+  fontFamily?: StringOrVariable;
+  fontSize?: NumberOrVariable;
+  fontWeight?: StringOrVariable;
+  letterSpacing?: NumberOrVariable;
+  fontStyle?: StringOrVariable;
+  underline?: BooleanOrVariable;
+  /** Multiplier of fontSize. Defaults to font's built-in. */
+  lineHeight?: NumberOrVariable;
+  textAlign?: "left" | "center" | "right" | "justify";
+  textAlignVertical?: "top" | "middle" | "bottom";
+  strikethrough?: BooleanOrVariable;
+  href?: string;
+}
+export type TextContent = StringOrVariable;
+export interface Text extends Entity, Size, CanHaveGraphics, TextStyle {
+  type: "text";
+  content?: TextContent;
+  /** Required before width/height take effect.
+'auto': grows to fit; no wrapping.
+'fixed-width': width fixed, wraps; height grows.
+'fixed-width-height': both fixed; may overflow. */
+  textGrowth?: "auto" | "fixed-width" | "fixed-width-height";
+}
+export interface CanHaveChildren { children?: Child[]; }
+/** Container to create hierarchy and layout. default layout=horizontal, width=fit_content, height=fit_content, clip=false. */
+export interface Frame extends Rectangleish, CanHaveChildren, Layout {
+  type: "frame";
+  /** Clip overflow. Default false. */
+  clip?: BooleanOrVariable;
+  placeholder?: boolean;
+  /** Marks frame as a slot for component instances. Array entries are IDs of recommended reusable child components (e.g. menu items inside a menu bar). */
+  slot?: false | string[];
+}
+export interface Group extends Entity, CanHaveChildren, CanHaveEffects { type: "group"; }
+export interface Note extends Entity, Size, TextStyle { type: "note"; content?: TextContent; }
+export interface Prompt extends Entity, Size, TextStyle { type: "prompt"; content?: TextContent; model?: StringOrVariable; }
+export interface Context extends Entity, Size, TextStyle { type: "context"; content?: TextContent; }
+/** Icon from a library. The icon is scaled to fit the width and height. */
+export interface Icon extends Entity, Size, CanHaveEffects {
+  type: "icon";
+  /** Valid: 'lucide', 'feather', 'Material Symbols Outlined', 'Material Symbols Rounded', 'Material Symbols Sharp', 'phosphor'. */
+  library?: StringOrVariable;
+  icon?: StringOrVariable;
+  /** Variable weight, 100-700; only for libraries that support it. */
+  weight?: NumberOrVariable;
+  fill?: Fills;
+}
+/** Generates nested children from JavaScript. */
+export interface Script extends Entity, Size {
+  type: "script";
+  /** Clip overflow. Default false. */
+  clip?: BooleanOrVariable;
+  /** JS file URI, relative to the .pen file. */
+  scriptUri?: string;
+  /** Input values by name. */
+  inputs?: { [key: string]: string | number | boolean | Variable };
+}
+/** Live web page shown on the canvas. */
+export interface Browser extends Entity, Size, CanHaveEffects, CanHaveStroke {
+  type: "browser";
+  /** Page URL. Empty shows a URL prompt. */
+  url?: string;
+  /** Device emulation preset id. Omit for responsive. */
+  deviceId?: string;
+  /** Page zoom factor. Default 1. */
+  zoom?: number;
+  scrollX?: number;
+  scrollY?: number;
+  cornerRadius?: NumberOrVariable | [NumberOrVariable, NumberOrVariable, NumberOrVariable, NumberOrVariable];
+}
+/** Reuses another object. */
+export interface Ref extends Entity {
+  type: "ref";
+  /** ID of the referenced object. */
+  ref: string;
+  /** Customize descendant properties. */
+  descendants?: { [key: string /** ID path of the descendant. */]: {} /** Based on the presence of `type`:
+- `type` is not present = property overrides: the descendant node is updated with the listed properties.
+- `type` is present = replacement: the descendant node is fully replaced with a new node tree. */ };
+  [key: string]: any;
+}
+export type Child = Frame | Group | Rectangle | Ellipse | Path | Polygon | Text | Note | Prompt | Context | Icon | Script | Browser | Ref;
+export type IdPath = string;
+export interface Document { version: "2.21"; themes?: { [key: string /** RegEx: [^:]+ */]: string[] }; imports?: { [key: string]: string /** Value: relative URI of imported .pen file. Key: short alias. */ }; variables?: { [key: string /** RegEx: [^:]+ */]: { type: "boolean"; value: BooleanOrVariable | { value: BooleanOrVariable; theme?: Theme }[] } | { type: "color"; value: ColorOrVariable | { value: ColorOrVariable; theme?: Theme }[] } | { type: "number"; value: NumberOrVariable | { value: NumberOrVariable; theme?: Theme }[] } | { type: "string"; value: StringOrVariable | { value: StringOrVariable; theme?: Theme }[] } }; children: (Frame | Group | Rectangle | Ellipse | Polygon | Path | Text | Note | Context | Prompt | Icon | Script | Browser | Ref)[]; }
+```
+
+# Available Styles
+
+Call get_style again with a style name
+
+## Styles
+
+- "Aerial Gravitas": A territory seen from above gives the design its scale
+- "Anchored Ribbon Grid": A dimensional ribbon creates motion around firmly anchored typography
+- "Annotated Lookbook": Authored photography meets monumental condensed type, handwritten art direction and selective collage.
+- "Artisan Editorial": Authored photography, expressive serif type and hand-rendered detail communicate craft, place and human care
+- "Blueprint Technical": Editable construction diagrams and boxed typographic emphasis make a technical idea understandable before decoration enters
+- "Brutalist Console 3": Condensed industrial signage, readable prose and precise mono labels create a flat printed console.
+- "Brutalist Editorial 1": An uninterrupted ruled sheet combines massive block lettering, flush imagery and sparse machine annotations.
+- "Brutalist Lattice 5": Sign-painted block letters and a visible backing plane bind flat cells into an exposed lattice.
+- "Brutalist Poster 4": Broad monospaced display letters give square poster-like panels unmistakable visual mass.
+- "Brutalist Spine 2": A binding-like identity edge connects robust slab-serif statements, fine rules and calm reading text.
+- "Calligraphic Atelier": Poised serif capitals and a sweeping calligraphic phrase create a luxurious typographic composition grounded in craft.
+- "Centered Device Cascade": A centered statement meets a composed cascade of product surfaces or objects
+- "Centered Serif List": An expressive serif statement and a precise ledger create a considered, literary identity
+- "Ceramic Console": A tactile interface feels molded from one material. Raised controls, recessed channels and strong labels make the task tangible.
+- "Cinematic Alternating": Immersive photography recurs at different scales, connecting a scene with the product or experience inside it
+- "Cinematic Device Column": A landscape and a grounded product surface connect immersion with a structured editorial reading layer
+- "Color Block Stack": Confident solid-color fields and emphatic typography carry the identity
+- "Dark Centered Platform": A credible product workspace is the focal object on an atmospheric dark ground
+- "Editorial Landscape Stack": A substantial landscape photograph and a three-voice typographic system balance place, story and precise information
+- "Editorial Scientific": An authored photograph or specimen meets precise annotation and restrained editorial structure
+- "Elegant Bento 2": A substantial curved serif brings personality to rounded surfaces separated by quiet tonal steps.
+- "Elegant Couture 4": Monumental high-contrast small caps meet a continuous deep ground, fine rules and restrained supporting text.
+- "Elegant Editorial 1": Expressive heavy serif headlines and a decisive masthead rule lend authority to a square editorial sheet.
+- "Elegant Serene 3": An authored swash serif and sculptural imagery create a ceremonial identity with calm practical text.
+- "Gradient Aurora 1": Dense grotesque declarations stand against a quiet deep field with concentrated aurora light.
+- "Gradient Bubble 2": Rounded geometric display, opaque soft objects and a slow peripheral color wash create an approachable identity.
+- "Gradient Editorial 5": A weighty humanist grotesque and a dramatic true serif italic interrupt a calm ruled reading surface.
+- "Gradient Halftone 3": Heavy grotesque statements contrast with crisp two-ink halftone fields and plain reading surfaces.
+- "Gradient Haze 4": A forceful grotesque opening meets a luminous haze and a quiet opaque sheet with generous rounded top corners.
+- "Gradient Prompt Stack": A useful conversational or input surface gains focus from a carefully shaped atmospheric color field
+- "Illustrated Ribbon Stack": Original character scenes and a dimensional ribbon create a playful world around a practical product
+- "Illustrated Warm": Loose authored illustration and a credible product task share a warm, human scale
+- "Inline Friendly": An expressive handwritten word inside a confident sentence gives the design an unmistakably human voice
+- "Minimalistic Atrium 5": Architectural squared display, an open ruled ledger and a restrained dimensional object create spacious precision.
+- "Minimalistic Hairline 3": A monumental natural-width grotesque and continuous hairlines give a print-like surface exact, quiet character.
+- "Minimalistic Monolith 6": Dense human-readable type and a distinct machine annotation voice occupy one continuous drafting sheet.
+- "Minimalistic Mosaic 4": Broad heavy geometric type sits in unequal calm tiles joined by a narrow continuous grout.
+- "Minimalistic Panel 2": Heavy friendly grotesque, compact mono context and generous rounded planes create a clear panel hierarchy.
+- "Minimalistic Swiss 7": Decisive grotesque statements, right angles and shared rules support generous intervals of open space.
+- "Modular Bento Showcase": A varied modular grid makes complex product capabilities tangible
+- "Monumental Editorial": Display typography behaves like an architectural object, meeting a carefully art-directed photograph
+- "Narrative Illustrated": A painterly environment establishes a world, then the content unfolds through specific people, places and tasks
+- "Optical Glass": Transparent optical depth frames a literal object or task while a stable reading layer keeps information clear.
+- "Playful": Inflated forms, reflective chrome, gel accents and elastic type create a playful internet club with a usable spine.
+- "Post Internet Archive": Monumental type, original scans and mismatched digital artifacts form an authored cultural collage.
+- "Prismatic Cinema": A specific environmental story is seen through refractive material, with a clear focal passage and decisive editorial type.
+- "Product Data Grid": Sculptural product photography and emphatic measurements connect physical craft with a precise working ledger
+- "Product Demo": A credible native product workflow is the main argument
+- "Saturated Code Bridge": A concentrated color field and an overlapping technical surface create a bold transition between expression and useful work
+- "Soft Bento": Soft containers and a disciplined grid organize friendly, detailed information
+- "Spatial Plus": A small repeated glyph acts as a precise signature beside expressive typography and authored photography
+- "Split Inverse Showcase": Contrasting surface regions give the proposition and the demonstrated product distinct responsibilities
+- "Swiss Type Atlas": Disciplined alignments support oversized grotesque words, offset reading axes and precise civic information.
+- "Technical Blueprint 2": One continuous single-ink drafting sheet, uniform mono utility text and one oversized working figure.
+- "Technical Console 1": A substantial technical sans and mono annotation layer make an outlined drafting sheet operational.
+- "Technical Dispatch 3": A natural-width monospaced family links authoritative statements, documentary records and exact readouts.
+- "Technical Phosphor 4": Wide constructed display forms and a compact mono layer create a flat instrument surface with deliberate contrast.
+- "Technical Terminal 5": Angular display, precise mono labels and opaque square slabs form a seam-defined engineering surface.
+- "Visual Cinematic 1": Environmental photography, broad heavy capitals and quiet tracked labels create an immersive continuous ground.
+- "Visual Editorial 2": Expressive serif statements and mounted photographic plates create an authored gallery with generous space.
+- "Visual Soft 3": An expressive friendly sans, inset photography and generous rounded controls create an inviting visual identity.
+- "Zigzag Bold Split": Heavy condensed type and changing image-to-text relationships create an energetic editorial rhythm
+
+[2mGoodbye.[22m
