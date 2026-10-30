@@ -41,51 +41,6 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 
 0.2.0 起支持应用内更新：启动时自动检查一次，也可在「设置 → 关于」手动检查。桌面端下载后自动安装并重启；Android 下载 APK 后调起系统安装器。v0.1.0 不含更新功能，需手动安装一次 0.2.0。
 
-### v0.8.0 四面板浮动 chrome
-
-- **底部播放栏**改为与侧栏相同的分离式浮动面板（`--panel-bg` / border / radius / shadow，内缩于窗口边缘）
-- **四面板同屏**：侧栏 / 歌单列 / 曲目列 / 底栏；「我的歌单」与「播放列表」均把右侧拆成两个浮动面板
-- 曲目面板去掉大标题与「播放全部 / 取消收藏 / 删除歌单」按钮；这些操作移到**歌单行右键菜单**
-- 曲目行光学垂直居中：封面上下等距留白，封面底边不再贴齐/裁切行背景
-- 来源徽标「网易云」改为与导航选中态相同的圆角矩形（`border-radius: 8px`），不再用胶囊半圆端
-- **同屏面板底色强制一致**：侧栏 / 列表 / 曲目 / 播放栏全部使用同一 `--panel-bg`（此前侧栏偏亮）
-- 保留 Phosphor、OPPO Sans、虚拟列表
-
-### v0.7.0 设计 token 统一 / 共现面板
-
-- 按 pen.dev「变量一次、组件继承」哲学重建 spacing / radius / button / list-row / badge / header token；扔掉各页 ad-hoc 内边距
-- **共现面板同一 chrome**：歌单列表 + 曲目列表等同屏浮层共用 `--panel-bg` / `--panel-border` / `--panel-divider`，层级靠字重与选中态，不靠不同底色
-- 播放三角光学居中改为 `--play-optical-x`（纠正偏右）
-- 页面标题与操作钮统一 `--head-*` 对齐；保留 Phosphor 图标、OPPO Sans、虚拟列表、炭灰分层、浮动侧栏与底栏（仅正在播放页控制融入背景）
-- pen.dev CLI 已登录；Claude Agent 需另 `/login`，故以 token 哲学落地（见 `design/PEN.md`）
-
-### v0.6.0 图标 / 滚动 / 字体
-
-- 图标改用成熟开源 Phosphor（`@iconify-json/ph` 子集），统一字重；播放/暂停用 Fill，与实心播放钮匹配并光学居中
-- 歌单 `TrackList` 虚拟列表（`@tanstack/vue-virtual`），上下滚动不再整表重绘；去掉列表滚动路径上的 backdrop-filter / 封面缩放
-- 全文改用 **OPPO Sans 4.0**（官方免费可商用，应用内嵌字体；见 `src/assets/fonts/` 许可说明），去掉 Newsreader / Noto Serif SC
-- 侧栏与底栏改为实色 chrome，降低长列表滚动时的合成层开销
-- 保留 v0.5.0 界面精修（选中态、音质下拉、隐藏滚动条、NP 控制融入背景、按钮 token 等）
-
-### v0.5.0 界面精修
-
-- 选中态去掉左侧强调条，改为 macOS 侧栏式略亮底 + 字重（导航 / 歌单 / 曲目一致）
-- （已被 v0.6.0 的 OPPO Sans 取代）全文衬线：Newsreader + Noto Serif SC
-- 音质设置：自定义下拉（深色可读），不再用系统原生 `<select>`
-- 全平台隐藏滚动条（仍可滚动）
-- 正在播放控制条融入封面/歌词背景，不再浮成独立卡片
-- 统一 Lucide 风描边图标（导航 / 播放 / 设置 / 菜单），去掉 emoji 混用；按压缩放动画
-- 按钮设计 token：`btn-primary` / `btn-secondary` / `btn-danger` / `btn-ghost`（播放全部 / 删除 / 取消收藏等）
-- 保留浮动 chrome、炭灰分层、主题/强调色、全屏 NP、窄屏歌单叠层、Dock 重开、应用内更新
-
-### v0.4.0 界面（Apple / YesPlayMusic）
-
-参照 [YesPlayMusic](https://github.com/qier222/YesPlayMusic) 与 macOS Music.app / Liquid Glass 浮动 chrome 重做视觉：系统 UI 字体 + Newsreader 衬线大标题（Claude 展示字体感）、侧栏与底栏为圆角内缩浮动面板（非贴边通栏）、半透明 vibrancy、封面软阴影、实心播放钮。深色为 ChatGPT 经典炭灰分层（`#181818` 窗体 / `#212121` 内容 / `#303030` 播放条，非纯黑 OLED）。选中导航/列表有更强对比。主题强制 + 强调色保留（默认网易云红）。v0.3.0 修复仍在：全屏正在播放、窄屏歌单叠层、Dock 重开、Windows 细滚动条与图标。
-
-### v0.3.0
-
-主题 / 强调色、轻量动效、Windows 细滚动条与图标、macOS Dock 重开、手机歌单叠层、全屏正在播放。
-
 ## 字体许可
 
 本软件界面使用 [OPPO Sans 4.0](https://open.oppomobile.com/new/developmentDoc/info?id=13223) 字体。版权归 OPPO 广东移动通信有限公司所有，按官方许可免费嵌入使用（含商用）；未对字体文件做改编。许可全文见 [`src/assets/fonts/OPPOSans-LICENSE.txt`](src/assets/fonts/OPPOSans-LICENSE.txt)。
