@@ -1,8 +1,9 @@
 import { reactive } from 'vue';
 import { api } from './api';
-import type { Profile, Settings } from './types';
+import type { AccentId, Profile, Settings, ThemeAppearance } from './types';
 import { applyPlaybackPrefs, restorePlaybackSession, setVolume } from './player';
 import { refreshLocalPlaylists } from './localPlaylists';
+import { applyTheme, normalizeAccent, normalizeAppearance } from './theme';
 
 const defaultSettings = (): Settings => ({
   quality: 'exhigh',
@@ -12,6 +13,8 @@ const defaultSettings = (): Settings => ({
   repeat: 'off',
   cacheEnabled: true,
   audioCacheMaxMb: 2048,
+  accent: 'red',
+  themeAppearance: 'system',
 });
 
 export const session = reactive({
@@ -30,11 +33,16 @@ export async function initSession() {
   session.settings = {
     ...defaultSettings(),
     ...loaded,
-    // 音量：仅缺省/非法时用 0.8
     volume: clampVol(loaded.volume),
     shuffle: !!loaded.shuffle,
     repeat: normalizeRepeat(loaded.repeat),
+    accent: normalizeAccent(loaded.accent) as AccentId,
+    themeAppearance: normalizeAppearance(loaded.themeAppearance) as ThemeAppearance,
   };
+  applyTheme({
+    accent: session.settings.accent,
+    themeAppearance: session.settings.themeAppearance,
+  });
   setVolume(session.settings.volume, { persist: false });
   applyPlaybackPrefs(session.settings.shuffle, session.settings.repeat);
   await restorePlaybackSession().catch(console.warn);
@@ -93,7 +101,21 @@ export async function toggleLike(ncmId: number): Promise<boolean> {
 }
 
 export async function saveSettings() {
+  applyTheme({
+    accent: session.settings.accent,
+    themeAppearance: session.settings.themeAppearance,
+  });
   await api.saveSettings(session.settings);
+}
+
+/** 设置外观 / 强调色并立即持久化 */
+export async function setAppearance(partial: {
+  accent?: AccentId;
+  themeAppearance?: ThemeAppearance;
+}) {
+  if (partial.accent) session.settings.accent = partial.accent;
+  if (partial.themeAppearance) session.settings.themeAppearance = partial.themeAppearance;
+  await saveSettings();
 }
 
 /** 把当前播放器音量/随机/循环写回 settings.json（防抖） */

@@ -25,12 +25,13 @@ import { dismissUpdate, installUpdate, updater } from '../lib/updater';
   z-index: 1000;
   width: 220px;
   padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
   border: 1px solid var(--border);
   color: inherit;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
   font-size: 13px;
+  animation: sm-scale-in var(--dur) var(--ease-enter);
 }
 .title {
   font-weight: 600;

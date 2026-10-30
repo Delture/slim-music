@@ -201,19 +201,25 @@ watch(
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 4px;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
 }
+.item:active { transform: scale(0.98); }
 .item .name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
 }
-.item:hover,
-.item.on {
+.item:hover {
   background: var(--hover);
+}
+.item.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }
 .mini {
   background: none;

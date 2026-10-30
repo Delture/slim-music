@@ -22,10 +22,24 @@ pub struct Settings {
     pub cache_enabled: bool,
     /// 音频缓存上限（MB）
     pub audio_cache_max_mb: u64,
+    /// 强调色：red（网易云红）/ terracotta（陶土橙）
+    #[serde(default = "default_accent")]
+    pub accent: String,
+    /// 主题外观：system / light / dark
+    #[serde(default = "default_theme_appearance")]
+    pub theme_appearance: String,
 }
 
 fn default_repeat() -> String {
     "off".into()
+}
+
+fn default_accent() -> String {
+    "red".into()
+}
+
+fn default_theme_appearance() -> String {
+    "system".into()
 }
 
 impl Default for Settings {
@@ -38,6 +52,8 @@ impl Default for Settings {
             repeat: "off".into(),
             cache_enabled: true,
             audio_cache_max_mb: 2048,
+            accent: "red".into(),
+            theme_appearance: "system".into(),
         }
     }
 }

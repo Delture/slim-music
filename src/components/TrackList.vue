@@ -206,15 +206,19 @@ function move(i: number, dir: -1 | 1) {
   gap: 10px;
   align-items: center;
   padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   user-select: none;
   min-width: 0;
+  transition: background var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
 }
 .row:has(.ord) {
   grid-template-columns: 36px 40px minmax(0, 1fr) minmax(0, 20%) 56px 28px 48px 36px;
 }
 .row:hover {
   background: var(--hover);
+}
+.row:active {
+  transform: scale(0.997);
 }
 .row.playing .title {
   color: var(--accent);
@@ -249,9 +253,14 @@ function move(i: number, dir: -1 | 1) {
 .cover {
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   cursor: pointer;
+  transition: transform var(--dur) var(--ease-swift), box-shadow var(--dur) var(--ease-swift);
+}
+.row:hover .cover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-sm);
 }
 .ph {
   display: grid;
@@ -288,7 +297,9 @@ function move(i: number, dir: -1 | 1) {
   padding: 4px;
   line-height: 0;
   opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
 }
+.heart:active { transform: scale(0.9); }
 .row:hover .heart,
 .heart.on {
   opacity: 1;
@@ -331,20 +342,23 @@ function move(i: number, dir: -1 | 1) {
 }
 .menu {
   position: fixed;
-  background: var(--bg);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 4px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 30;
   min-width: 180px;
   max-height: 70vh;
   overflow: auto;
+  animation: sm-scale-in var(--dur) var(--ease-enter);
+  transform-origin: top left;
 }
 .menu div {
-  padding: 6px 14px;
-  border-radius: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-swift);
 }
 .menu div:hover {
   background: var(--hover);

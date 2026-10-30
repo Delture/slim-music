@@ -15,7 +15,7 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 | 本地音乐 | 扫描设置里的文件夹（mp3/flac/m4a/aac/wav/ogg/opus/aiff/ape/wma/wv），lofty 读标签，同名 .lrc 作歌词，可筛选 |
 | 播放列表 | 本机 Walkman 式列表，可混本地+网易云；与播放队列独立；JSON 持久化 |
 | 正在播放 | 当前播放队列 |
-| 设置 | 扫码登录 / 退出、网易云音质（standard / higher / exhigh / lossless / hires）、本地文件夹、歌单/音频缓存 |
+| 设置 | 扫码登录 / 退出、主题（浅色/深色/跟随系统）、强调色（网易云红 / 陶土橙）、网易云音质、本地文件夹、歌单/音频缓存 |
 
 - **红心 / 取消喜欢**、**取消收藏歌单**、**删除自建歌单**
 - **播放页**：点底部栏封面进入，左侧大封面 + 右侧滚动歌词（含翻译，歌词有磁盘缓存）
@@ -40,6 +40,10 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 ### 应用内更新
 
 0.2.0 起支持应用内更新：启动时自动检查一次，也可在「设置 → 关于」手动检查。桌面端下载后自动安装并重启；Android 下载 APK 后调起系统安装器。v0.1.0 不含更新功能，需手动安装一次 0.2.0。
+
+### v0.3.0 界面
+
+参考 Claude / Anthropic 设计语言做了前端抛光：暖纸色画布、表面阶梯、发丝线边框、轻阴影、8–12px 圆角、时间等宽数字、轻量动效（透明度/位移/缩放）。设置里可切换主题与强调色；Windows 使用与界面一致的细滚动条，并刷新了深色任务栏可读的应用图标。
 
 ## 开发与构建
 
@@ -68,7 +72,7 @@ Android 打包（需 Android SDK/NDK，并先 `npx tauri android init`）：`npx
 其他命令：`npm run typecheck`（前端类型检查）；`cd src-tauri && cargo check`；`cargo test -- --ignored`（联网冒烟测试：匿名搜索 + 获取二维码 key）。
 
 数据保存在系统应用数据目录（identifier `dev.slimmusic.app`）：
-- `settings.json`：音质、文件夹、音量、缓存设置
+- `settings.json`：音质、文件夹、音量、缓存、主题、强调色
 - `cookie.txt`：网易云登录 cookie，明文保存，仅限自用
 
 ## 架构

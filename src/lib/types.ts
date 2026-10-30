@@ -1,4 +1,4 @@
-// 与 Rust 端 model.rs 保持一致
+// 与 Rust 端 model.rs / settings.rs 保持一致
 export type Source = 'local' | 'netease';
 
 export interface Track {
@@ -44,6 +44,8 @@ export interface LyricPayload {
 }
 
 export type Quality = 'standard' | 'higher' | 'exhigh' | 'lossless' | 'hires';
+export type AccentId = 'red' | 'terracotta';
+export type ThemeAppearance = 'system' | 'light' | 'dark';
 
 export interface Settings {
   quality: Quality;
@@ -53,6 +55,10 @@ export interface Settings {
   repeat: 'off' | 'all' | 'one';
   cacheEnabled: boolean;
   audioCacheMaxMb: number;
+  /** 强调色：网易云红 / 陶土橙 */
+  accent: AccentId;
+  /** 主题：跟随系统 / 浅色 / 深色 */
+  themeAppearance: ThemeAppearance;
 }
 
 /** 上次播放会话（playback.json） */

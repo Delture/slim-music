@@ -171,7 +171,7 @@ async function onLike() {
   position: absolute;
   inset: 0;
   z-index: 40;
-  background: var(--bg);
+  background: var(--surface-1);
   display: flex;
   flex-direction: column;
   padding: 16px 24px 12px;
@@ -187,12 +187,16 @@ async function onLike() {
   border: 0;
   color: var(--muted);
   cursor: pointer;
-  padding: 4px 0;
+  padding: 6px 10px;
   margin-bottom: 8px;
+  border-radius: var(--radius-pill);
+  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
 }
 .back:hover {
   color: inherit;
+  background: var(--hover);
 }
+.back:active { transform: scale(0.97); }
 .body {
   flex: 1;
   min-height: 0;
@@ -214,11 +218,14 @@ async function onLike() {
   max-width: 100%;
   max-height: min(320px, 45vh);
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   object-fit: cover;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-lg);
   flex-shrink: 1;
+  animation: sm-scale-in var(--dur-slow) var(--ease-enter);
+  transition: transform var(--dur-slow) var(--ease-swift);
 }
+.cover:hover { transform: scale(1.02); }
 .ph {
   display: grid;
   place-items: center;
@@ -261,11 +268,11 @@ async function onLike() {
   font-size: 18px;
   color: var(--muted);
   cursor: pointer;
-  border-radius: 8px;
-  transition: color 0.15s, transform 0.15s;
+  border-radius: var(--radius);
+  transition: color var(--dur) var(--ease-swift), transform var(--dur) var(--ease-swift), background var(--dur-fast) var(--ease-swift), font-size var(--dur) var(--ease-swift);
 }
 .line.on {
-  color: inherit;
+  color: var(--text);
   font-weight: 700;
   font-size: 22px;
   transform: scale(1.02);

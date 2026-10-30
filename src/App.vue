@@ -27,7 +27,6 @@ const ready = ref(false);
 
 function go(key: string) {
   page.value = key;
-  // 播放页是叠在内容区上的：切侧栏时先退出，再显示目标页
   closeNowPlaying();
 }
 
@@ -45,7 +44,7 @@ onMounted(async () => {
       <a
         v-for="p in pages"
         :key="p.key"
-        :class="{ on: page === p.key }"
+        :class="{ on: page === p.key && !session.nowPlaying }"
         @click="go(p.key)"
       >
         <Icon :name="p.icon" :size="15" />
@@ -53,19 +52,37 @@ onMounted(async () => {
       </a>
       <div class="user muted">{{ session.profile ? session.profile.nickname : '未登录' }}</div>
     </nav>
-    <!-- 播放页必须放在「不滚动」的壳里：若放在 .content 内，列表滚动后 absolute 叠层会跑到视口外，看起来像打不开 -->
     <div class="main-col">
       <main class="content" :class="{ locked: session.nowPlaying }">
-        <KeepAlive v-if="ready">
-          <component
-            :is="pages.find((p) => p.key === page)!.view"
-            :key="page + (session.profile?.userId ?? 0)"
-          />
-        </KeepAlive>
+        <Transition name="page" mode="out-in">
+          <KeepAlive v-if="ready">
+            <component
+              :is="pages.find((p) => p.key === page)!.view"
+              :key="page + '-' + (session.profile?.userId ?? 0)"
+            />
+          </KeepAlive>
+        </Transition>
       </main>
-      <NowPlayingView v-if="session.nowPlaying" />
+      <Transition name="np">
+        <NowPlayingView v-if="session.nowPlaying" />
+      </Transition>
     </div>
     <PlayerBar class="player" />
     <UpdatePrompt />
   </div>
 </template>
+
+<style>
+.page-enter-active {
+  animation: sm-fade-in var(--dur-slow) var(--ease-enter);
+}
+.page-leave-active {
+  animation: sm-fade-in var(--dur-fast) var(--ease-out) reverse;
+}
+.np-enter-active {
+  animation: sm-slide-up var(--dur-slow) var(--ease-enter);
+}
+.np-leave-active {
+  animation: sm-slide-up var(--dur) var(--ease-out) reverse;
+}
+</style>

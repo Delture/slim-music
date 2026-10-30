@@ -8,7 +8,28 @@ defineProps<{ source: Source }>();
 </template>
 
 <style scoped>
-.badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-weight: 600; flex-shrink: 0; justify-self: start; }
-.local { background: #e3f4e8; color: #1f7a3a; }
-.netease { background: #fde4e4; color: #c62f2f; }
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  font-weight: 600;
+  flex-shrink: 0;
+  justify-self: start;
+  letter-spacing: 0.02em;
+  transition: transform var(--dur-fast) var(--ease-swift);
+}
+.local {
+  background: color-mix(in srgb, #1f7a3a 14%, transparent);
+  color: #1f7a3a;
+}
+.netease {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+:root[data-theme='dark'] .local,
+[data-theme='dark'] .local {
+  background: color-mix(in srgb, #4ade80 18%, transparent);
+  color: #86efac;
+}
 </style>

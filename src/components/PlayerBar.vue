@@ -265,8 +265,10 @@ async function onLike() {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-bar);
+  z-index: 20;
+  animation: sm-slide-up var(--dur-slow) var(--ease-enter);
 }
 .now {
   display: flex;
@@ -274,8 +276,9 @@ async function onLike() {
   align-items: center;
   min-width: 0;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 2px 4px;
+  transition: background var(--dur-fast) var(--ease-swift);
 }
 .now:hover {
   background: var(--hover);
@@ -283,8 +286,13 @@ async function onLike() {
 .cover {
   width: 48px;
   height: 48px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   object-fit: cover;
+  transition: transform var(--dur) var(--ease-swift);
+  box-shadow: var(--shadow-sm);
+}
+.now:hover .cover {
+  transform: scale(1.04);
 }
 .ph {
   display: grid;
@@ -340,10 +348,14 @@ async function onLike() {
   align-items: center;
   justify-content: center;
   line-height: 0;
+  transition: background var(--dur-fast) var(--ease-swift), opacity var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift);
 }
 .ctrls button:hover {
   opacity: 1;
   background: var(--hover);
+}
+.ctrls button:active {
+  transform: scale(0.92);
 }
 .ctrls button.on {
   opacity: 1;
@@ -376,6 +388,7 @@ async function onLike() {
 }
 .time {
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
   min-width: 36px;
   text-align: center;
 }
