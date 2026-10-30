@@ -550,7 +550,7 @@ pub fn run() {
         .run(|app, event| {
             // macOS：关窗隐藏后点 Dock 图标会发 Reopened；显示并聚焦主窗口
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopened { .. } = event {
+            if let tauri::RunEvent::Reopen { .. } = event {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.unminimize();
