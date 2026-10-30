@@ -6,6 +6,8 @@ import { api } from '../lib/api';
 import { refreshProfile, saveSettings, session } from '../lib/session';
 import { coverSrc } from '../lib/format';
 import { clearLyricMemory } from '../lib/lyrics';
+import { checkUpdate, updater } from '../lib/updater';
+import { getVersion } from '@tauri-apps/api/app';
 import { QUALITY_LABELS, type CacheStats, type Quality } from '../lib/types';
 
 const qrSvg = ref('');
@@ -90,6 +92,14 @@ async function clearCache() {
 }
 
 onMounted(refreshStats);
+onMounted(async () => {
+  updater.current ||= await getVersion().catch(() => '');
+});
+const checked = ref(false);
+async function manualCheck() {
+  await checkUpdate();
+  checked.value = true;
+}
 
 const qrSaved = ref(false);
 
@@ -182,6 +192,16 @@ async function saveQr() {
     <div class="row">
       <button :disabled="cacheBusy" @click="refreshStats">刷新用量</button>
       <button :disabled="cacheBusy" @click="clearCache">清空缓存</button>
+    </div>
+
+    <h3>关于</h3>
+    <div class="row">
+      <span>SlimMusic v{{ updater.current }}</span>
+      <button :disabled="updater.checking || updater.downloading" @click="manualCheck">
+        {{ updater.checking ? '检查中…' : '检查更新' }}
+      </button>
+      <span v-if="checked && !updater.checking && !updater.error && !updater.available" class="muted">已是最新</span>
+      <span v-if="updater.error && !updater.prompt" class="muted">{{ updater.error }}</span>
     </div>
   </section>
 </template>

@@ -11,6 +11,8 @@ import LocalPlaylistsView from './views/LocalPlaylistsView.vue';
 import LocalView from './views/LocalView.vue';
 import SettingsView from './views/SettingsView.vue';
 import NowPlayingView from './views/NowPlayingView.vue';
+import UpdatePrompt from './components/UpdatePrompt.vue';
+import { checkUpdate } from './lib/updater';
 
 const pages: { key: string; label: string; icon: string; view: Component }[] = [
   { key: 'daily', label: '每日推荐', icon: 'calendar', view: DailyView },
@@ -33,6 +35,7 @@ onMounted(async () => {
   await initSession().catch(console.error);
   await bindTrayBridge().catch(console.error);
   ready.value = true;
+  setTimeout(() => checkUpdate(true), 3000);
 });
 </script>
 
@@ -63,5 +66,6 @@ onMounted(async () => {
       <NowPlayingView v-if="session.nowPlaying" />
     </div>
     <PlayerBar class="player" />
+    <UpdatePrompt />
   </div>
 </template>

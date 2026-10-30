@@ -11,6 +11,10 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.net.HttpURLConnection
+import java.net.URL
 import android.util.Base64
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
@@ -371,6 +375,110 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
       invoke.resolve(JSObject().put("ok", true))
     } catch (e: Exception) {
       invoke.reject(e.message ?: "save failed")
+    }
+  }
+
+  // ---------- 应用内更新（APK） ----------
+
+  @Volatile private var dlState = "idle"
+  @Volatile private var dlReceived = 0L
+  @Volatile private var dlTotal = 0L
+  @Volatile private var dlError = ""
+  private var pendingInstall: File? = null
+
+  private fun apkFile() = File(File(activity.cacheDir, "update").apply { mkdirs() }, "update.apk")
+
+  @Command
+  fun downloadApk(invoke: Invoke) {
+    val url = invoke.getArgs().getString("url", null)
+    if (url.isNullOrEmpty()) { invoke.reject("missing url"); return }
+    if (dlState == "downloading") { invoke.resolve(); return }
+    dlState = "downloading"; dlReceived = 0; dlTotal = 0; dlError = ""
+    Thread {
+      try {
+        var u = URL(url)
+        var conn: HttpURLConnection
+        var hops = 0
+        while (true) {
+          conn = u.openConnection() as HttpURLConnection
+          conn.instanceFollowRedirects = false
+          conn.connectTimeout = 15000
+          conn.readTimeout = 30000
+          val code = conn.responseCode
+          if (code in 300..399 && hops++ < 8) {
+            u = URL(u, conn.getHeaderField("Location")); conn.disconnect(); continue
+          }
+          if (code != 200) throw Exception("HTTP $code")
+          break
+        }
+        dlTotal = conn.contentLengthLong
+        val f = apkFile()
+        conn.inputStream.use { inp ->
+          f.outputStream().use { out ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+              val n = inp.read(buf)
+              if (n < 0) break
+              out.write(buf, 0, n)
+              dlReceived += n
+            }
+          }
+        }
+        conn.disconnect()
+        dlState = "done"
+      } catch (e: Exception) {
+        dlError = e.message ?: "download failed"
+        dlState = "error"
+      }
+    }.start()
+    invoke.resolve()
+  }
+
+  @Command
+  fun downloadStatus(invoke: Invoke) {
+    invoke.resolve(
+      JSObject().put("state", dlState).put("received", dlReceived.toDouble())
+        .put("total", dlTotal.toDouble()).put("error", dlError)
+    )
+  }
+
+  private fun canInstall() =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.O || activity.packageManager.canRequestPackageInstalls()
+
+  private fun launchInstaller(f: File) {
+    val uri = FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", f)
+    val i = Intent(Intent.ACTION_VIEW)
+      .setDataAndType(uri, "application/vnd.android.package-archive")
+      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    activity.startActivity(i)
+  }
+
+  @Command
+  fun installApk(invoke: Invoke) {
+    val f = apkFile()
+    if (!f.exists()) { invoke.reject("apk missing"); return }
+    main.post {
+      try {
+        if (canInstall()) {
+          launchInstaller(f)
+          invoke.resolve(JSObject().put("needPermission", false))
+        } else {
+          pendingInstall = f
+          val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + activity.packageName))
+          activity.startActivity(i)
+          invoke.resolve(JSObject().put("needPermission", true))
+        }
+      } catch (e: Exception) {
+        invoke.reject(e.message ?: "install failed")
+      }
+    }
+  }
+
+  override fun onResume(activity: androidx.appcompat.app.AppCompatActivity) {
+    val f = pendingInstall ?: return
+    if (canInstall()) {
+      pendingInstall = null
+      main.post { try { launchInstaller(f) } catch (_: Exception) {} }
     }
   }
 

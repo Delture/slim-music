@@ -494,6 +494,10 @@ pub fn run() {
             Ok(())
         });
     #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    #[cfg(desktop)]
     let builder = builder.on_window_event(|window, event| {
         // 红灯 / 关闭：隐藏窗口，音频继续在后台播；真正退出走托盘「退出」
         if let WindowEvent::CloseRequested { api, .. } = event {

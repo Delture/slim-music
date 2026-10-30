@@ -5,8 +5,20 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 jobs:
-  build:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft release
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --draft --title "SlimMusic $GITHUB_REF_NAME" --notes "SlimMusic $GITHUB_REF_NAME"
+
+  desktop:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -34,10 +46,68 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'SlimMusic ${{ github.ref_name }}'
-          releaseBody: 'See release notes.'
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+  android:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;35.0.0 ndk;27.2.12479018'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - run: npm ci
+      - name: Signing config
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KS_PASS"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASS"
+          } > src-tauri/gen/android/keystore.properties
+      - name: Build APK
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+        run: npx tauri android build --apk --target aarch64
+      - name: Upload APK
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          APK=$(ls src-tauri/gen/android/app/build/outputs/apk/universal/release/*release.apk | grep -v unsigned | head -1)
+          cp "$APK" "SlimMusic_${VER}_android_arm64.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "SlimMusic_${VER}_android_arm64.apk" | grep SHA-256
+          gh release upload "$GITHUB_REF_NAME" "SlimMusic_${VER}_android_arm64.apk" --clobber
+
+  publish:
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest

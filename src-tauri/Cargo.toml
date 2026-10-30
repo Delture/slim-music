@@ -1,6 +1,6 @@
 [package]
 name = "slim-music"
-version = "0.1.0"
+version = "0.2.0"
 description = "精简自用网易云 + 本地音乐播放器"
 edition = "2021"
 license = "MIT"
@@ -24,6 +24,10 @@ walkdir = "2"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 futures-util = "0.3"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [profile.release]
 opt-level = "s"
