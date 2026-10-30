@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SlimMusic v0.8.1 design tokens — pen.dev philosophy (variables once,
+   SlimMusic v0.8.2 design tokens — pen.dev philosophy (variables once,
    components inherit). ONE spacing / radius / button / list-row / badge /
    header system. Charcoal layers + floating chrome. OPPO Sans 4.0.
    ========================================================================== */
@@ -84,7 +84,7 @@
   --chrome-radius: var(--radius-chrome);
   --chrome-shadow: var(--shadow-chrome);
   --chrome-bg: var(--surface-chrome);
-  --chrome-bg-solid: var(--surface-chrome-solid);
+  --chrome-bg-solid: #f5f5f7;
   --content-bg: var(--surface-1);
   --content-border: var(--chrome-border);
   --content-radius: var(--chrome-radius);
@@ -92,8 +92,8 @@
 
   /* ONE panel token for EVERY floating pane (nav, playlist list, tracks, player).
      Co-visible panels MUST share identical fill — hierarchy ≠ different surface.
-     Detached chrome: same radius / border / shadow as the sidebar. */
-  --panel-bg: var(--chrome-bg-solid);
+     Explicit hex so light/dark cannot drift via chrome vs surface-1 chain. */
+  --panel-bg: #f5f5f7;
   --panel-border: var(--chrome-border);
   --panel-radius: var(--chrome-radius);
   --panel-shadow: var(--chrome-shadow);
@@ -111,7 +111,8 @@
   --btn-h: 32px;
   --btn-px: 14px;
   --btn-gap: var(--space-2);
-  --btn-radius: var(--radius-pill);
+  /* Rounded-rect — never pill/capsule (999px). Matches badge ~8px. */
+  --btn-radius: var(--radius);
   --btn-font-weight: 550;
   --btn-secondary-bg: var(--fill-secondary);
   --btn-secondary-fg: var(--text);
@@ -138,7 +139,7 @@
   /* ---- ONE badge / chip ---- */
   --badge-h: 18px;
   --badge-px: 6px;
-  --badge-radius: var(--radius); /* ~8px rounded-rect, match nav tab — not capsule */
+  --badge-radius: var(--radius); /* ~8px rounded-rect — never pill/capsule */
   --badge-font: 10px;
   --badge-weight: 650;
 
@@ -188,6 +189,9 @@
   --bg-window: #181818;
   --surface-chrome: rgba(37, 37, 36, 0.86);
   --surface-chrome-solid: #252524;
+  /* Must match .nav / .float-panel / .player — do not use darker surface-1 here */
+  --panel-bg: #252524;
+  --chrome-bg-solid: #252524;
   --surface-1: #212121;
   --surface-player: var(--surface-chrome);
   --surface-player-solid: var(--surface-chrome-solid);
@@ -295,8 +299,10 @@ html, body {
 }
 .nav,
 .player,
-.float-panel {
+.float-panel,
+.main-col {
   background: var(--panel-bg);
+  background-color: var(--panel-bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border: var(--panel-border);
@@ -322,7 +328,8 @@ html, body {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .nav,
   .player,
-  .float-panel { background: var(--panel-bg); }
+  .float-panel,
+  .main-col { background: var(--panel-bg); background-color: var(--panel-bg); }
 }
 
 /* Nav items = list-row tokens */
@@ -373,12 +380,6 @@ html, body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--panel-bg);
-  border-radius: var(--panel-radius);
-  border: var(--panel-border);
-  box-shadow: var(--panel-shadow);
-  overflow: hidden;
-  isolation: isolate;
   margin-right: var(--chrome-gap);
 }
 .content {
@@ -560,7 +561,7 @@ button.icon-btn {
   height: var(--icon-btn);
   min-height: var(--icon-btn);
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--btn-radius);
 }
 
 input, select, .sm-select-trigger {
@@ -664,7 +665,7 @@ input[type='checkbox'] {
   display: inline-flex;
   padding: var(--space-1);
   gap: 2px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--btn-radius);
   background: var(--fill-secondary);
   border: 0;
   height: var(--btn-h);
@@ -674,7 +675,7 @@ input[type='checkbox'] {
 .seg button {
   border: 0;
   background: transparent;
-  border-radius: var(--radius-pill);
+  border-radius: calc(var(--btn-radius) - 2px);
   padding: 0 var(--btn-px);
   color: var(--muted);
   font-size: 13px;
@@ -685,7 +686,7 @@ input[type='checkbox'] {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  overflow: hidden; /* keep swatch inside the pill */
+  overflow: hidden; /* keep swatch inside rounded-rect */
   line-height: 1;
 }
 .seg button.on {
@@ -787,7 +788,7 @@ input[type='checkbox'] {
   box-sizing: border-box;
 }
 /* Selection chrome lives on the seg button (.on), not an outer ring on the swatch
-   (outer rings overflow / drop out of the pill). */
+   (outer rings overflow / drop out of the control). */
 .swatch.on {
   box-shadow: inset 0 0 0 1px var(--border-strong);
 }

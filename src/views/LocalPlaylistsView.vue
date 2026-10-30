@@ -210,15 +210,22 @@ watch(
         </button>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
-      <p v-if="isNowPlaying && !activeTracks.length" class="muted empty-hint">队列为空，去别处点一首歌开始听</p>
-      <div v-else class="tracks-scroll">
-        <TrackList
-          :tracks="activeTracks"
-          :local-playlist-id="isNowPlaying ? null : activeUser?.id"
-          :show-reorder="!isNowPlaying && !!activeUser"
-          @reorder="onReorder"
-        />
-      </div>
+      <!-- Soft fade/slide when switching selected playlist (not only row highlight). -->
+      <Transition name="tracks-swap" mode="out-in">
+        <p
+          v-if="isNowPlaying && !activeTracks.length"
+          :key="'empty-' + activeId"
+          class="muted empty-hint"
+        >队列为空，去别处点一首歌开始听</p>
+        <div v-else :key="activeId" class="tracks-scroll">
+          <TrackList
+            :tracks="activeTracks"
+            :local-playlist-id="isNowPlaying ? null : activeUser?.id"
+            :show-reorder="!isNowPlaying && !!activeUser"
+            @reorder="onReorder"
+          />
+        </div>
+      </Transition>
     </div>
 
     <div
@@ -389,5 +396,21 @@ watch(
   .pl.mobile-detail .body {
     animation: sm-fade-in var(--dur) var(--ease-enter);
   }
+}
+
+/* Playlist → tracks content soft swap */
+.tracks-swap-enter-active,
+.tracks-swap-leave-active {
+  transition:
+    opacity var(--dur) var(--ease-swift),
+    transform var(--dur) var(--ease-swift);
+}
+.tracks-swap-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.tracks-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 </style>

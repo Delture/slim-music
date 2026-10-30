@@ -197,9 +197,12 @@ onUnmounted(() => {
         <span v-if="loading && !tracks.length" class="muted tiny">加载中…</span>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
-      <div class="tracks-scroll">
-        <TrackList :tracks="tracks" />
-      </div>
+      <!-- Soft fade/slide when switching selected playlist (not only row highlight). -->
+      <Transition name="tracks-swap" mode="out-in">
+        <div :key="active.id" class="tracks-scroll">
+          <TrackList :tracks="tracks" />
+        </div>
+      </Transition>
     </div>
 
     <div
@@ -359,5 +362,21 @@ onUnmounted(() => {
   .pl.mobile-detail .body {
     animation: sm-fade-in var(--dur) var(--ease-enter);
   }
+}
+
+/* Playlist → tracks content soft swap */
+.tracks-swap-enter-active,
+.tracks-swap-leave-active {
+  transition:
+    opacity var(--dur) var(--ease-swift),
+    transform var(--dur) var(--ease-swift);
+}
+.tracks-swap-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.tracks-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 </style>

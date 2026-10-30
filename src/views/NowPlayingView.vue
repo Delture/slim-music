@@ -265,9 +265,8 @@ onUnmounted(() => {
       aria-hidden="true"
     ></div>
     <div class="top">
-      <button class="back" type="button" title="返回" @click="closeNowPlaying">
-        <Icon name="chevron-left" :size="16" />
-        <span class="back-label">返回</span>
+      <button class="back" type="button" aria-label="返回" title="返回" @click="closeNowPlaying">
+        <Icon name="chevron-left" :size="18" />
       </button>
       <div class="grab" aria-hidden="true"></div>
       <div class="top-spacer"></div>
@@ -335,10 +334,10 @@ onUnmounted(() => {
           <Icon name="shuffle" :size="18" />
         </button>
         <button title="上一首" @click="prev"><Icon name="previous" :size="22" /></button>
-        <button class="big" :title="player.playing ? '暂停' : '播放'" @click="togglePlay">
+        <button class="play-toggle" :title="player.playing ? '暂停' : '播放'" @click="togglePlay">
           <Icon
             :name="player.playing ? 'pause' : 'play'"
-            :size="28"
+            :size="26"
             :class="{ 'play-icon': !player.playing }"
           />
         </button>
@@ -366,7 +365,7 @@ onUnmounted(() => {
   background: var(--bg-window);
   display: flex;
   flex-direction: column;
-  padding: calc(16px + env(safe-area-inset-top)) 36px calc(20px + env(safe-area-inset-bottom));
+  padding: calc(20px + env(safe-area-inset-top)) 36px calc(24px + env(safe-area-inset-bottom));
   overflow: hidden;
   box-sizing: border-box;
   transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
@@ -376,20 +375,31 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  margin-bottom: 12px;
+  /* Keep back highlight clear of album art — never overlap cover */
+  margin-bottom: 20px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 .back {
   justify-self: start;
   display: inline-flex;
-  gap: 6px;
   align-items: center;
+  justify-content: center;
+  /* Icon-only rounded-rect; compact so highlight cannot reach the cover */
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  gap: 0;
   background: var(--fill-secondary);
   border: 0;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 8px 14px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--btn-radius);
   font-weight: 550;
+  line-height: 0;
   transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
     transform var(--dur-fast) var(--ease-swift);
 }
@@ -415,16 +425,19 @@ onUnmounted(() => {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(280px, 40%) 1fr;
-  gap: 48px;
+  gap: 40px;
   align-items: stretch;
+  position: relative;
+  z-index: 1;
 }
 .art {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 20px;
   min-height: 0;
+  padding-top: 4px;
 }
 .cover {
   width: min(100%, 400px);
@@ -467,7 +480,7 @@ onUnmounted(() => {
   color: var(--muted);
   cursor: pointer;
   padding: 10px;
-  border-radius: 50%;
+  border-radius: var(--btn-radius);
   transition: color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
 }
 .like:hover { background: var(--fill-secondary); color: var(--text); }
@@ -535,8 +548,8 @@ onUnmounted(() => {
 }
 .dock {
   /* Blend into cover/lyrics page — no floating card chrome */
-  margin-top: 16px;
-  padding: 18px 8px 6px;
+  margin-top: 20px;
+  padding: 12px 8px 4px;
   max-width: 520px;
   width: 100%;
   margin-left: auto;
@@ -547,6 +560,8 @@ onUnmounted(() => {
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  position: relative;
+  z-index: 1;
 }
 .progress {
   display: flex;
@@ -607,8 +622,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 22px;
-  margin-top: 14px;
+  gap: 20px;
+  margin-top: 12px;
 }
 .ctrls button {
   background: none;
@@ -617,7 +632,7 @@ onUnmounted(() => {
   cursor: pointer;
   opacity: 0.78;
   padding: 10px;
-  border-radius: 50%;
+  border-radius: var(--btn-radius);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -646,16 +661,17 @@ onUnmounted(() => {
   opacity: 1;
   color: var(--accent);
 }
-.ctrls .big {
+/* Play/pause: same chrome as prev/next — no filled disc/circle behind the icon */
+.ctrls .play-toggle {
   opacity: 1;
-  width: 58px;
-  height: 58px;
-  min-width: 58px;
-  min-height: 58px;
-  background: var(--text);
-  color: var(--bg);
+  color: var(--text);
+  background: transparent;
 }
-.ctrls .big .play-icon {
+.ctrls .play-toggle:hover {
+  background: var(--fill-secondary);
+  opacity: 1;
+}
+.ctrls .play-toggle .play-icon {
   transform: translateX(var(--play-optical-x));
 }
 .err {
@@ -669,13 +685,14 @@ onUnmounted(() => {
   .stage {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 18px;
+    gap: 16px;
   }
   .art {
     flex-direction: row;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     justify-content: flex-start;
+    padding-top: 0;
   }
   .cover {
     width: 120px;
@@ -701,10 +718,13 @@ onUnmounted(() => {
     padding: calc(10px + env(safe-area-inset-top)) 18px calc(14px + env(safe-area-inset-bottom));
   }
   .back {
-    min-height: 44px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
   }
-  .back-label {
-    font-size: 15px;
+  .top {
+    margin-bottom: 16px;
   }
   .cover {
     width: 96px;
@@ -714,11 +734,9 @@ onUnmounted(() => {
   .ctrls {
     gap: 24px;
   }
-  .ctrls .big {
-    width: 64px;
-    height: 64px;
-    min-width: 64px;
-    min-height: 64px;
+  .ctrls .play-toggle {
+    min-width: 48px;
+    min-height: 48px;
   }
   .seek {
     height: 28px;

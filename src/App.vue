@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, type Component } from 'vue';
+import { computed, onMounted, ref, type Component } from 'vue';
 import { closeNowPlaying, initSession, session } from './lib/session';
 import { bindTrayBridge } from './lib/tray';
 import PlayerBar from './components/PlayerBar.vue';
@@ -25,7 +25,15 @@ const pages: { key: string; label: string; icon: string; view: Component }[] = [
 const page = ref('daily');
 const ready = ref(false);
 
+const activeView = computed(() => pages.find((p) => p.key === page.value)!.view);
+/** Cache key: page only. Do NOT fold profile id in — that remounts mid-transition and flashes. */
+const viewKey = computed(() => page.value);
+
 function go(key: string) {
+  if (page.value === key) {
+    closeNowPlaying();
+    return;
+  }
   page.value = key;
   closeNowPlaying();
 }
@@ -60,12 +68,11 @@ onMounted(async () => {
     </nav>
     <div class="main-col">
       <main class="content">
-        <Transition name="page" mode="out-in">
-          <KeepAlive v-if="ready">
-            <component
-              :is="pages.find((p) => p.key === page)!.view"
-              :key="page + '-' + (session.profile?.userId ?? 0)"
-            />
+        <!-- Transition must see the keyed view vnode. KeepAlive is direct child of
+             Transition; key is page-only so out-in never paints a stale sibling. -->
+        <Transition v-if="ready" name="page" mode="out-in">
+          <KeepAlive>
+            <component :is="activeView" :key="viewKey" />
           </KeepAlive>
         </Transition>
       </main>
@@ -80,11 +87,18 @@ onMounted(async () => {
 </template>
 
 <style>
-.page-enter-active {
-  animation: sm-fade-in var(--dur-slow) var(--ease-enter);
-}
+/* Opacity-only page swap — no translateY (that reads as an extra intermediate frame). */
+.page-enter-active,
 .page-leave-active {
-  animation: sm-fade-in var(--dur-fast) var(--ease-out) reverse;
+  transition: opacity var(--dur) var(--ease-swift);
+}
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+.page-enter-to,
+.page-leave-from {
+  opacity: 1;
 }
 .np-enter-active {
   animation: sm-slide-up var(--dur-slow) var(--ease-enter);

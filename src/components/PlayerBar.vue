@@ -342,7 +342,7 @@ async function onLike() {
   cursor: pointer;
   padding: 8px;
   line-height: 0;
-  border-radius: 50%;
+  border-radius: var(--btn-radius);
   width: var(--icon-btn);
   min-width: var(--icon-btn);
   height: var(--icon-btn);
@@ -372,7 +372,7 @@ async function onLike() {
   cursor: pointer;
   opacity: 0.72;
   padding: 8px;
-  border-radius: 50%;
+  border-radius: var(--btn-radius);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -382,6 +382,7 @@ async function onLike() {
   height: var(--icon-btn);
   min-height: var(--icon-btn);
   padding: 0;
+  border-radius: var(--btn-radius);
   transition: background var(--dur-fast) var(--ease-swift), opacity var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift);
 }
 .ctrls button:hover {
@@ -411,6 +412,7 @@ async function onLike() {
   min-height: 42px;
   background: var(--text);
   color: var(--bg);
+  border-radius: var(--btn-radius);
 }
 .ctrls .big :deep(svg),
 .ctrls .big > * {
