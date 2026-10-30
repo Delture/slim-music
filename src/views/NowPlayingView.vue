@@ -258,9 +258,15 @@ onUnmounted(() => {
     @touchend="onTouchEnd"
     @touchcancel="onTouchEnd"
   >
+    <div
+      v-if="t?.cover"
+      class="np-bg"
+      :style="{ backgroundImage: `url(${coverSrc(t.cover, '500y500')})` }"
+      aria-hidden="true"
+    ></div>
     <div class="top">
       <button class="back" type="button" title="返回" @click="closeNowPlaying">
-        <Icon name="previous" :size="16" />
+        <Icon name="chevron-left" :size="16" />
         <span class="back-label">返回</span>
       </button>
       <div class="grab" aria-hidden="true"></div>
@@ -354,6 +360,7 @@ onUnmounted(() => {
 <style scoped>
 .np {
   position: fixed;
+  isolation: isolate;
   inset: 0;
   z-index: 80;
   background: var(--bg-window);
@@ -508,19 +515,38 @@ onUnmounted(() => {
   color: var(--muted);
   text-align: center;
 }
+.np-bg {
+  position: absolute;
+  inset: -40px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(48px) saturate(1.15);
+  opacity: 0.28;
+  transform: scale(1.08);
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme='light'] .np-bg { opacity: 0.18; }
+.np > .top,
+.np > .stage,
+.np > .dock {
+  position: relative;
+  z-index: 1;
+}
 .dock {
+  /* Blend into cover/lyrics page — no floating card chrome */
   margin-top: 16px;
-  padding: 14px 18px 10px;
+  padding: 18px 8px 6px;
   max-width: 520px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
-  background: var(--surface-player);
-  -webkit-backdrop-filter: var(--vibrancy);
-  backdrop-filter: var(--vibrancy);
-  border-radius: var(--radius-chrome);
-  border: 0.5px solid var(--border);
-  box-shadow: var(--shadow-chrome);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .progress {
   display: flex;
@@ -606,7 +632,15 @@ onUnmounted(() => {
   background: var(--fill-secondary);
 }
 .ctrls button:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
+}
+.ctrls button:active :deep(.icon) {
+  animation: icon-pop var(--dur-fast) var(--ease-swift);
+}
+@keyframes icon-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(0.82); }
+  100% { transform: scale(1); }
 }
 .ctrls button.on {
   opacity: 1;

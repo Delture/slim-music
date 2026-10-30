@@ -158,13 +158,13 @@ onUnmounted(() => {
     <div v-if="active" class="body">
       <header class="head">
         <button v-if="narrow" class="back" type="button" @click="backToLists">
-          <Icon name="previous" :size="14" /> 歌单
+          <Icon name="chevron-left" :size="14" /> 歌单
         </button>
         <h2>{{ active.isLiked ? '我喜欢的音乐' : active.name }}</h2>
         <span v-if="fromCache" class="badge muted">缓存</span>
-        <button :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
-        <button v-if="canUnsubscribe" :disabled="busy" @click="unsubscribe">取消收藏</button>
-        <button v-if="canDelete" :disabled="busy" class="danger" @click="removeOwned">删除歌单</button>
+        <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
+        <button v-if="canUnsubscribe" class="btn-ghost" :disabled="busy" @click="unsubscribe">取消收藏</button>
+        <button v-if="canDelete" class="btn-danger" :disabled="busy" @click="removeOwned">删除歌单</button>
       </header>
       <p v-if="loading && !tracks.length" class="muted">加载中…</p>
       <p v-if="err" class="error">{{ err }}</p>
@@ -218,10 +218,10 @@ onUnmounted(() => {
   background: var(--fill-secondary);
 }
 .item.on {
-  background: var(--accent-soft-strong);
-  color: var(--accent);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 0 var(--accent);
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 650;
+  box-shadow: none;
 }
 .body {
   min-width: 0;
@@ -245,9 +245,6 @@ onUnmounted(() => {
   padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: 4px;
-}
-.danger {
-  color: #c62f2f;
 }
 
 @media (max-width: 700px) {

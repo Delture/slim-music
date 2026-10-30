@@ -158,26 +158,27 @@ watch(
       >
         <span class="name" :title="p.name" @dblclick.stop="onRename(p)">{{ p.name }}</span>
         <small class="muted">{{ p.tracks.length }}</small>
-        <button class="mini" title="重命名" @click.stop="onRename(p)">✎</button>
-        <button class="mini" title="删除" @click.stop="onDelete(p)">×</button>
+        <button class="mini" type="button" title="重命名" @click.stop="onRename(p)"><Icon name="pencil" :size="13" /></button>
+        <button class="mini" type="button" title="删除" @click.stop="onDelete(p)"><Icon name="x" :size="14" /></button>
       </div>
     </aside>
 
     <div class="body">
       <header class="head">
         <button v-if="narrow" class="back" type="button" @click="backToLists">
-          <Icon name="previous" :size="14" /> 列表
+          <Icon name="chevron-left" :size="14" /> 列表
         </button>
         <h2 class="title-ellip">{{ activeTitle }}</h2>
         <button
           v-if="activeTracks.length && !isNowPlaying"
+          class="btn-primary"
           @click="playList(activeTracks)"
         >
           播放全部
         </button>
         <template v-if="activeUser">
-          <button class="ghost" @click="onRename(activeUser)">重命名</button>
-          <button class="ghost" @click="onDelete(activeUser)">删除</button>
+          <button class="btn-ghost" @click="onRename(activeUser)">重命名</button>
+          <button class="btn-danger" @click="onDelete(activeUser)">删除</button>
         </template>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
@@ -254,10 +255,10 @@ watch(
   background: var(--fill-secondary);
 }
 .item.on {
-  background: var(--accent-soft-strong);
-  color: var(--accent);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 0 var(--accent);
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 650;
+  box-shadow: none;
 }
 .mini {
   background: none;
@@ -294,9 +295,6 @@ watch(
   white-space: nowrap;
   min-width: 0;
   max-width: 40vw;
-}
-.ghost {
-  background: transparent;
 }
 
 @media (max-width: 700px) {

@@ -27,8 +27,8 @@ onMounted(load);
   <section>
     <header class="head">
       <h2>每日推荐</h2>
-      <button :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
-      <button @click="load">刷新</button>
+      <button class="btn-primary" :disabled="!tracks.length" @click="playList(tracks)">播放全部</button>
+      <button class="btn-secondary" @click="load">刷新</button>
     </header>
     <p v-if="loading" class="muted">加载中…</p>
     <p v-if="err" class="error">{{ err }}</p>

@@ -218,12 +218,12 @@ function move(i: number, dir: -1 | 1) {
   background: var(--fill-secondary);
 }
 .row.playing {
-  background: var(--accent-soft-strong);
-  box-shadow: inset 3px 0 0 0 var(--accent);
+  background: var(--selected);
+  box-shadow: none;
 }
 .row.playing .title {
-  color: var(--accent);
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 650;
 }
 .no {
   background: none;

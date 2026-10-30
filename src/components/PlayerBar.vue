@@ -266,9 +266,10 @@ async function onLike() {
   gap: 16px;
   padding: 10px 20px;
   min-height: 72px;
-  background: var(--surface-player);
-  -webkit-backdrop-filter: var(--vibrancy-strong);
-  backdrop-filter: var(--vibrancy-strong);
+  /* Fill/rim/glass come from shared .player chrome — keep bar transparent */
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   box-shadow: none;
   border: 0;
   z-index: 20;
@@ -289,7 +290,7 @@ async function onLike() {
 .cover {
   width: 52px;
   height: 52px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   object-fit: cover;
   transition: transform var(--dur) var(--ease-swift);
   box-shadow: var(--shadow-cover);
@@ -375,7 +376,15 @@ async function onLike() {
   background: var(--fill-secondary);
 }
 .ctrls button:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
+}
+.ctrls button:active :deep(.icon) {
+  animation: icon-pop var(--dur-fast) var(--ease-swift);
+}
+@keyframes icon-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(0.82); }
+  100% { transform: scale(1); }
 }
 .ctrls button.on {
   opacity: 1;

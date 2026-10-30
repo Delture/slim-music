@@ -1,7 +1,7 @@
 /* ==========================================================================
    SlimMusic design tokens — Apple HIG / YesPlayMusic + macOS floating chrome.
    Refs: YesPlayMusic, WWDC25 Liquid Glass sidebars, ChatGPT charcoal dark,
-   Claude-app display serif (Newsreader) + system UI sans.
+   Full-UI Claude-like serif (Newsreader + Noto Serif SC); design-token buttons.
    ========================================================================== */
 
 :root {
@@ -27,8 +27,8 @@
   --surface-chrome: rgba(255, 255, 255, 0.78); /* sidebar / tab bar glass */
   --surface-chrome-solid: #f5f5f7;
   --surface-1: #ffffff;                 /* main content */
-  --surface-player: rgba(255, 255, 255, 0.82);
-  --surface-player-solid: #ffffff;
+  --surface-player: var(--surface-chrome);
+  --surface-player-solid: var(--surface-chrome-solid);
   --surface-2: var(--surface-player);
   --surface-2-solid: var(--surface-player-solid);
   --surface-3: #ffffff;                 /* menus / cards */
@@ -64,10 +64,22 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-chrome: 18px;
+  --radius-chrome-mobile: 16px;
+  --radius-chrome-tab: 22px;
   --radius-pill: 999px;
 
   --chrome-inset: 12px;
   --chrome-gap: 12px;
+  /* One chrome system: nav + player share rim / radius / shadow / fill */
+  --chrome-border: 0.5px solid var(--border);
+  --chrome-radius: var(--radius-chrome);
+  --chrome-shadow: var(--shadow-chrome);
+  --chrome-bg: var(--surface-chrome);
+  --chrome-bg-solid: var(--surface-chrome-solid);
+  --content-bg: var(--surface-1);
+  --content-border: var(--chrome-border);
+  --content-radius: var(--chrome-radius);
+  --content-shadow: var(--shadow-sm);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -83,14 +95,13 @@
   --dur: 200ms;
   --dur-slow: 320ms;
 
-  /* UI sans (system) + display serif (Claude-app style titles only) */
-  --font-ui:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
-    'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI',
-    'Microsoft YaHei', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
-  --font-display:
+  /* Full-UI Anthropic-adjacent serif (body + titles); ZH via Noto Serif SC */
+  --font-serif:
     'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
-    'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', ui-serif, serif;
+    'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong',
+    'SimSun', 'Noto Serif CJK SC', ui-serif, serif;
+  --font-ui: var(--font-serif);
+  --font-display: var(--font-serif);
 
   color: var(--text);
   background: var(--bg-window);
@@ -114,8 +125,9 @@
   --surface-chrome: rgba(37, 37, 36, 0.86); /* sidebar ~#252524 */
   --surface-chrome-solid: #252524;
   --surface-1: #212121;                 /* content canvas */
-  --surface-player: rgba(48, 48, 48, 0.9); /* #303030 raised */
-  --surface-player-solid: #303030;
+  /* Same-level as sidebar chrome — not a separate raised card */
+  --surface-player: var(--surface-chrome);
+  --surface-player-solid: var(--surface-chrome-solid);
   --surface-2: var(--surface-player);
   --surface-2-solid: var(--surface-player-solid);
   --surface-3: #2a2a29;                 /* menus / elevated cards */
@@ -163,22 +175,16 @@ html, body {
 }
 #app { height: 100%; }
 
+/* Hide scrollbars everywhere; overflow remains scrollable */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted) 45%, transparent);
-  border-radius: var(--radius-pill);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--muted) 70%, transparent);
-  background-clip: padding-box;
-  border: 2px solid transparent;
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+  background: transparent;
 }
 
 @keyframes sm-fade-in {
@@ -222,26 +228,30 @@ html, body {
   background: var(--bg-window);
   box-sizing: border-box;
 }
+.nav,
+.player {
+  background: var(--chrome-bg);
+  -webkit-backdrop-filter: var(--vibrancy);
+  backdrop-filter: var(--vibrancy);
+  border: var(--chrome-border);
+  border-radius: var(--chrome-radius);
+  box-shadow: var(--chrome-shadow);
+}
 .nav {
   grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: var(--space-3);
-  background: var(--surface-chrome);
-  -webkit-backdrop-filter: var(--vibrancy);
-  backdrop-filter: var(--vibrancy);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-chrome);
-  box-shadow: var(--shadow-chrome);
   z-index: 5;
   min-height: 0;
   overflow: auto;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav { background: var(--surface-chrome-solid); }
+  .nav,
+  .player { background: var(--chrome-bg-solid); }
   .player .bar,
-  footer.bar { background: var(--surface-player-solid); }
+  footer.bar { background: transparent; }
 }
 .nav a {
   display: flex;
@@ -268,14 +278,15 @@ html, body {
   color: var(--text);
 }
 .nav a:active { transform: scale(0.97); }
-/* Strong selected state — readable at a glance */
+/* Selected: macOS-sidebar fill + weight/color; no vertical accent stripe */
 .nav a.on {
-  background: var(--accent-soft-strong);
-  color: var(--accent);
-  font-weight: 700;
-  box-shadow:
-    inset 3px 0 0 0 var(--accent),
-    0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 650;
+  box-shadow: none;
+}
+[data-theme='dark'] .nav a.on {
+  background: rgba(255, 255, 255, 0.14);
 }
 .nav .user {
   margin-top: auto;
@@ -291,10 +302,10 @@ html, body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--surface-1);
-  border-radius: var(--radius-chrome);
-  border: 0.5px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  background: var(--content-bg);
+  border-radius: var(--content-radius);
+  border: var(--content-border);
+  box-shadow: var(--content-shadow);
   overflow: hidden;
 }
 .content {
@@ -303,16 +314,13 @@ html, body {
   overflow: auto;
   padding: var(--space-5) var(--space-6);
   min-width: 0;
-  background: var(--surface-1);
+  background: var(--content-bg);
 }
 .content.locked { overflow: hidden; }
 .player {
   grid-column: 1 / -1;
-  border-radius: var(--radius-chrome);
   overflow: hidden;
-  border: 0.5px solid var(--border);
-  box-shadow: var(--shadow-chrome);
-  background: transparent;
+  /* rim / radius / shadow / fill come from shared .nav, .player rule */
 }
 
 .app.np-open .nav,
@@ -344,9 +352,32 @@ html, body {
 .error { color: #c62f2f; }
 [data-theme='dark'] .error { color: #ff6b6b; }
 
-button, input, select {
+/* ---- Design-token buttons: primary / secondary / danger / ghost ---- */
+:root {
+  --btn-h: 34px;
+  --btn-px: 16px;
+  --btn-radius: var(--radius-pill);
+  --btn-font-weight: 550;
+  --btn-secondary-bg: var(--fill-secondary);
+  --btn-secondary-fg: var(--text);
+  --btn-secondary-hover: var(--selected);
+  --btn-primary-bg: var(--accent);
+  --btn-primary-fg: #fff;
+  --btn-primary-hover: var(--accent-hover);
+  --btn-danger-fg: #c62f2f;
+  --btn-danger-bg: color-mix(in srgb, #c62f2f 12%, transparent);
+  --btn-danger-hover: color-mix(in srgb, #c62f2f 20%, transparent);
+  --btn-ghost-hover: var(--hover);
+}
+[data-theme='dark'] {
+  --btn-danger-fg: #ff6b6b;
+  --btn-danger-bg: color-mix(in srgb, #ff6b6b 16%, transparent);
+  --btn-danger-hover: color-mix(in srgb, #ff6b6b 26%, transparent);
+}
+
+button, input, select, .sm-select-trigger {
   font: inherit;
-  padding: 8px 16px;
+  padding: 8px var(--btn-px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-3);
@@ -361,43 +392,141 @@ button, input, select {
 }
 button {
   cursor: pointer;
-  border-radius: var(--radius-pill);
-  background: var(--fill-secondary);
+  border-radius: var(--btn-radius);
+  background: var(--btn-secondary-bg);
   border-color: transparent;
-  font-weight: 550;
-  min-height: 34px;
+  color: var(--btn-secondary-fg);
+  font-weight: var(--btn-font-weight);
+  min-height: var(--btn-h);
 }
 button:hover:not(:disabled) {
-  background: var(--selected);
+  background: var(--btn-secondary-hover);
   border-color: transparent;
 }
 button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary, button.btn-accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+
+/* secondary = default filled chip (播放全部 / 刷新 / 搜索) */
+button.btn-secondary,
+button.secondary { /* alias */ }
+
+/* primary = accent CTA */
+button.primary,
+button.btn-primary,
+button.btn-accent {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-weight: 600;
 }
 button.primary:hover:not(:disabled),
+button.btn-primary:hover:not(:disabled),
 button.btn-accent:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: var(--btn-primary-hover);
+  border-color: var(--btn-primary-hover);
 }
-button.ghost {
+
+/* danger = destructive (删除 / 取消收藏 destructive path) */
+button.danger,
+button.btn-danger {
+  background: var(--btn-danger-bg);
+  border-color: transparent;
+  color: var(--btn-danger-fg);
+  font-weight: 600;
+}
+button.danger:hover:not(:disabled),
+button.btn-danger:hover:not(:disabled) {
+  background: var(--btn-danger-hover);
+  color: var(--btn-danger-fg);
+}
+
+/* ghost = low-emphasis text actions (重命名) */
+button.ghost,
+button.btn-ghost {
   background: transparent;
   border-color: transparent;
+  color: var(--text-secondary);
+  font-weight: 550;
 }
-button.ghost:hover:not(:disabled) { background: var(--hover); }
-input, select {
+button.ghost:hover:not(:disabled),
+button.btn-ghost:hover:not(:disabled) {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+input, select, .sm-select-trigger {
   border-radius: var(--radius-md);
   background: var(--fill-secondary);
   border-color: transparent;
-  min-height: 34px;
+  min-height: var(--btn-h);
 }
-input:focus, select:focus, button:focus-visible {
+input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Custom dropdown (replaces native <select> — readable on dark / Windows) */
+.sm-select {
+  position: relative;
+  display: inline-block;
+  min-width: 200px;
+  max-width: 100%;
+}
+.sm-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-weight: 550;
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+}
+.sm-select-trigger .chev {
+  opacity: 0.55;
+  flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease-swift);
+}
+.sm-select.open .sm-select-trigger .chev {
+  transform: rotate(180deg);
+}
+.sm-select-menu {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface-3);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  max-height: 280px;
+  overflow: auto;
+  animation: sm-scale-in var(--dur-fast) var(--ease-enter) both;
+}
+.sm-select-menu li {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-swift);
+}
+.sm-select-menu li:hover,
+.sm-select-menu li:focus {
+  background: var(--fill-secondary);
+  outline: none;
+}
+.sm-select-menu li.on {
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 650;
 }
 input[type='range'] {
   padding: 0;
@@ -482,8 +611,8 @@ input[type='checkbox'] {
     padding: calc(8px + env(safe-area-inset-top)) 8px 0;
     gap: 8px;
   }
-  .main-col { grid-row: 1; border-radius: 16px; }
-  .player { grid-row: 2; border-radius: 16px; }
+  .main-col { grid-row: 1; border-radius: var(--radius-chrome-mobile); }
+  .player { grid-row: 2; border-radius: var(--radius-chrome-mobile); }
   .nav {
     grid-row: 3;
     flex-direction: row;
@@ -491,7 +620,7 @@ input[type='checkbox'] {
     gap: 2px;
     margin: 0 4px calc(8px + env(safe-area-inset-bottom));
     padding: 6px 6px;
-    border-radius: 22px;
+    border-radius: var(--radius-chrome-tab);
     overflow: visible;
     box-shadow: var(--shadow-chrome);
   }
@@ -504,13 +633,17 @@ input[type='checkbox'] {
     justify-content: center;
     font-size: 10px;
     font-weight: 550;
-    border-radius: 16px;
+    border-radius: var(--radius-chrome-mobile);
   }
   .nav a:hover { background: none; }
   .nav a.on {
-    background: var(--accent-soft-strong);
-    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent);
-    /* no left inset bar on vertical tabs */
+    background: var(--selected);
+    color: var(--text);
+    font-weight: 650;
+    box-shadow: none;
+  }
+  [data-theme='dark'] .nav a.on {
+    background: rgba(255, 255, 255, 0.14);
   }
   .nav .user { display: none; }
   .content { padding: 16px 16px 20px; }

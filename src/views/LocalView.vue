@@ -50,8 +50,8 @@ onMounted(() => (isAndroid || session.settings.localFolders.length) && scan());
     <header class="head">
       <h2>本地音乐</h2>
       <input v-model="filter" class="grow" placeholder="筛选" />
-      <button :disabled="!shown.length" @click="playList(shown)">播放全部</button>
-      <button :disabled="loading" @click="scan">{{ loading ? '扫描中…' : isAndroid ? '刷新' : '重新扫描' }}</button>
+      <button class="btn-primary" :disabled="!shown.length" @click="playList(shown)">播放全部</button>
+      <button class="btn-secondary" :disabled="loading" @click="scan">{{ loading ? '扫描中…' : isAndroid ? '刷新' : '重新扫描' }}</button>
     </header>
     <p v-if="!isAndroid && !session.settings.localFolders.length" class="muted">还没有添加文件夹，去「设置」里添加。</p>
     <p v-if="err" class="error">{{ err }}</p>

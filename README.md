@@ -41,6 +41,17 @@ Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实
 
 0.2.0 起支持应用内更新：启动时自动检查一次，也可在「设置 → 关于」手动检查。桌面端下载后自动安装并重启；Android 下载 APK 后调起系统安装器。v0.1.0 不含更新功能，需手动安装一次 0.2.0。
 
+### v0.5.0 界面精修
+
+- 选中态去掉左侧强调条，改为 macOS 侧栏式略亮底 + 字重（导航 / 歌单 / 曲目一致）
+- 全文衬线：Newsreader（英）+ Noto Serif SC（中），标题与正文同一套
+- 音质设置：自定义下拉（深色可读），不再用系统原生 `<select>`
+- 全平台隐藏滚动条（仍可滚动）
+- 正在播放控制条融入封面/歌词背景，不再浮成独立卡片
+- 统一 Lucide 风描边图标（导航 / 播放 / 设置 / 菜单），去掉 emoji 混用；按压缩放动画
+- 按钮设计 token：`btn-primary` / `btn-secondary` / `btn-danger` / `btn-ghost`（播放全部 / 删除 / 取消收藏等）
+- 保留浮动 chrome、炭灰分层、主题/强调色、全屏 NP、窄屏歌单叠层、Dock 重开、应用内更新
+
 ### v0.4.0 界面（Apple / YesPlayMusic）
 
 参照 [YesPlayMusic](https://github.com/qier222/YesPlayMusic) 与 macOS Music.app / Liquid Glass 浮动 chrome 重做视觉：系统 UI 字体 + Newsreader 衬线大标题（Claude 展示字体感）、侧栏与底栏为圆角内缩浮动面板（非贴边通栏）、半透明 vibrancy、封面软阴影、实心播放钮。深色为 ChatGPT 经典炭灰分层（`#181818` 窗体 / `#212121` 内容 / `#303030` 播放条，非纯黑 OLED）。选中导航/列表有更强对比。主题强制 + 强调色保留（默认网易云红）。v0.3.0 修复仍在：全屏正在播放、窄屏歌单叠层、Dock 重开、Windows 细滚动条与图标。
