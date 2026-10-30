@@ -23,15 +23,17 @@ import { dismissUpdate, installUpdate, updater } from '../lib/updater';
   right: 16px;
   bottom: 96px;
   z-index: 1000;
-  width: 220px;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  width: 240px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-2-solid);
+  border: 0.5px solid var(--border);
   color: inherit;
   box-shadow: var(--shadow-lg);
   font-size: 13px;
   animation: sm-scale-in var(--dur) var(--ease-enter);
+  -webkit-backdrop-filter: var(--vibrancy);
+  backdrop-filter: var(--vibrancy);
 }
 .title {
   font-weight: 600;

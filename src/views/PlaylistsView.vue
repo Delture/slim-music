@@ -188,18 +188,19 @@ onUnmounted(() => {
 }
 .side-title {
   display: none;
-  font-weight: 600;
-  font-size: 18px;
-  margin-bottom: 10px;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  font-size: 22px;
+  margin-bottom: 14px;
+  letter-spacing: -0.03em;
 }
 .item {
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: var(--radius);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  font-weight: 500;
   transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
     transform var(--dur-fast) var(--ease-swift);
 }
@@ -213,12 +214,12 @@ onUnmounted(() => {
   min-width: 0;
 }
 .item:hover {
-  background: var(--hover);
+  background: var(--fill-secondary);
 }
 .item.on {
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 650;
 }
 .body {
   min-width: 0;

@@ -210,8 +210,10 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: 600;
-  margin-bottom: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
 }
 .link {
   background: none;
@@ -231,9 +233,10 @@ watch(
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 4px;
   align-items: center;
-  padding: 8px 10px;
-  border-radius: var(--radius);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  font-weight: 500;
   transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
     transform var(--dur-fast) var(--ease-swift);
 }
@@ -247,12 +250,12 @@ watch(
   min-width: 0;
 }
 .item:hover {
-  background: var(--hover);
+  background: var(--fill-secondary);
 }
 .item.on {
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 650;
 }
 .mini {
   background: none;
@@ -305,8 +308,8 @@ watch(
     max-height: none;
   }
   .side-head {
-    font-size: 18px;
-    letter-spacing: -0.02em;
+    font-size: 22px;
+    letter-spacing: -0.03em;
   }
   .item {
     min-height: 48px;

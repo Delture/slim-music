@@ -165,7 +165,7 @@ async function saveQr() {
           </button>
         </div>
       </div>
-      <p class="muted tip">浅色采用暖纸色画布；深色跟随系统或强制切换。设置写入 settings.json。</p>
+      <p class="muted tip">浅色 / 深色为干净的黑白系统色（参考 Music.app / YesPlayMusic）；强调色可切换。设置写入 settings.json。</p>
     </div>
 
     <div class="settings-card">

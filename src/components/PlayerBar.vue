@@ -263,42 +263,47 @@ async function onLike() {
   display: grid;
   grid-template-columns: 1fr 1.4fr 1fr;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 16px;
+  padding: 10px 20px;
+  min-height: 72px;
   background: var(--surface-2);
+  -webkit-backdrop-filter: var(--vibrancy-strong);
+  backdrop-filter: var(--vibrancy-strong);
   box-shadow: var(--shadow-bar);
+  border-top: 0.5px solid var(--border);
   z-index: 20;
-  animation: sm-slide-up var(--dur-slow) var(--ease-enter);
 }
 .now {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   min-width: 0;
   cursor: pointer;
-  border-radius: var(--radius);
-  padding: 2px 4px;
+  border-radius: var(--radius-md);
+  padding: 4px 6px;
   transition: background var(--dur-fast) var(--ease-swift);
 }
 .now:hover {
-  background: var(--hover);
+  background: var(--fill-secondary);
 }
 .cover {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius);
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
   object-fit: cover;
   transition: transform var(--dur) var(--ease-swift);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-cover);
+  border: 0.5px solid rgba(0, 0, 0, 0.06);
 }
 .now:hover .cover {
-  transform: scale(1.04);
+  transform: scale(1.03);
 }
 .ph {
   display: grid;
   place-items: center;
-  background: var(--hover);
+  background: var(--fill-secondary);
   color: var(--muted);
+  box-shadow: none;
 }
 .info {
   min-width: 0;
@@ -310,18 +315,31 @@ async function onLike() {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  opacity: 0.92;
+}
 .sub {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
+  margin-top: 2px;
+  opacity: 0.85;
 }
 .heart {
   background: none;
   border: 0;
   color: var(--muted);
   cursor: pointer;
-  padding: 6px;
+  padding: 8px;
   line-height: 0;
+  border-radius: 50%;
+  min-width: 36px;
+  min-height: 36px;
+  transition: color var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
 }
+.heart:hover { background: var(--hover); color: var(--text); }
 .heart.on {
   color: var(--accent);
 }
@@ -329,12 +347,12 @@ async function onLike() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .ctrls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .ctrls button {
   background: none;
@@ -342,17 +360,19 @@ async function onLike() {
   color: inherit;
   cursor: pointer;
   opacity: 0.72;
-  padding: 6px;
+  padding: 8px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 0;
+  min-width: 36px;
+  min-height: 36px;
   transition: background var(--dur-fast) var(--ease-swift), opacity var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift);
 }
 .ctrls button:hover {
   opacity: 1;
-  background: var(--hover);
+  background: var(--fill-secondary);
 }
 .ctrls button:active {
   transform: scale(0.92);
@@ -363,27 +383,32 @@ async function onLike() {
 }
 .ctrls .big {
   opacity: 1;
-  width: 40px;
-  height: 40px;
-  background: var(--hover);
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  background: var(--text);
+  color: var(--bg);
 }
 .ctrls .big :deep(svg),
 .ctrls .big > * {
   display: block;
+  color: inherit;
 }
 /* 三角形视觉重心偏左，右移/上移做光学居中 */
 .ctrls .big .play-icon {
   transform: translate(2px, -1px);
 }
 .ctrls .big:hover {
-  background: var(--border);
+  background: var(--text);
+  opacity: 0.88;
 }
 .progress {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   width: 100%;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
 }
 .time {
@@ -391,14 +416,14 @@ async function onLike() {
   font-feature-settings: 'tnum' 1;
   min-width: 36px;
   text-align: center;
+  opacity: 0.7;
 }
 .seek {
   position: relative;
   flex: 1;
-  height: 16px;
+  height: 18px;
   cursor: pointer;
   touch-action: none;
-  /* 禁止任何过渡，避免填充宽度动画造成左右抖 */
   transition: none;
 }
 .seek-rail,
@@ -407,14 +432,15 @@ async function onLike() {
   left: 0;
   right: 0;
   top: 50%;
-  height: 4px;
-  margin-top: -2px;
+  height: 3px;
+  margin-top: -1.5px;
   border-radius: 2px;
   transition: none;
   pointer-events: none;
 }
 .seek-rail {
-  background: var(--border);
+  background: var(--border-strong);
+  opacity: 0.55;
 }
 .seek-fill {
   right: auto;
@@ -423,6 +449,7 @@ async function onLike() {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+  opacity: 1;
 }
 .seek-thumb {
   position: absolute;
@@ -432,11 +459,16 @@ async function onLike() {
   margin: -6px 0 0 -6px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 2px var(--bg);
+  box-shadow: 0 0 0 2px var(--surface-2-solid);
   left: 0%;
   transition: none;
   pointer-events: none;
   will-change: left;
+  opacity: 0;
+}
+.seek:hover .seek-thumb,
+.seek:active .seek-thumb {
+  opacity: 1;
 }
 .err {
   color: #c62f2f;
@@ -465,19 +497,21 @@ async function onLike() {
   left: 0;
   right: 0;
   top: 50%;
-  height: 4px;
-  margin-top: -2px;
+  height: 3px;
+  margin-top: -1.5px;
   border-radius: 2px;
   transition: none;
   pointer-events: none;
 }
 .vol-seek .seek-rail {
-  background: var(--border);
+  background: var(--border-strong);
+  opacity: 0.55;
 }
 .vol-seek .seek-fill {
   right: auto;
   width: 100%;
-  background: var(--accent);
+  background: var(--text);
+  opacity: 0.55;
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
@@ -489,15 +523,20 @@ async function onLike() {
   height: 12px;
   margin: -6px 0 0 -6px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--bg);
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--surface-2-solid);
   left: 0%;
   transition: none;
   pointer-events: none;
   will-change: left;
+  opacity: 0;
+}
+.vol-seek:hover .seek-thumb,
+.vol-seek:active .seek-thumb {
+  opacity: 1;
 }
 .pct {
-  font-size: 12px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   min-width: 36px;
   text-align: right;
@@ -506,23 +545,25 @@ async function onLike() {
 .queue {
   min-width: 40px;
   text-align: right;
+  font-size: 12px;
 }
 
-/* 手机：底部迷你播放条（封面+标题+播放/下一首）；播放页打开时展开完整控制 */
+/* 手机：底部迷你播放条 */
 @media (max-width: 700px) {
   .bar {
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px;
-    padding: 6px 8px;
+    gap: 8px;
+    padding: 8px 10px;
+    min-height: 64px;
   }
   .vol { display: none; }
-  .cover { width: 42px; height: 42px; }
-  .heart { padding: 10px; }
+  .cover { width: 44px; height: 44px; }
+  .heart { padding: 10px; min-width: 44px; min-height: 44px; }
   .center .progress, .ctrls .opt { display: none; }
   .ctrls button { min-width: 44px; min-height: 44px; }
-  .ctrls .big { width: 44px; height: 44px; }
+  .ctrls .big { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
   .err { display: none; }
   .seek { height: 28px; }
-  .seek-thumb { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
+  .seek-thumb { width: 16px; height: 16px; margin: -8px 0 0 -8px; opacity: 1; }
 }
 </style>

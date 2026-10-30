@@ -47,7 +47,7 @@ onMounted(async () => {
         :class="{ on: page === p.key }"
         @click="go(p.key)"
       >
-        <Icon :name="p.icon" :size="15" />
+        <Icon :name="p.icon" :size="17" />
         <span>{{ p.label }}</span>
       </a>
       <div class="user muted">{{ session.profile ? session.profile.nickname : '未登录' }}</div>

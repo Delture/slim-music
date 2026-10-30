@@ -9,15 +9,15 @@ defineProps<{ source: Source }>();
 
 <style scoped>
 .badge {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 10px;
+  padding: 2px 7px;
   border-radius: var(--radius-pill);
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 650;
   flex-shrink: 0;
   justify-self: start;
-  letter-spacing: 0.02em;
-  transition: transform var(--dur-fast) var(--ease-swift);
+  letter-spacing: 0.01em;
+  opacity: 0.92;
 }
 .local {
   background: color-mix(in srgb, #1f7a3a 14%, transparent);

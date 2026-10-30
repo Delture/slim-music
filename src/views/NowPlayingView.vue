@@ -359,7 +359,7 @@ onUnmounted(() => {
   background: var(--surface-1);
   display: flex;
   flex-direction: column;
-  padding: calc(12px + env(safe-area-inset-top)) 28px calc(16px + env(safe-area-inset-bottom));
+  padding: calc(16px + env(safe-area-inset-top)) 36px calc(20px + env(safe-area-inset-bottom));
   overflow: hidden;
   box-sizing: border-box;
   transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
@@ -369,35 +369,36 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .back {
   justify-self: start;
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  background: none;
+  background: var(--fill-secondary);
   border: 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: var(--radius-pill);
+  font-weight: 550;
   transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
     transform var(--dur-fast) var(--ease-swift);
 }
 .back:hover {
-  color: inherit;
-  background: var(--hover);
+  color: var(--text);
+  background: var(--selected);
 }
 .back:active {
   transform: scale(0.97);
 }
 .grab {
   width: 36px;
-  height: 4px;
+  height: 5px;
   border-radius: var(--radius-pill);
   background: var(--border-strong);
-  opacity: 0.7;
+  opacity: 0.55;
 }
 .top-spacer {
   justify-self: end;
@@ -406,8 +407,8 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 42%) 1fr;
-  gap: 40px;
+  grid-template-columns: minmax(280px, 40%) 1fr;
+  gap: 48px;
   align-items: stretch;
 }
 .art {
@@ -415,48 +416,53 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 24px;
   min-height: 0;
 }
 .cover {
-  width: min(100%, 380px);
-  max-height: min(380px, 48vh);
+  width: min(100%, 400px);
+  max-height: min(400px, 50vh);
   aspect-ratio: 1;
-  border-radius: var(--radius-xl);
+  border-radius: 14px;
   object-fit: cover;
   box-shadow: var(--shadow-lg);
+  border: 0.5px solid rgba(0, 0, 0, 0.06);
   animation: sm-scale-in var(--dur-slow) var(--ease-enter);
 }
 .ph {
   display: grid;
   place-items: center;
-  background: var(--hover);
+  background: var(--fill-secondary);
   color: var(--muted);
 }
 .meta {
   text-align: center;
-  max-width: 380px;
+  max-width: 400px;
   width: 100%;
 }
 .title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
 }
 .sub {
-  color: var(--muted);
+  color: var(--text-secondary);
   margin-top: 8px;
+  font-size: 15px;
+  opacity: 0.85;
 }
 .like {
-  margin-top: 14px;
+  margin-top: 16px;
   background: none;
   border: 0;
   color: var(--muted);
   cursor: pointer;
-  padding: 8px;
+  padding: 10px;
   border-radius: 50%;
-  transition: color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+  transition: color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift), background var(--dur-fast) var(--ease-swift);
 }
+.like:hover { background: var(--fill-secondary); color: var(--text); }
 .like:active {
   transform: scale(0.9);
 }
@@ -468,48 +474,50 @@ onUnmounted(() => {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 28% 16px;
+  padding: 28% 20px;
   mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
   -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
 }
 .line {
-  padding: 12px 10px;
+  padding: 14px 12px;
   font-size: 18px;
   color: var(--muted);
   cursor: pointer;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  letter-spacing: -0.01em;
   transition: color var(--dur) var(--ease-swift), transform var(--dur) var(--ease-swift),
-    background var(--dur-fast) var(--ease-swift), font-size var(--dur) var(--ease-swift);
+    background var(--dur-fast) var(--ease-swift), font-size var(--dur) var(--ease-swift), font-weight var(--dur) var(--ease-swift);
 }
 .line.on {
   color: var(--text);
   font-weight: 700;
-  font-size: 24px;
-  transform: scale(1.02);
+  font-size: 26px;
+  letter-spacing: -0.025em;
 }
 .line:hover {
-  background: var(--hover);
+  background: var(--fill-secondary);
 }
 .trans {
-  font-size: 0.85em;
-  opacity: 0.75;
+  font-size: 0.82em;
+  opacity: 0.7;
   margin-top: 4px;
+  font-weight: 500;
 }
 .muted {
   color: var(--muted);
   text-align: center;
 }
 .dock {
-  margin-top: 12px;
-  padding-top: 8px;
-  max-width: 560px;
+  margin-top: 16px;
+  padding-top: 10px;
+  max-width: 520px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
 .progress {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   font-size: 12px;
   color: var(--muted);
@@ -519,11 +527,12 @@ onUnmounted(() => {
   font-feature-settings: 'tnum' 1;
   min-width: 36px;
   text-align: center;
+  opacity: 0.7;
 }
 .seek {
   position: relative;
   flex: 1;
-  height: 20px;
+  height: 22px;
   cursor: pointer;
   touch-action: none;
 }
@@ -539,7 +548,8 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .seek-rail {
-  background: var(--border);
+  background: var(--border-strong);
+  opacity: 0.5;
 }
 .seek-fill {
   right: auto;
@@ -551,9 +561,9 @@ onUnmounted(() => {
 .seek-thumb {
   position: absolute;
   top: 50%;
-  width: 12px;
-  height: 12px;
-  margin: -6px 0 0 -6px;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--surface-1);
@@ -564,8 +574,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  margin-top: 10px;
+  gap: 22px;
+  margin-top: 14px;
 }
 .ctrls button {
   background: none;
@@ -573,18 +583,20 @@ onUnmounted(() => {
   color: inherit;
   cursor: pointer;
   opacity: 0.78;
-  padding: 8px;
+  padding: 10px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 0;
+  min-width: 44px;
+  min-height: 44px;
   transition: background var(--dur-fast) var(--ease-swift), opacity var(--dur-fast) var(--ease-swift),
     transform var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift);
 }
 .ctrls button:hover {
   opacity: 1;
-  background: var(--hover);
+  background: var(--fill-secondary);
 }
 .ctrls button:active {
   transform: scale(0.92);
@@ -595,9 +607,12 @@ onUnmounted(() => {
 }
 .ctrls .big {
   opacity: 1;
-  width: 56px;
-  height: 56px;
-  background: var(--hover);
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  background: var(--text);
+  color: var(--bg);
 }
 .ctrls .big .play-icon {
   transform: translate(2px, -1px);
@@ -613,12 +628,12 @@ onUnmounted(() => {
   .stage {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 16px;
+    gap: 18px;
   }
   .art {
     flex-direction: row;
     align-items: center;
-    gap: 16px;
+    gap: 18px;
     justify-content: flex-start;
   }
   .cover {
@@ -626,13 +641,14 @@ onUnmounted(() => {
     height: 120px;
     max-height: 120px;
     flex-shrink: 0;
+    border-radius: 12px;
   }
   .meta {
     text-align: left;
     min-width: 0;
   }
   .title {
-    font-size: 18px;
+    font-size: 20px;
   }
   .grab {
     display: block;
@@ -641,7 +657,7 @@ onUnmounted(() => {
 
 @media (max-width: 700px) {
   .np {
-    padding: calc(8px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));
+    padding: calc(10px + env(safe-area-inset-top)) 18px calc(14px + env(safe-area-inset-bottom));
   }
   .back {
     min-height: 44px;
@@ -655,11 +671,13 @@ onUnmounted(() => {
     max-height: 96px;
   }
   .ctrls {
-    gap: 22px;
+    gap: 24px;
   }
   .ctrls .big {
     width: 64px;
     height: 64px;
+    min-width: 64px;
+    min-height: 64px;
   }
   .seek {
     height: 28px;

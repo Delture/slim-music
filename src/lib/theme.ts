@@ -3,7 +3,7 @@ export type ThemeAppearance = 'system' | 'light' | 'dark';
 export type AccentId = 'red' | 'terracotta';
 
 export const ACCENT_COLORS: Record<AccentId, string> = {
-  red: '#e63c3c',
+  red: '#ec4141',
   terracotta: '#d97757',
 };
 
