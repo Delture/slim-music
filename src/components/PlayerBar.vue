@@ -168,7 +168,7 @@ async function onLike() {
 </script>
 
 <template>
-  <footer class="bar" :class="{ full: session.nowPlaying }">
+  <footer class="bar">
     <div class="now" title="打开播放页" @click="openNp">
       <img v-if="t?.cover" :src="coverSrc(t.cover)" class="cover" />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
@@ -522,15 +522,6 @@ async function onLike() {
   .ctrls button { min-width: 44px; min-height: 44px; }
   .ctrls .big { width: 44px; height: 44px; }
   .err { display: none; }
-  .bar.full {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
-  }
-  .bar.full .now { display: none; }
-  .bar.full .center .progress, .bar.full .ctrls .opt { display: flex; }
-  .bar.full .ctrls { gap: 18px; }
-  .bar.full .ctrls .big { width: 56px; height: 56px; }
-  .bar.full .err { display: block; }
   .seek { height: 28px; }
   .seek-thumb { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
 }

@@ -248,6 +248,13 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .content.locked { overflow: hidden; }
 .player { grid-column: 1 / -1; }
 
+/* 全屏播放：隐藏侧栏与底栏（桌面 / Windows / Android 一致） */
+.app.np-open .nav,
+.app.np-open .player {
+  display: none !important;
+}
+
+
 .head {
   display: flex;
   gap: 10px;
@@ -421,7 +428,6 @@ input[type='checkbox'] {
   .nav a:hover { background: none; }
   .nav a.on { background: none; }
   .nav .user { display: none; }
-  .app.np-open .nav { display: none; }
   .content { padding: 12px 12px 16px; }
   .head { flex-wrap: wrap; gap: 8px; }
   .head h2 { font-size: 20px; flex-basis: 100%; }

@@ -44,7 +44,7 @@ onMounted(async () => {
       <a
         v-for="p in pages"
         :key="p.key"
-        :class="{ on: page === p.key && !session.nowPlaying }"
+        :class="{ on: page === p.key }"
         @click="go(p.key)"
       >
         <Icon :name="p.icon" :size="15" />
@@ -53,7 +53,7 @@ onMounted(async () => {
       <div class="user muted">{{ session.profile ? session.profile.nickname : '未登录' }}</div>
     </nav>
     <div class="main-col">
-      <main class="content" :class="{ locked: session.nowPlaying }">
+      <main class="content">
         <Transition name="page" mode="out-in">
           <KeepAlive v-if="ready">
             <component
@@ -63,12 +63,13 @@ onMounted(async () => {
           </KeepAlive>
         </Transition>
       </main>
-      <Transition name="np">
-        <NowPlayingView v-if="session.nowPlaying" />
-      </Transition>
     </div>
     <PlayerBar class="player" />
     <UpdatePrompt />
+    <!-- 全屏沉浸播放页：盖住侧栏 / 底栏 / 内容，三端一致 -->
+    <Transition name="np">
+      <NowPlayingView v-if="session.nowPlaying" />
+    </Transition>
   </div>
 </template>
 

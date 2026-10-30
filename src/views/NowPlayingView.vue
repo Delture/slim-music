@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
-import { current, player, seek } from '../lib/player';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+  current,
+  cycleRepeat,
+  next,
+  player,
+  prev,
+  seek,
+  togglePlay,
+  toggleShuffle,
+} from '../lib/player';
 import { closeNowPlaying, isLiked, session, toggleLike } from '../lib/session';
 import { setTrayLyricLines, clearTrayLyric } from '../lib/tray';
-import { coverSrc } from '../lib/format';
+import { coverSrc, fmtTime } from '../lib/format';
 import { loadLocalLyricCached, loadLyricCached, peekLyric, peekLyricForTrack } from '../lib/lyrics';
 import type { LyricLine } from '../lib/types';
 import Icon from '../components/Icon.vue';
@@ -13,8 +22,12 @@ const lines = ref<LyricLine[]>([]);
 const err = ref('');
 const loading = ref(false);
 const listEl = ref<HTMLElement | null>(null);
+const rootEl = ref<HTMLElement | null>(null);
 
 const t = computed(() => current());
+const repeatLabel = computed(
+  () => ({ off: '不循环', all: '列表循环', one: '单曲循环' })[player.repeat],
+);
 const activeIdx = computed(() => {
   const ms = player.currentTime * 1000;
   let idx = -1;
@@ -86,7 +99,6 @@ watch(
       return;
     }
     if (track.source === 'local' && track.path) {
-      // 先 peek，有缓存则立刻显示（同曲重开无闪烁）
       const warm = peekLyricForTrack(track);
       if (warm) {
         applyLyric(warm);
@@ -108,7 +120,6 @@ watch(activeIdx, async (i) => {
   const root = listEl.value;
   const el = root?.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
   if (!root || !el || i < 0) return;
-  // 只滚歌词列，避免 scrollIntoView 带动 .content 整页滚动（露出播放条）
   const top = el.offsetTop - root.clientHeight / 2 + el.offsetHeight / 2;
   root.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 });
@@ -122,15 +133,144 @@ async function onLike() {
     alert(String(e));
   }
 }
+
+/* ---- seek UI (rAF, same approach as PlayerBar) ---- */
+const trackEl = ref<HTMLElement | null>(null);
+const fillEl = ref<HTMLElement | null>(null);
+const thumbEl = ref<HTMLElement | null>(null);
+const timeCurEl = ref<HTMLElement | null>(null);
+const timeDurEl = ref<HTMLElement | null>(null);
+let seeking = false;
+let seekRatio = 0;
+let raf = 0;
+let lastCur = '';
+let lastDur = '';
+
+function ratioNow() {
+  if (seeking) return seekRatio;
+  const d = player.duration;
+  if (!d || !isFinite(d) || d <= 0) return 0;
+  return Math.min(1, Math.max(0, player.currentTime / d));
+}
+function paint(r: number) {
+  if (fillEl.value) fillEl.value.style.transform = `scaleX(${r})`;
+  if (thumbEl.value) thumbEl.value.style.left = `${r * 100}%`;
+  const cur = seeking ? r * (player.duration || 0) : player.currentTime;
+  const curT = fmtTime(cur);
+  const durT = fmtTime(player.duration);
+  if (timeCurEl.value && curT !== lastCur) {
+    timeCurEl.value.textContent = curT;
+    lastCur = curT;
+  }
+  if (timeDurEl.value && durT !== lastDur) {
+    timeDurEl.value.textContent = durT;
+    lastDur = durT;
+  }
+}
+function tick() {
+  paint(ratioNow());
+  raf = requestAnimationFrame(tick);
+}
+function ratioFromEvent(e: PointerEvent) {
+  const el = trackEl.value;
+  if (!el) return 0;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0) return 0;
+  return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+}
+function onPointerDown(e: PointerEvent) {
+  trackEl.value?.setPointerCapture(e.pointerId);
+  seeking = true;
+  seekRatio = ratioFromEvent(e);
+  paint(seekRatio);
+}
+function onPointerMove(e: PointerEvent) {
+  if (!seeking) return;
+  seekRatio = ratioFromEvent(e);
+  paint(seekRatio);
+}
+function onPointerUp(e: PointerEvent) {
+  if (!seeking) return;
+  seekRatio = ratioFromEvent(e);
+  seek(seekRatio * (player.duration || 0));
+  seeking = false;
+  paint(ratioNow());
+}
+
+/* ---- swipe down / Escape to exit ---- */
+let touchY0 = 0;
+let touchX0 = 0;
+let swiping = false;
+const dragY = ref(0);
+
+function onTouchStart(e: TouchEvent) {
+  if (e.touches.length !== 1) return;
+  const target = e.target as HTMLElement | null;
+  // 歌词区纵向滚动时不抢手势
+  if (target && listEl.value?.contains(target)) {
+    if (listEl.value.scrollTop > 2) return;
+  }
+  touchY0 = e.touches[0].clientY;
+  touchX0 = e.touches[0].clientX;
+  swiping = true;
+  dragY.value = 0;
+}
+function onTouchMove(e: TouchEvent) {
+  if (!swiping) return;
+  const dy = e.touches[0].clientY - touchY0;
+  const dx = Math.abs(e.touches[0].clientX - touchX0);
+  if (dy > 8 && dy > dx) {
+    dragY.value = Math.min(160, dy);
+    if (e.cancelable) e.preventDefault();
+  } else if (dy < -4 || dx > dy) {
+    swiping = false;
+    dragY.value = 0;
+  }
+}
+function onTouchEnd() {
+  if (!swiping) return;
+  if (dragY.value > 90) closeNowPlaying();
+  swiping = false;
+  dragY.value = 0;
+}
+
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeNowPlaying();
+}
+
+onMounted(() => {
+  raf = requestAnimationFrame(tick);
+  window.addEventListener('keydown', onKey);
+});
+onUnmounted(() => {
+  cancelAnimationFrame(raf);
+  window.removeEventListener('keydown', onKey);
+});
 </script>
 
 <template>
-  <div class="np">
-    <button class="back" @click="closeNowPlaying"><Icon name="previous" :size="14" /> 返回</button>
-    <div class="body">
-      <div class="left">
+  <div
+    ref="rootEl"
+    class="np"
+    :style="dragY ? { transform: `translateY(${dragY}px)`, opacity: String(1 - dragY / 220) } : undefined"
+    @touchstart.passive="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
+    @touchcancel="onTouchEnd"
+  >
+    <div class="top">
+      <button class="back" type="button" title="返回" @click="closeNowPlaying">
+        <Icon name="previous" :size="16" />
+        <span class="back-label">返回</span>
+      </button>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="top-spacer"></div>
+    </div>
+
+    <div class="stage">
+      <div class="art">
         <img v-if="t?.cover" :src="coverSrc(t.cover, '500y500')" class="cover" />
-        <div v-else class="cover ph"><Icon name="music" :size="48" /></div>
+        <div v-else class="cover ph"><Icon name="music" :size="56" /></div>
         <div class="meta">
           <div class="title">
             {{ t?.title ?? '未在播放' }}
@@ -143,11 +283,12 @@ async function onLike() {
             :class="{ on: isLiked(t.ncmId) }"
             @click="onLike"
           >
-            <Icon :name="isLiked(t?.ncmId) ? 'heart-solid' : 'heart'" :size="18" />
+            <Icon :name="isLiked(t?.ncmId) ? 'heart-solid' : 'heart'" :size="20" />
           </button>
         </div>
       </div>
-      <div class="right" ref="listEl">
+
+      <div class="lyrics" ref="listEl">
         <p v-if="loading" class="muted">加载歌词…</p>
         <p v-else-if="err" class="muted">{{ err }}</p>
         <div
@@ -163,23 +304,75 @@ async function onLike() {
         </div>
       </div>
     </div>
+
+    <div class="dock">
+      <div class="progress">
+        <span ref="timeCurEl" class="time">0:00</span>
+        <div
+          ref="trackEl"
+          class="seek"
+          role="slider"
+          tabindex="0"
+          @pointerdown.prevent="onPointerDown"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+        >
+          <div class="seek-rail"></div>
+          <div ref="fillEl" class="seek-fill"></div>
+          <div ref="thumbEl" class="seek-thumb"></div>
+        </div>
+        <span ref="timeDurEl" class="time">0:00</span>
+      </div>
+      <div class="ctrls">
+        <button class="opt" :class="{ on: player.shuffle }" title="随机" @click="toggleShuffle">
+          <Icon name="shuffle" :size="18" />
+        </button>
+        <button title="上一首" @click="prev"><Icon name="previous" :size="22" /></button>
+        <button class="big" :title="player.playing ? '暂停' : '播放'" @click="togglePlay">
+          <Icon
+            :name="player.playing ? 'pause' : 'play'"
+            :size="28"
+            :class="{ 'play-icon': !player.playing }"
+          />
+        </button>
+        <button title="下一首" @click="next()"><Icon name="next" :size="22" /></button>
+        <button
+          class="opt"
+          :class="{ on: player.repeat !== 'off' }"
+          :title="repeatLabel"
+          @click="cycleRepeat"
+        >
+          <Icon :name="player.repeat === 'one' ? 'repeat-1' : 'repeat'" :size="18" />
+        </button>
+      </div>
+      <p v-if="player.error" class="err">{{ player.error }}</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .np {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 80;
   background: var(--surface-1);
   display: flex;
   flex-direction: column;
-  padding: 16px 24px 12px;
+  padding: calc(12px + env(safe-area-inset-top)) 28px calc(16px + env(safe-area-inset-bottom));
   overflow: hidden;
   box-sizing: border-box;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+  will-change: transform, opacity;
+}
+.top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-bottom: 8px;
 }
 .back {
-  align-self: flex-start;
+  justify-self: start;
   display: inline-flex;
   gap: 6px;
   align-items: center;
@@ -187,45 +380,53 @@ async function onLike() {
   border: 0;
   color: var(--muted);
   cursor: pointer;
-  padding: 6px 10px;
-  margin-bottom: 8px;
+  padding: 8px 12px;
   border-radius: var(--radius-pill);
-  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+  transition: background var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift);
 }
 .back:hover {
   color: inherit;
   background: var(--hover);
 }
-.back:active { transform: scale(0.97); }
-.body {
+.back:active {
+  transform: scale(0.97);
+}
+.grab {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  opacity: 0.7;
+}
+.top-spacer {
+  justify-self: end;
+}
+.stage {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(240px, 38%) 1fr;
-  gap: 32px;
+  grid-template-columns: minmax(280px, 42%) 1fr;
+  gap: 40px;
+  align-items: stretch;
 }
-.left {
+.art {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 20px;
   min-height: 0;
-  overflow: hidden;
 }
 .cover {
-  width: min(100%, 320px);
-  max-width: 100%;
-  max-height: min(320px, 45vh);
+  width: min(100%, 380px);
+  max-height: min(380px, 48vh);
   aspect-ratio: 1;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   object-fit: cover;
   box-shadow: var(--shadow-lg);
-  flex-shrink: 1;
   animation: sm-scale-in var(--dur-slow) var(--ease-enter);
-  transition: transform var(--dur-slow) var(--ease-swift);
 }
-.cover:hover { transform: scale(1.02); }
 .ph {
   display: grid;
   place-items: center;
@@ -234,67 +435,240 @@ async function onLike() {
 }
 .meta {
   text-align: center;
-  max-width: 320px;
+  max-width: 380px;
+  width: 100%;
 }
 .title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 .sub {
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .like {
-  margin-top: 12px;
+  margin-top: 14px;
   background: none;
   border: 0;
   color: var(--muted);
   cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: color var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+}
+.like:active {
+  transform: scale(0.9);
 }
 .like.on {
   color: var(--accent);
 }
-.right {
+.lyrics {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 30% 12px;
-  mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
-  -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
+  padding: 28% 16px;
+  mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
 }
 .line {
-  padding: 10px 8px;
+  padding: 12px 10px;
   font-size: 18px;
   color: var(--muted);
   cursor: pointer;
   border-radius: var(--radius);
-  transition: color var(--dur) var(--ease-swift), transform var(--dur) var(--ease-swift), background var(--dur-fast) var(--ease-swift), font-size var(--dur) var(--ease-swift);
+  transition: color var(--dur) var(--ease-swift), transform var(--dur) var(--ease-swift),
+    background var(--dur-fast) var(--ease-swift), font-size var(--dur) var(--ease-swift);
 }
 .line.on {
   color: var(--text);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 24px;
   transform: scale(1.02);
 }
 .line:hover {
   background: var(--hover);
 }
+.trans {
+  font-size: 0.85em;
+  opacity: 0.75;
+  margin-top: 4px;
+}
 .muted {
   color: var(--muted);
   text-align: center;
 }
+.dock {
+  margin-top: 12px;
+  padding-top: 8px;
+  max-width: 560px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+.progress {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.time {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  min-width: 36px;
+  text-align: center;
+}
+.seek {
+  position: relative;
+  flex: 1;
+  height: 20px;
+  cursor: pointer;
+  touch-action: none;
+}
+.seek-rail,
+.seek-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.seek-rail {
+  background: var(--border);
+}
+.seek-fill {
+  right: auto;
+  width: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.seek-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface-1);
+  left: 0%;
+  pointer-events: none;
+}
+.ctrls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 10px;
+}
+.ctrls button {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.78;
+  padding: 8px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  transition: background var(--dur-fast) var(--ease-swift), opacity var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift), color var(--dur-fast) var(--ease-swift);
+}
+.ctrls button:hover {
+  opacity: 1;
+  background: var(--hover);
+}
+.ctrls button:active {
+  transform: scale(0.92);
+}
+.ctrls button.on {
+  opacity: 1;
+  color: var(--accent);
+}
+.ctrls .big {
+  opacity: 1;
+  width: 56px;
+  height: 56px;
+  background: var(--hover);
+}
+.ctrls .big .play-icon {
+  transform: translate(2px, -1px);
+}
+.err {
+  color: #c62f2f;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 6px;
+}
 
-@media (max-width: 700px) {
-  .np { padding: 8px 16px 0; }
-  .back { min-height: 44px; font-size: 15px; }
-  .body {
+@media (max-width: 900px) {
+  .stage {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 12px;
+    gap: 16px;
   }
-  .left { flex-direction: row; align-items: center; gap: 12px; }
-  .left .cover { width: 96px; height: 96px; flex-shrink: 0; }
-  .meta { text-align: left; min-width: 0; }
+  .art {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    justify-content: flex-start;
+  }
+  .cover {
+    width: 120px;
+    height: 120px;
+    max-height: 120px;
+    flex-shrink: 0;
+  }
+  .meta {
+    text-align: left;
+    min-width: 0;
+  }
+  .title {
+    font-size: 18px;
+  }
+  .grab {
+    display: block;
+  }
+}
+
+@media (max-width: 700px) {
+  .np {
+    padding: calc(8px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));
+  }
+  .back {
+    min-height: 44px;
+  }
+  .back-label {
+    font-size: 15px;
+  }
+  .cover {
+    width: 96px;
+    height: 96px;
+    max-height: 96px;
+  }
+  .ctrls {
+    gap: 22px;
+  }
+  .ctrls .big {
+    width: 64px;
+    height: 64px;
+  }
+  .seek {
+    height: 28px;
+  }
+}
+
+@media (min-width: 901px) {
+  .grab {
+    display: none;
+  }
 }
 </style>
