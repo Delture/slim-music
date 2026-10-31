@@ -7,7 +7,8 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import type { Track } from '../lib/types';
 import { current, enqueue, playList } from '../lib/player';
-import { coverSrc, fmtTime } from '../lib/format';
+import { fmtTime } from '../lib/format';
+import CoverThumb from './CoverThumb.vue';
 import { isLiked, session, toggleLike } from '../lib/session';
 import {
   addTrackToLocal,
@@ -189,17 +190,10 @@ function move(i: number, dir: -1 | 1) {
           <span class="n">{{ vRow.index + 1 }}</span
           ><span class="p"><Icon name="play" :size="12" /></span>
         </button>
-        <img
-          v-if="tracks[vRow.index]?.cover"
-          :src="coverSrc(tracks[vRow.index].cover)"
-          class="cover"
-          loading="lazy"
-          decoding="async"
-          @click.stop="playAt(vRow.index)"
+        <CoverThumb
+          :src="tracks[vRow.index]?.cover"
+          @click="playAt(vRow.index)"
         />
-        <div v-else class="cover ph" @click.stop="playAt(vRow.index)">
-          <Icon name="music" :size="16" />
-        </div>
         <div class="main">
           <div class="title">{{ tracks[vRow.index].title }}</div>
           <div class="sub">{{ tracks[vRow.index].artists.join(' / ') || '未知歌手' }}</div>
@@ -343,23 +337,7 @@ function move(i: number, dir: -1 | 1) {
   background: var(--hover);
   opacity: 1;
 }
-.cover {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius);
-  object-fit: cover;
-  cursor: pointer;
-  border: 0.5px solid rgba(0, 0, 0, 0.06);
-  box-shadow: var(--shadow-sm);
-  /* 40 + 10+10 pad = 60 row — cover clears row background edges */
-}
-.ph {
-  display: grid;
-  place-items: center;
-  background: var(--fill-secondary);
-  color: var(--muted);
-  box-shadow: none;
-}
+/* cover via CoverThumb */
 .main {
   min-width: 0;
   overflow: hidden;
@@ -511,7 +489,7 @@ function move(i: number, dir: -1 | 1) {
   .row:has(.ord) {
     grid-template-columns: 48px minmax(0, 1fr) 44px 72px;
   }
-  .cover {
+  :deep(.cover-thumb) {
     width: 44px;
     height: 44px;
   }

@@ -202,6 +202,38 @@ async fn song_play_src(
     }))
 }
 
+
+/// 预取下一首音频到磁盘缓存：已命中则立刻返回 true；否则后台拉直链并下载，不阻塞调用方。
+#[tauri::command]
+async fn prefetch_song_audio(state: State<'_, AppState>, id: i64) -> R<bool> {
+    let (enabled, quality, max_mb) = {
+        let s = state.settings.lock().await;
+        (s.cache_enabled, s.quality.clone(), s.audio_cache_max_mb)
+    };
+    if !enabled {
+        return Ok(false);
+    }
+    if state.cache.audio_cached_path(id, &quality).is_some() {
+        return Ok(true);
+    }
+    let max_bytes = max_mb.saturating_mul(1024 * 1024);
+    let cache = state.cache.clone();
+    let q = quality.clone();
+    let c = cookie(&state).await;
+    tauri::async_runtime::spawn(async move {
+        if cache.audio_cached_path(id, &q).is_some() {
+            return;
+        }
+        match ncm::song_url(&c, id, &q).await {
+            Ok(Some(url)) => {
+                let _ = cache.download_audio(id, &q, &url, max_bytes).await;
+            }
+            _ => {}
+        }
+    });
+    Ok(false)
+}
+
 #[tauri::command]
 fn cache_stats(state: State<'_, AppState>) -> R<cache::CacheStats> {
     Ok(state.cache.stats())
@@ -569,6 +601,7 @@ pub fn run() {
             playlist_tracks,
             song_url,
             song_play_src,
+            prefetch_song_audio,
             cache_stats,
             cache_clear,
             get_playback_session,

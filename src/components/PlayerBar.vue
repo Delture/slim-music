@@ -171,7 +171,7 @@ async function onLike() {
 <template>
   <footer class="bar">
     <div class="now" title="打开播放页" @click="openNp">
-      <img v-if="t?.cover" :src="coverSrc(t.cover)" class="cover" />
+      <img v-if="t?.cover" :src="coverSrc(t.cover, '80y80')" class="cover" loading="lazy" decoding="async" />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
       <div v-if="t" class="info">
         <div class="title">{{ t.title }} <SourceBadge :source="t.source" /></div>

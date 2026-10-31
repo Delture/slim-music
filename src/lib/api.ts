@@ -26,6 +26,8 @@ export const api = {
   songUrl: (id: number) => invoke<string | null>('song_url', { id }),
   songPlaySrc: (id: number, refresh = false) =>
     invoke<PlaySrc | null>('song_play_src', { id, refresh }),
+  /** 后台预取音频到磁盘缓存；已缓存则立刻返回 true，不阻塞播放 */
+  prefetchSongAudio: (id: number) => invoke<boolean>('prefetch_song_audio', { id }),
   cacheStats: () => invoke<CacheStats>('cache_stats'),
   cacheClear: () => invoke<CacheStats>('cache_clear'),
   getSettings: () => invoke<Settings>('get_settings'),

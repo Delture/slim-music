@@ -62,6 +62,54 @@ let lastTickTime = 0;
 let lastTickAt = 0;
 const MAX_RECOVER = 3;
 const STALL_MS = 4000;
+/** 当前曲剩余约这么多秒时预取下一首（落在 30–45s 窗口） */
+const PREFETCH_REMAIN_SEC = 40;
+let prefetchTargetId: number | null = null;
+let prefetchInFlight = false;
+
+/** 队列中「下一首」曲目（考虑列表循环；单曲循环不预取另一首） */
+function peekNextTrack(): Track | null {
+  if (!player.order.length || player.pos < 0) return null;
+  if (player.repeat === 'one') return null;
+  let nextPos = player.pos + 1;
+  if (nextPos >= player.order.length) {
+    if (player.repeat === 'off') return null;
+    nextPos = 0;
+  }
+  const qi = player.order[nextPos];
+  if (qi === undefined || qi === player.order[player.pos]) return null;
+  return player.queue[qi] ?? null;
+}
+
+/**
+ * 预取下一首网易云音频到磁盘缓存。
+ * force=true：切歌/进队后立刻尝试；否则仅在剩余时长 ≤ PREFETCH_REMAIN_SEC 时触发。
+ * 已缓存 / 已在飞 / 非网易云 → 跳过；invoke 立即返回，下载在 Rust 后台。
+ */
+function maybePrefetchNext(force = false) {
+  const n = peekNextTrack();
+  if (!n || n.source !== 'netease' || n.ncmId == null) return;
+  if (prefetchInFlight && prefetchTargetId === n.ncmId) return;
+  if (!force && prefetchTargetId === n.ncmId) return;
+  if (!force) {
+    const metaDur = (current()?.durationMs ?? 0) / 1000;
+    const dur = player.duration > 0 ? player.duration : metaDur;
+    if (!(dur > 0)) return;
+    const remain = dur - player.currentTime;
+    if (remain > PREFETCH_REMAIN_SEC || remain < 0) return;
+  }
+  prefetchTargetId = n.ncmId;
+  prefetchInFlight = true;
+  void api
+    .prefetchSongAudio(n.ncmId)
+    .catch(() => {
+      if (prefetchTargetId === n.ncmId) prefetchTargetId = null;
+    })
+    .finally(() => {
+      prefetchInFlight = false;
+    });
+}
+
 
 function isAbortError(e: unknown): boolean {
   return (
@@ -293,6 +341,7 @@ async function loadCurrent(
       player.currentTime = target;
       if (t.durationMs) player.duration = t.durationMs / 1000;
       if (!autoplay) player.playing = false;
+      maybePrefetchNext(true);
       return;
     }
     const target = seekTo != null && seekTo > 0 ? seekTo : 0;
@@ -300,6 +349,8 @@ async function loadCurrent(
     if (token !== loadToken) return;
     noteProgress();
     if (playingFromUrl && autoplay) scheduleUrlCacheSwap(token);
+    // 切歌/进队后立刻预取下一首（已缓存则跳过）
+    maybePrefetchNext(true);
   } catch (e) {
     if (token !== loadToken || isAbortError(e)) return;
     player.error = String(e);
@@ -519,6 +570,7 @@ audio.addEventListener('timeupdate', () => {
   player.currentTime = audio.currentTime;
   noteProgress();
   if (recoverAttempts > 0) recoverAttempts = 0;
+  maybePrefetchNext(false);
   const now = Date.now();
   // 进度约每 2s 落盘一次，避免狂写
   if (now - lastTimePersist > 2000) {
@@ -579,6 +631,7 @@ if (NATIVE) {
             schedulePersist(1500);
           }
         }
+        maybePrefetchNext(false);
         break;
       case 'ended':
         next(true);

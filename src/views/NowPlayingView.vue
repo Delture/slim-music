@@ -117,6 +117,8 @@ watch(
 );
 
 watch(activeIdx, async (i) => {
+  // 后台 / 隐藏时不滚歌词，避免无意义 smooth scroll + 合成
+  if (typeof document !== 'undefined' && document.hidden) return;
   await nextTick();
   const root = listEl.value;
   const el = root?.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
@@ -168,9 +170,28 @@ function paint(r: number) {
     lastDur = durT;
   }
 }
+let animRunning = false;
+function stopAnim() {
+  animRunning = false;
+  if (raf) {
+    cancelAnimationFrame(raf);
+    raf = 0;
+  }
+}
+function startAnim() {
+  if (animRunning) return;
+  if (typeof document !== 'undefined' && document.hidden) return;
+  animRunning = true;
+  raf = requestAnimationFrame(tick);
+}
 function tick() {
+  if (!animRunning) return;
   paint(ratioNow());
   raf = requestAnimationFrame(tick);
+}
+function onVisibility() {
+  if (document.hidden) stopAnim();
+  else startAnim();
 }
 function ratioFromEvent(e: PointerEvent) {
   const el = trackEl.value;
@@ -240,11 +261,13 @@ function onKey(e: KeyboardEvent) {
 }
 
 onMounted(() => {
-  raf = requestAnimationFrame(tick);
+  startAnim();
+  document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('keydown', onKey);
 });
 onUnmounted(() => {
-  cancelAnimationFrame(raf);
+  stopAnim();
+  document.removeEventListener('visibilitychange', onVisibility);
   window.removeEventListener('keydown', onKey);
 });
 </script>
