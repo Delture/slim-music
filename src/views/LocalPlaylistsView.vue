@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { dialog } from '../lib/dialog';
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { playList, player } from '../lib/player';
 import {
@@ -95,14 +96,14 @@ function menuPlayAll() {
 }
 
 async function onCreate() {
-  const name = prompt('新建播放列表名称', '新播放列表');
+  const name = await dialog.prompt('新建列表', '新播放列表');
   if (!name?.trim()) return;
   try {
     const pl = await createLocalPlaylist(name.trim());
     activeId.value = pl.id;
     if (narrow.value) mobileDetail.value = true;
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   }
 }
 
@@ -110,12 +111,12 @@ async function menuRename() {
   const p = menu.target;
   closeMenu();
   if (!p) return;
-  const name = prompt('重命名', p.name);
+  const name = await dialog.prompt('重命名', p.name);
   if (!name?.trim() || name.trim() === p.name) return;
   try {
     await renameLocalPlaylist(p.id, name.trim());
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   }
 }
 
@@ -123,7 +124,7 @@ async function menuDelete() {
   const p = menu.target;
   closeMenu();
   if (!p) return;
-  if (!confirm(`确定删除播放列表「${p.name}」？歌曲文件不会被删除。`)) return;
+  if (!(await dialog.confirm('删除播放列表', `「${p.name}」`, { danger: true, confirmText: '删除' }))) return;
   try {
     await deleteLocalPlaylist(p.id);
     if (activeId.value === p.id) {
@@ -131,7 +132,7 @@ async function menuDelete() {
       if (narrow.value) mobileDetail.value = false;
     }
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   }
 }
 
@@ -140,7 +141,7 @@ async function onReorder(e: { from: number; to: number }) {
   try {
     await moveLocalTrack(activeUser.value.id, e.from, e.to);
   } catch (err) {
-    alert(String(err));
+    void dialog.alert(String(err));
   }
 }
 

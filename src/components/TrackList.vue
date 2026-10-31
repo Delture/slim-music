@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { dialog } from '../lib/dialog';
 import { isMobile } from '../lib/native';
 // 通用歌曲列表。播放：把当前列表设为「播放队列」从该曲开始（不影响本机播放列表内容）。
 // 虚拟列表：只渲染视口附近行，消除长歌单上下滚动卡顿。
@@ -124,7 +125,7 @@ async function onLike(t: Track, e: Event) {
   try {
     await toggleLike(t.ncmId);
   } catch (err) {
-    alert(String(err));
+    void dialog.alert(String(err));
   }
 }
 
@@ -135,7 +136,7 @@ async function addTo(plId: string) {
   try {
     await addTrackToLocal(plId, t);
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   } finally {
     busy.value = false;
     closeMenu();
@@ -149,7 +150,7 @@ async function removeFrom(plId: string, useIndex: boolean) {
   try {
     await removeTrackFromLocal(plId, t.id, useIndex ? menu.index : undefined);
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   } finally {
     busy.value = false;
     closeMenu();

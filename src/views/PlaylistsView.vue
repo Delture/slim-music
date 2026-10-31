@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { dialog } from '../lib/dialog';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
@@ -120,14 +121,14 @@ async function menuUnsubscribe() {
   const p = menu.target;
   closeMenu();
   if (!p || !p.subscribed || p.isLiked) return;
-  if (!confirm(`确定取消收藏「${p.name}」？`)) return;
+  if (!(await dialog.confirm('取消收藏', `「${p.name}」`, { danger: true, confirmText: '取消收藏' }))) return;
   busy.value = true;
   try {
     await api.playlistSubscribe(p.id, false);
     if (active.value?.id === p.id) mobileDetail.value = false;
     await loadLists(true);
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   } finally {
     busy.value = false;
   }
@@ -137,13 +138,8 @@ async function menuDelete() {
   const p = menu.target;
   closeMenu();
   if (!p || !p.owned || p.isLiked) return;
-  if (
-    !confirm(
-      `确定删除网易云歌单「${p.name}」？\n此操作不可恢复，歌单内歌曲不会从云盘删除。`,
-    )
-  ) {
-    return;
-  }
+  if (!(await dialog.confirm('删除歌单', `「${p.name}」
+此操作不可恢复`, { danger: true, confirmText: '删除' }))) return;
   busy.value = true;
   try {
     await api.playlistDelete(p.id);
@@ -153,7 +149,7 @@ async function menuDelete() {
     }
     await loadLists(true);
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   } finally {
     busy.value = false;
   }

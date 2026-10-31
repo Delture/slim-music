@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { dialog } from '../lib/dialog';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
   current,
@@ -130,7 +131,7 @@ async function onLike() {
   try {
     await toggleLike(id);
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   }
 }
 

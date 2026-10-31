@@ -12,6 +12,7 @@ import LocalView from './views/LocalView.vue';
 import SettingsView from './views/SettingsView.vue';
 import NowPlayingView from './views/NowPlayingView.vue';
 import UpdatePrompt from './components/UpdatePrompt.vue';
+import AppDialog from './components/AppDialog.vue';
 import { checkUpdate } from './lib/updater';
 
 const pages: { key: string; label: string; icon: string; view: Component }[] = [
@@ -100,6 +101,7 @@ onMounted(async () => {
     </div>
     <PlayerBar class="player" />
     <UpdatePrompt />
+    <AppDialog />
     <!-- 全屏沉浸播放页：盖住侧栏 / 底栏 / 内容，三端一致 -->
     <Transition name="np">
       <NowPlayingView v-if="session.nowPlaying" />

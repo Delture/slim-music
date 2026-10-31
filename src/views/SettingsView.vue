@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { dialog } from '../lib/dialog';
 import { isAndroid, openExternal, saveImage } from '../lib/native';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -99,13 +100,13 @@ async function refreshStats() {
 }
 
 async function clearCache() {
-  if (!confirm('确定清空歌单、歌词与音频缓存？本地音乐文件不受影响。')) return;
+  if (!(await dialog.confirm('清空缓存', '歌单、歌词与音频缓存', { danger: true, confirmText: '清空' }))) return;
   cacheBusy.value = true;
   try {
     stats.value = await api.cacheClear();
     clearLyricMemory();
   } catch (e) {
-    alert(String(e));
+    void dialog.alert(String(e));
   } finally {
     cacheBusy.value = false;
   }
