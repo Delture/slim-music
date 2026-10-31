@@ -405,13 +405,10 @@ async function onLike() {
   color: var(--accent);
 }
 .ctrls .big {
+  /* Icon-only play/pause — same bare chrome as prev/next (no disc / rounded-square fill). */
   opacity: 1;
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  min-height: 42px;
-  background: var(--text);
-  color: var(--bg);
+  color: var(--text);
+  background: transparent;
   border-radius: var(--btn-radius);
 }
 .ctrls .big :deep(svg),
@@ -424,8 +421,8 @@ async function onLike() {
   transform: translateX(var(--play-optical-x));
 }
 .ctrls .big:hover {
-  background: var(--text);
-  opacity: 0.88;
+  background: var(--fill-secondary);
+  opacity: 1;
 }
 .progress {
   display: flex;
@@ -585,7 +582,7 @@ async function onLike() {
   .heart { padding: 10px; min-width: 44px; min-height: 44px; }
   .center .progress, .ctrls .opt { display: none; }
   .ctrls button { min-width: 44px; min-height: 44px; }
-  .ctrls .big { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .ctrls .big { min-width: 44px; min-height: 44px; }
   .err { display: none; }
   .seek { height: 28px; }
   .seek-thumb { width: 16px; height: 16px; margin: -8px 0 0 -8px; opacity: 1; }

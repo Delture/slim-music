@@ -24,23 +24,38 @@ const pages: { key: string; label: string; icon: string; view: Component }[] = [
 ];
 const page = ref('daily');
 const ready = ref(false);
+/** Drives split chrome; synced around Transition hooks so leave+gap keep the
+ *  leaving page's chrome (solid panel), matching tracks-swap's stable parent. */
+const chromeSplit = ref(false);
 
 const activeView = computed(() => pages.find((p) => p.key === page.value)!.view);
 /** Cache key: page only. Do NOT fold profile id in — that remounts mid-transition and flashes. */
 const viewKey = computed(() => page.value);
+
+function isSplitKey(key: string) {
+  return key === 'playlists' || key === 'localPlaylists';
+}
 
 function go(key: string) {
   if (page.value === key) {
     closeNowPlaying();
     return;
   }
+  // Lock chrome to the page we are leaving for the whole leave + empty gap.
+  chromeSplit.value = isSplitKey(page.value);
   page.value = key;
   closeNowPlaying();
+}
+
+/** After leave empties the stage, flip chrome to the destination before enter. */
+function onPageAfterLeave() {
+  chromeSplit.value = isSplitKey(page.value);
 }
 
 onMounted(async () => {
   await initSession().catch(console.error);
   await bindTrayBridge().catch(console.error);
+  chromeSplit.value = isSplitKey(page.value);
   ready.value = true;
   setTimeout(() => checkUpdate(true), 3000);
 });
@@ -51,7 +66,7 @@ onMounted(async () => {
     class="app"
     :class="{
       'np-open': session.nowPlaying,
-      'split-main': page === 'playlists' || page === 'localPlaylists',
+      'split-main': chromeSplit,
     }"
   >
     <nav class="nav">
@@ -68,9 +83,15 @@ onMounted(async () => {
     </nav>
     <div class="main-col">
       <main class="content">
-        <!-- Transition must see the keyed view vnode. KeepAlive is direct child of
-             Transition; key is page-only so out-in never paints a stale sibling. -->
-        <Transition v-if="ready" name="page" mode="out-in">
+        <!-- Same motion as playlist tracks-swap (fade + slight X slide, out-in).
+             Chrome stays on the leaving page through leave+gap so the empty frame
+             sits on a solid panel — no window-bg flash (e.g. 搜索→我的歌单). -->
+        <Transition
+          v-if="ready"
+          name="page-swap"
+          mode="out-in"
+          @after-leave="onPageAfterLeave"
+        >
           <KeepAlive>
             <component :is="activeView" :key="viewKey" />
           </KeepAlive>
@@ -87,18 +108,20 @@ onMounted(async () => {
 </template>
 
 <style>
-/* Opacity-only page swap — no translateY (that reads as an extra intermediate frame). */
-.page-enter-active,
-.page-leave-active {
-  transition: opacity var(--dur) var(--ease-swift);
+/* Identical to PlaylistsView / LocalPlaylistsView `.tracks-swap-*`. */
+.page-swap-enter-active,
+.page-swap-leave-active {
+  transition:
+    opacity var(--dur) var(--ease-swift),
+    transform var(--dur) var(--ease-swift);
 }
-.page-enter-from,
-.page-leave-to {
+.page-swap-enter-from {
   opacity: 0;
+  transform: translateX(10px);
 }
-.page-enter-to,
-.page-leave-from {
-  opacity: 1;
+.page-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 .np-enter-active {
   animation: sm-slide-up var(--dur-slow) var(--ease-enter);
