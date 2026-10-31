@@ -375,25 +375,24 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  /* Keep back highlight clear of album art — never overlap cover */
   margin-bottom: 20px;
   flex-shrink: 0;
   position: relative;
   z-index: 2;
 }
+/* Back: bare icon like play/pause — no gray square/pill fill */
 .back {
   justify-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Icon-only rounded-rect; compact so highlight cannot reach the cover */
   width: 36px;
   height: 36px;
   min-width: 36px;
   min-height: 36px;
   padding: 0;
   gap: 0;
-  background: var(--fill-secondary);
+  background: transparent;
   border: 0;
   color: var(--text-secondary);
   cursor: pointer;
@@ -405,7 +404,7 @@ onUnmounted(() => {
 }
 .back:hover {
   color: var(--text);
-  background: var(--selected);
+  background: var(--fill-secondary);
 }
 .back:active {
   transform: scale(0.97);
