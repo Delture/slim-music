@@ -408,6 +408,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "退出 SlimMusic", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &play, &prev, &next, &quit])?;
 
+    #[cfg(target_os = "windows")]
+    let icon = win_tray::icon_for(win_tray::taskbar_is_light());
+    #[cfg(not(target_os = "windows"))]
     // 菜单栏用透明底黑色音符模板图（不要用带色块的 app icon，否则会变成白圆坨）
     let icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))
         .expect("tray-template.png");
@@ -456,7 +459,48 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
+    #[cfg(target_os = "windows")]
+    win_tray::watch(app.clone());
     Ok(())
+}
+
+/// Windows 托盘随任务栏主题（SystemUsesLightTheme）切换黑/白图标。
+#[cfg(target_os = "windows")]
+mod win_tray {
+    use tauri::{image::Image, AppHandle};
+    use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+
+    pub fn taskbar_is_light() -> bool {
+        RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+            .and_then(|k| k.get_value::<u32, _>("SystemUsesLightTheme"))
+            .map(|v| v != 0)
+            .unwrap_or(false) // 缺省按深色任务栏（Win10/11 默认）
+    }
+
+    pub fn icon_for(light: bool) -> Image<'static> {
+        if light {
+            Image::from_bytes(include_bytes!("../icons/tray-dark.png")).expect("tray-dark.png")
+        } else {
+            Image::from_bytes(include_bytes!("../icons/tray-light.png")).expect("tray-light.png")
+        }
+    }
+
+    pub fn watch(app: AppHandle) {
+        std::thread::spawn(move || {
+            let mut last = taskbar_is_light();
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                let now = taskbar_is_light();
+                if now != last {
+                    last = now;
+                    if let Some(tray) = app.tray_by_id("main") {
+                        let _ = tray.set_icon(Some(icon_for(now)));
+                    }
+                }
+            }
+        });
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

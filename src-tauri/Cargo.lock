@@ -855,7 +855,7 @@ dependencies = [
  "rustc_version",
  "toml 1.1.8+spec-1.1.0",
  "vswhom",
- "winreg",
+ "winreg 0.56.0",
 ]
 
 [[package]]
@@ -3718,7 +3718,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slim-music"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "futures-util",
  "lofty",
@@ -3734,6 +3734,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "walkdir",
+ "winreg 0.55.0",
 ]
 
 [[package]]
@@ -5234,6 +5235,15 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
+dependencies = [
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
 version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
@@ -5396,6 +5406,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "winreg"
+version = "0.55.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb5a765337c50e9ec252c2069be9bf91c7df47afb103b642ba3a53bf8101be97"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
