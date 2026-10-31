@@ -12,10 +12,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create draft release
+        with:
+          fetch-depth: 0
+      # Annotated tags only: release body = `git tag -a -m "..."`; empty / title-only notes fail the job.
+      - name: Create draft release from annotated tag message
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --draft --title "SlimMusic $GITHUB_REF_NAME" --notes "SlimMusic $GITHUB_REF_NAME"
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          NOTES=$(git tag -l --format='%(contents)' "$TAG" | sed -e 's/[[:space:]]*$//' )
+          NOTES_TRIM=$(printf '%s' "$NOTES" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          TITLE_ONLY="SlimMusic $TAG"
+          if [ -z "$NOTES_TRIM" ] || [ "$NOTES_TRIM" = "$TAG" ] || [ "$NOTES_TRIM" = "$TITLE_ONLY" ]; then
+            echo "::error::Release notes required: create an annotated tag with a real changelog message (git tag -a $TAG -m '...'). Lightweight tags or title-only messages are rejected."
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            BODY=$(gh release view "$TAG" --json body -q .body)
+            BODY_TRIM=$(printf '%s' "$BODY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [ -z "$BODY_TRIM" ] || [ "$BODY_TRIM" = "$TAG" ] || [ "$BODY_TRIM" = "$TITLE_ONLY" ]; then
+              gh release edit "$TAG" --notes "$NOTES_TRIM"
+            fi
+          else
+            gh release create "$TAG" --draft --title "$TITLE_ONLY" --notes "$NOTES_TRIM"
+          fi
 
   desktop:
     needs: create-release
@@ -110,4 +129,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+        with:
+          fetch-depth: 0
+      - name: Publish release (require non-empty notes)
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          BODY=$(gh release view "$TAG" --json body -q .body)
+          BODY_TRIM=$(printf '%s' "$BODY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          TITLE_ONLY="SlimMusic $TAG"
+          if [ -z "$BODY_TRIM" ] || [ "$BODY_TRIM" = "$TAG" ] || [ "$BODY_TRIM" = "$TITLE_ONLY" ]; then
+            NOTES=$(git tag -l --format='%(contents)' "$TAG" | sed -e 's/[[:space:]]*$//' )
+            NOTES_TRIM=$(printf '%s' "$NOTES" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [ -z "$NOTES_TRIM" ] || [ "$NOTES_TRIM" = "$TAG" ] || [ "$NOTES_TRIM" = "$TITLE_ONLY" ]; then
+              echo "::error::Cannot publish $TAG: release body and annotated tag message are both empty/title-only."
+              exit 1
+            fi
+            gh release edit "$TAG" --notes "$NOTES_TRIM"
+          fi
+          gh release edit "$TAG" --draft=false --latest
