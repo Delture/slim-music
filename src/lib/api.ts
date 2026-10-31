@@ -24,7 +24,8 @@ export const api = {
   playlistTracks: (id: number, refresh = false) =>
     invoke<CacheHit<Track[]>>('playlist_tracks', { id, refresh }),
   songUrl: (id: number) => invoke<string | null>('song_url', { id }),
-  songPlaySrc: (id: number) => invoke<PlaySrc | null>('song_play_src', { id }),
+  songPlaySrc: (id: number, refresh = false) =>
+    invoke<PlaySrc | null>('song_play_src', { id, refresh }),
   cacheStats: () => invoke<CacheStats>('cache_stats'),
   cacheClear: () => invoke<CacheStats>('cache_clear'),
   getSettings: () => invoke<Settings>('get_settings'),

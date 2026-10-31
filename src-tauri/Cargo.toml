@@ -1,6 +1,6 @@
 [package]
 name = "slim-music"
-version = "0.8.6"
+version = "0.8.7"
 description = "精简自用网易云 + 本地音乐播放器"
 edition = "2021"
 license = "MIT"

@@ -105,6 +105,7 @@ impl NetCache {
 
     /// 已缓存的音频文件路径（并 touch 访问时间做 LRU）。
     /// 忽略未下完的 `*.part`，否则第一次播放会把半成品当缓存，解码失败。
+    /// 空文件视为损坏并删除。
     pub fn audio_cached_path(&self, id: i64, quality: &str) -> Option<PathBuf> {
         let dir = self.audio_dir();
         let prefix = format!("{id}_{quality}.");
@@ -124,9 +125,28 @@ impl NetCache {
             }
         }
         if let Some(ref p) = found {
+            let len = fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+            if len == 0 {
+                let _ = fs::remove_file(p);
+                return None;
+            }
             let _ = filetime_touch(p);
         }
         found
+    }
+
+    /// 删除该曲目指定音质的缓存（含残留 `.part`），用于损坏条目或强制重新下载。
+    pub fn invalidate_audio(&self, id: i64, quality: &str) {
+        let dir = self.audio_dir();
+        let prefix = format!("{id}_{quality}.");
+        let Ok(rd) = fs::read_dir(&dir) else { return };
+        for e in rd.flatten() {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(&prefix) {
+                let _ = fs::remove_file(e.path());
+            }
+        }
     }
 
     pub async fn download_audio(
@@ -158,14 +178,17 @@ impl NetCache {
         let dest = self.audio_dir().join(format!("{id}_{quality}.{ext}"));
         let tmp = self.audio_dir().join(format!("{id}_{quality}.{ext}.part"));
 
+        let expected_len = resp.content_length();
         let mut stream = resp.bytes_stream();
         let mut file = tokio::fs::File::create(&tmp)
             .await
             .map_err(|e| e.to_string())?;
         use tokio::io::AsyncWriteExt;
+        let mut written: u64 = 0;
         let write_result: Result<(), String> = async {
             while let Some(chunk) = stream.next().await {
                 let chunk = chunk.map_err(|e| e.to_string())?;
+                written += chunk.len() as u64;
                 file.write_all(&chunk).await.map_err(|e| e.to_string())?;
             }
             file.flush().await.map_err(|e| e.to_string())?;
@@ -176,6 +199,18 @@ impl NetCache {
         if let Err(e) = write_result {
             let _ = fs::remove_file(&tmp);
             return Err(e);
+        }
+        if written == 0 {
+            let _ = fs::remove_file(&tmp);
+            return Err("下载文件为空".into());
+        }
+        if let Some(exp) = expected_len {
+            if written != exp {
+                let _ = fs::remove_file(&tmp);
+                return Err(format!(
+                    "下载不完整：Content-Length={exp}，实际写入={written}"
+                ));
+            }
         }
         fs::rename(&tmp, &dest).map_err(|e| {
             let _ = fs::remove_file(&tmp);

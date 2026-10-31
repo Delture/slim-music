@@ -153,9 +153,15 @@ async fn song_url(state: State<'_, AppState>, id: i64) -> R<Option<String>> {
     ncm::song_url(&c, id, &level).await
 }
 
-/// 播放地址：优先本地音频缓存，否则返回 URL 并后台下载
+/// 播放地址：优先本地音频缓存，否则返回 URL 并后台下载。
+/// `refresh=true` 时丢弃该曲缓存并重新取直链（卡顿/损坏恢复用）。
 #[tauri::command]
-async fn song_play_src(state: State<'_, AppState>, id: i64) -> R<Option<cache::PlaySrc>> {
+async fn song_play_src(
+    state: State<'_, AppState>,
+    id: i64,
+    refresh: Option<bool>,
+) -> R<Option<cache::PlaySrc>> {
+    let refresh = refresh.unwrap_or(false);
     let (enabled, quality, max_mb) = {
         let s = state.settings.lock().await;
         (s.cache_enabled, s.quality.clone(), s.audio_cache_max_mb)
@@ -163,7 +169,9 @@ async fn song_play_src(state: State<'_, AppState>, id: i64) -> R<Option<cache::P
     let max_bytes = max_mb.saturating_mul(1024 * 1024);
 
     if enabled {
-        if let Some(path) = state.cache.audio_cached_path(id, &quality) {
+        if refresh {
+            state.cache.invalidate_audio(id, &quality);
+        } else if let Some(path) = state.cache.audio_cached_path(id, &quality) {
             return Ok(Some(cache::PlaySrc {
                 kind: "file".into(),
                 value: path.to_string_lossy().into(),

@@ -1,5 +1,6 @@
 // 播放器：一个 <audio> + 队列。本地文件走 asset 协议，网易云按需取 URL。
 // 队列 / 当前曲 / 进度写入 playback.json（防抖），启动时恢复。
+// 网易云直链可能中途 stalled；waiting/stalled/error 超时后重取 URL 或切到已下完的缓存，并保持进度。
 import { reactive } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { api } from './api';
@@ -51,30 +52,16 @@ const NATIVE = isAndroid;
 /** 原生端最近一次状态 */
 const nat = { hasSrc: false, paused: true, time: 0 };
 
-async function resolveSrc(t: Track): Promise<string | null> {
-  if (NATIVE) {
-    if (t.source === 'local' && t.path) return t.path; // content:// 或绝对路径
-    if (t.source === 'netease' && t.ncmId != null) {
-      const src = await api.songPlaySrc(t.ncmId);
-      if (!src) return null;
-      if (src.kind === 'file') return src.value;
-      return src.value.replace(/^http:\/\//i, 'https://');
-    }
-    return null;
-  }
-  if (t.source === 'local' && t.path) return convertFileSrc(t.path);
-  if (t.source === 'netease' && t.ncmId != null) {
-    const src = await api.songPlaySrc(t.ncmId);
-    if (!src) return null;
-    if (src.kind === 'file') return convertFileSrc(src.value);
-    // 防御：后端已升 https，这里再兜一层，避免旧会话/异常路径残留 http
-    return src.value.replace(/^http:\/\//i, 'https://');
-  }
-  return null;
-}
-
-let loadToken = 0;
-let suppressPersist = false;
+/** 当前桌面端资源是否走远程 URL（缓存未命中） */
+let playingFromUrl = false;
+let recoverAttempts = 0;
+let recovering = false;
+let stallWatchTimer: number | undefined;
+let urlSwapTimer: number | undefined;
+let lastTickTime = 0;
+let lastTickAt = 0;
+const MAX_RECOVER = 3;
+const STALL_MS = 4000;
 
 function isAbortError(e: unknown): boolean {
   return (
@@ -83,22 +70,215 @@ function isAbortError(e: unknown): boolean {
   );
 }
 
-async function loadCurrent(autoplay = true, seekTo?: number) {
+function clearStallWatch() {
+  if (stallWatchTimer != null) {
+    window.clearTimeout(stallWatchTimer);
+    stallWatchTimer = undefined;
+  }
+}
+
+function clearUrlSwap() {
+  if (urlSwapTimer != null) {
+    window.clearTimeout(urlSwapTimer);
+    urlSwapTimer = undefined;
+  }
+}
+
+function noteProgress() {
+  lastTickTime = audio.currentTime;
+  lastTickAt = Date.now();
+}
+
+function armStallWatch(delayMs = STALL_MS) {
+  if (NATIVE) return;
+  clearStallWatch();
+  stallWatchTimer = window.setTimeout(() => {
+    stallWatchTimer = undefined;
+    void checkStallAndRecover();
+  }, delayMs);
+}
+
+/** 下载完成后把远程直链热切换到本地缓存，降低中途断流概率 */
+function scheduleUrlCacheSwap(token: number) {
+  clearUrlSwap();
+  if (NATIVE || !playingFromUrl) return;
+  urlSwapTimer = window.setTimeout(() => {
+    void (async () => {
+      if (token !== loadToken || !playingFromUrl || recovering) return;
+      const t = current();
+      if (!t || t.source !== 'netease' || t.ncmId == null) return;
+      try {
+        const src = await api.songPlaySrc(t.ncmId, false);
+        if (token !== loadToken || !src || src.kind !== 'file') {
+          scheduleUrlCacheSwap(token);
+          return;
+        }
+        const pos = audio.currentTime || player.currentTime || 0;
+        const wantPlay = player.playing || !audio.paused;
+        await applyDesktopSrc(src.value, true, wantPlay, pos, token);
+        playingFromUrl = false;
+        recoverAttempts = 0;
+        noteProgress();
+      } catch {
+        scheduleUrlCacheSwap(token);
+      }
+    })();
+  }, 2000);
+}
+
+async function checkStallAndRecover() {
+  if (NATIVE || recovering) return;
+  const t = current();
+  if (!t) return;
+  const wantPlay = player.playing || !audio.paused;
+  if (!wantPlay) return;
+
+  const now = Date.now();
+  const noProgress = now - lastTickAt > STALL_MS - 500;
+  const timeFrozen = Math.abs(audio.currentTime - lastTickTime) < 0.2;
+  const networkWait = audio.readyState < 3; // HAVE_FUTURE_DATA
+  const frozenPlaying = !audio.paused && noProgress && timeFrozen;
+  const uiDesync = player.playing && audio.paused && noProgress;
+  const waitingStuck = player.playing && networkWait && noProgress;
+
+  if (!(frozenPlaying || uiDesync || waitingStuck)) return;
+
+  if (recoverAttempts >= MAX_RECOVER) {
+    player.playing = false;
+    try {
+      audio.pause();
+    } catch {
+      /* ignore */
+    }
+    player.error = `播放卡住：${t.title}`;
+    return;
+  }
+
+  // 第一次优先切缓存/重取同曲；其后强制作废缓存
+  const forceRefresh = recoverAttempts > 0 || !playingFromUrl;
+  recoverAttempts += 1;
+  await recoverPlayback(forceRefresh);
+}
+
+async function recoverPlayback(forceRefresh: boolean, seekTo?: number) {
+  if (NATIVE || recovering) return;
+  const t = current();
+  if (!t) return;
+  recovering = true;
+  clearStallWatch();
+  clearUrlSwap();
+  const pos =
+    seekTo != null && seekTo >= 0
+      ? seekTo
+      : audio.currentTime || player.currentTime || 0;
+  try {
+    await loadCurrent(true, pos, { forceRefresh });
+  } finally {
+    recovering = false;
+  }
+}
+
+async function resolveSrc(
+  t: Track,
+  forceRefresh = false,
+): Promise<{ src: string; fromUrl: boolean } | null> {
+  if (NATIVE) {
+    if (t.source === 'local' && t.path) return { src: t.path, fromUrl: false };
+    if (t.source === 'netease' && t.ncmId != null) {
+      const got = await api.songPlaySrc(t.ncmId, forceRefresh);
+      if (!got) return null;
+      if (got.kind === 'file') return { src: got.value, fromUrl: false };
+      return { src: got.value.replace(/^http:\/\//i, 'https://'), fromUrl: true };
+    }
+    return null;
+  }
+  if (t.source === 'local' && t.path) {
+    return { src: convertFileSrc(t.path), fromUrl: false };
+  }
+  if (t.source === 'netease' && t.ncmId != null) {
+    const got = await api.songPlaySrc(t.ncmId, forceRefresh);
+    if (!got) return null;
+    if (got.kind === 'file') return { src: convertFileSrc(got.value), fromUrl: false };
+    // 防御：后端已升 https，这里再兜一层，避免旧会话/异常路径残留 http
+    return { src: got.value.replace(/^http:\/\//i, 'https://'), fromUrl: true };
+  }
+  return null;
+}
+
+let loadToken = 0;
+let suppressPersist = false;
+
+async function applyDesktopSrc(
+  src: string,
+  _isFile: boolean,
+  autoplay: boolean,
+  target: number,
+  token: number,
+) {
+  audio.src = src;
+  // 显式 load，避免沿用上一曲缓冲状态
+  audio.load();
+  if (target > 0) {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        try {
+          audio.currentTime = Math.min(target, audio.duration || target);
+        } catch {
+          /* ignore */
+        }
+        audio.removeEventListener('loadedmetadata', onMeta);
+        window.clearTimeout(timer);
+        resolve();
+      };
+      const onMeta = () => finish();
+      const timer = window.setTimeout(finish, 8000);
+      if (audio.readyState >= 1) finish();
+      else audio.addEventListener('loadedmetadata', onMeta);
+    });
+    if (token !== loadToken) return;
+    player.currentTime = audio.currentTime;
+  }
+  if (autoplay) {
+    try {
+      await audio.play();
+    } catch (e) {
+      // 切歌时前一次 play() 被 abort 是正常的，不当错误
+      if (token !== loadToken || isAbortError(e)) return;
+      throw e;
+    }
+  } else {
+    // 预加载到可 seek，界面显示曲目与进度，等用户按播放
+    player.playing = false;
+  }
+}
+
+async function loadCurrent(
+  autoplay = true,
+  seekTo?: number,
+  opts?: { forceRefresh?: boolean },
+) {
   const t = current();
   if (!t) return;
   const token = ++loadToken;
   player.error = '';
+  clearStallWatch();
+  clearUrlSwap();
+  if (!opts?.forceRefresh) recoverAttempts = 0;
   try {
-    const src = await resolveSrc(t);
+    const resolved = await resolveSrc(t, !!opts?.forceRefresh);
     if (token !== loadToken) return;
-    if (!src) {
+    if (!resolved) {
       player.error = `无法播放「${t.title}」（无版权或需要 VIP），已跳过`;
       return next(true);
     }
+    playingFromUrl = resolved.fromUrl;
     if (NATIVE) {
       const target = seekTo != null && seekTo > 0 ? seekTo : 0;
       await nativeCall('load', {
-        url: src,
+        url: resolved.src,
         id: t.id,
         title: t.title,
         artist: t.artists.join(' / '),
@@ -115,39 +295,11 @@ async function loadCurrent(autoplay = true, seekTo?: number) {
       if (!autoplay) player.playing = false;
       return;
     }
-    audio.src = src;
-    // 显式 load，避免沿用上一曲缓冲状态
-    audio.load();
     const target = seekTo != null && seekTo > 0 ? seekTo : 0;
-    if (target > 0) {
-      await new Promise<void>((resolve) => {
-        const done = () => {
-          try {
-            audio.currentTime = Math.min(target, audio.duration || target);
-          } catch {
-            /* ignore */
-          }
-          audio.removeEventListener('loadedmetadata', done);
-          resolve();
-        };
-        if (audio.readyState >= 1) done();
-        else audio.addEventListener('loadedmetadata', done);
-      });
-      if (token !== loadToken) return;
-      player.currentTime = audio.currentTime;
-    }
-    if (autoplay) {
-      try {
-        await audio.play();
-      } catch (e) {
-        // 切歌时前一次 play() 被 abort 是正常的，不当错误
-        if (token !== loadToken || isAbortError(e)) return;
-        throw e;
-      }
-    } else {
-      // 预加载到可 seek，界面显示曲目与进度，等用户按播放
-      player.playing = false;
-    }
+    await applyDesktopSrc(resolved.src, !resolved.fromUrl, autoplay, target, token);
+    if (token !== loadToken) return;
+    noteProgress();
+    if (playingFromUrl && autoplay) scheduleUrlCacheSwap(token);
   } catch (e) {
     if (token !== loadToken || isAbortError(e)) return;
     player.error = String(e);
@@ -185,7 +337,9 @@ export function togglePlay() {
   if (!audio.src) return void loadCurrent(true);
   if (audio.paused) {
     void audio.play().catch((e) => {
-      if (!isAbortError(e)) player.error = String(e);
+      if (isAbortError(e)) return;
+      // 元素可能已卡死：重挂载到当前进度
+      void recoverPlayback(playingFromUrl ? recoverAttempts > 0 : true);
     });
   } else audio.pause();
   schedulePersist(300);
@@ -234,8 +388,28 @@ export function seek(sec: number) {
     schedulePersist(400);
     return;
   }
-  audio.currentTime = sec;
+  const wantPlay = player.playing || !audio.paused;
+  try {
+    audio.currentTime = sec;
+  } catch {
+    void recoverPlayback(true, sec);
+    schedulePersist(400);
+    return;
+  }
   player.currentTime = sec;
+  noteProgress();
+  // 卡死后同曲 seek 常无效果：短暂观察，仍不到位则重挂载
+  window.setTimeout(() => {
+    if (recovering || loadToken === 0) return;
+    if (!wantPlay && audio.paused) return;
+    const missed = Math.abs(audio.currentTime - sec) > 1.25;
+    const stuck = player.playing && (audio.paused || audio.readyState < 2);
+    if (missed || stuck) {
+      void recoverPlayback(true, sec);
+    } else if (wantPlay && audio.paused) {
+      void audio.play().catch(() => recoverPlayback(true, sec));
+    }
+  }, 700);
   schedulePersist(400);
 }
 
@@ -325,14 +499,26 @@ export async function restorePlaybackSession() {
 audio.addEventListener('play', () => {
   player.playing = true;
   player.error = '';
+  noteProgress();
   schedulePersist(500);
+});
+audio.addEventListener('playing', () => {
+  noteProgress();
+  clearStallWatch();
+  // 真正开播后重置计数，允许后续再遇 stall 时再恢复
+  if (recoverAttempts > 0 && Date.now() - lastTickAt < 1000) {
+    /* keep attempts until timeupdate proves progress */
+  }
 });
 audio.addEventListener('pause', () => {
   player.playing = false;
+  clearStallWatch();
   schedulePersist(300);
 });
 audio.addEventListener('timeupdate', () => {
   player.currentTime = audio.currentTime;
+  noteProgress();
+  if (recoverAttempts > 0) recoverAttempts = 0;
   const now = Date.now();
   // 进度约每 2s 落盘一次，避免狂写
   if (now - lastTimePersist > 2000) {
@@ -342,10 +528,31 @@ audio.addEventListener('timeupdate', () => {
 });
 audio.addEventListener('durationchange', () => (player.duration = audio.duration || 0));
 audio.addEventListener('ended', () => next(true));
+audio.addEventListener('waiting', () => {
+  if (!player.playing && audio.paused) return;
+  armStallWatch(STALL_MS);
+});
+audio.addEventListener('stalled', () => {
+  if (!player.playing && audio.paused) return;
+  armStallWatch(2500);
+});
+audio.addEventListener('emptied', () => {
+  // 主动 load()/换源时也会 emptied，交给 loadToken 屏蔽；仅在播放意图下监视
+  if (recovering) return;
+  if (player.playing) armStallWatch(STALL_MS);
+});
 audio.addEventListener('error', () => {
   // 1 = MEDIA_ERR_ABORTED（切歌打断），忽略
   const code = audio.error?.code;
   if (code === 1) return;
+  if (recovering) return;
+  if (recoverAttempts < MAX_RECOVER) {
+    recoverAttempts += 1;
+    // 网络/解码错误：作废可能损坏的缓存并重取
+    void recoverPlayback(true);
+    return;
+  }
+  player.playing = false;
   player.error = `播放出错：${current()?.title ?? ''}`;
 });
 audio.volume = player.volume;
