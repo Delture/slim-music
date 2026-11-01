@@ -220,7 +220,7 @@ pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option
         .map(ncm_https_url))
 }
 
-/// 喜欢歌曲 id 列表（仅 id，不是详情）
+/// 喜欢歌曲的ID列表
 pub async fn liked_ids(cookie: &Option<String>, uid: i64) -> R<Vec<i64>> {
     let query = q(cookie).param("uid", &uid.to_string());
     let res = ok(create_client(None).likelist(&query).await)?;
