@@ -95,7 +95,7 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
     }
-    // 返回键交给前端（关闭播放页等）；前端未接管时退到后台而不是销毁，播放继续
+    // 返回键交给前端（关闭播放页等）；前端未接管时退到后台并保持播放
     (activity as? ComponentActivity)?.onBackPressedDispatcher?.addCallback(
       object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
