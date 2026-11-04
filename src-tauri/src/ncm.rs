@@ -220,17 +220,39 @@ pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option
         .map(ncm_https_url))
 }
 
-/// 「我喜欢的音乐」：用 likelist（实时、按收藏时间倒序）+ song/detail 构建，
-/// 避免 v6/playlist/detail 被网易云 CDN 缓存导致手机端新收藏不同步。
-pub async fn liked_tracks(cookie: &Option<String>, uid: i64) -> R<Vec<Track>> {
-    let ids = liked_ids(cookie, uid).await?;
-    let mut all = Vec::with_capacity(ids.len());
-    for chunk in ids.chunks(500) {
+/// 「我喜欢的音乐」：顺序以歌单自身 trackIds 为准（`at` 为收藏时间，按其倒序）；
+/// likelist 的 id 不按收藏时间排序，只用来补齐 CDN 未更新的新收藏（置顶）并剔除已取消的。
+pub async fn liked_tracks(cookie: &Option<String>, uid: i64, playlist_id: i64) -> R<Vec<Track>> {
+    let query = q(cookie).param("id", &playlist_id.to_string()).param("s", "0");
+    let res = ok(create_client(None).playlist_detail(&query).await)?;
+    let mut entries: Vec<(i64, i64)> = res.body["playlist"]["trackIds"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|t| Some((t["id"].as_i64()?, t["at"].as_i64().unwrap_or(0))))
+                .collect()
+        })
+        .unwrap_or_default();
+    if entries.iter().all(|e| e.1 > 0) {
+        entries.sort_by(|x, y| y.1.cmp(&x.1)); // stable; 收藏时间倒序
+    }
+    let mut order: Vec<i64> = entries.into_iter().map(|e| e.0).collect();
+    if let Ok(likes) = liked_ids(cookie, uid).await {
+        if !likes.is_empty() {
+            let like_set: std::collections::HashSet<i64> = likes.iter().copied().collect();
+            let have: std::collections::HashSet<i64> = order.iter().copied().collect();
+            let mut fresh: Vec<i64> = likes.iter().copied().filter(|id| !have.contains(id)).collect();
+            order.retain(|id| like_set.contains(id));
+            fresh.extend(order);
+            order = fresh;
+        }
+    }
+    let mut all = Vec::with_capacity(order.len());
+    for chunk in order.chunks(500) {
         let joined = chunk.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
         let query = q(cookie).param("ids", &joined);
         let res = ok(create_client(None).song_detail(&query).await)?;
         let mut page = tracks_at(&res.body["songs"]);
-        // song/detail 不保证顺序，按 likelist 顺序重排
         let pos: std::collections::HashMap<i64, usize> = chunk.iter().enumerate().map(|(i, id)| (*id, i)).collect();
         page.sort_by_key(|t| t.ncm_id.and_then(|id| pos.get(&id).copied()).unwrap_or(usize::MAX));
         all.extend(page);

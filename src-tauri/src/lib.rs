@@ -129,7 +129,7 @@ async fn playlist_tracks(
     let c = cookie(&state).await;
     let fetched = if liked.unwrap_or(false) {
         match ncm::profile(&c).await {
-            Ok(Some(p)) => ncm::liked_tracks(&c, p.user_id).await,
+            Ok(Some(p)) => ncm::liked_tracks(&c, p.user_id, id).await,
             _ => ncm::playlist_tracks(&c, id).await,
         }
     } else {
