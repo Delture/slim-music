@@ -290,8 +290,10 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
           while (cur.moveToNext()) {
             val id = cur.getLong(iId)
             val albumId = cur.getLong(iAlbumId)
+            // 列表查询只检查已缓存的封面文件（不解码），缺失的封面由 albumCovers 在后台补
             val cover = coverOf.getOrPut(albumId) {
-              albumCover(coverDir, albumId, Uri.withAppendedPath(base, id.toString()))
+              val f = File(coverDir, "a$albumId.jpg")
+              if (f.exists()) f.absolutePath else ""
             }
             val artist = cur.getString(iArtist)
             val o = JSObject()
@@ -303,6 +305,7 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
               .put("path", cur.getString(iData) ?: "")
               .put("albumArt", "content://media/external/audio/albumart/" + albumId)
               .put("cover", cover)
+              .put("albumId", albumId)
               .put("track", cur.getInt(iTrack))
               .put("year", cur.getInt(iYear))
               .put("addedMs", cur.getLong(iAdded) * 1000L)
@@ -313,6 +316,44 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
       } catch (e: Exception) {
         invoke.reject(e.message ?: "query failed")
       }
+    }.start()
+  }
+
+  /**
+   * 后台生成缺失的专辑封面：每个专辑独立 try/catch（含 OOM），返回 { albumId: path }。
+   * 与列表查询解耦，封面失败绝不影响曲库显示。
+   */
+  @Command
+  fun albumCovers(invoke: Invoke) {
+    if (getPermissionState(audioAlias()) != PermissionState.GRANTED) {
+      invoke.resolve(JSObject().put("covers", JSObject()))
+      return
+    }
+    Thread {
+      val out = JSObject()
+      try {
+        val dir = File(activity.cacheDir, "local_covers").apply { mkdirs() }
+        val base = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val firstOf = LinkedHashMap<Long, Long>()
+        activity.contentResolver.query(
+          base, arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.ALBUM_ID),
+          "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, null
+        )?.use { cur ->
+          while (cur.moveToNext()) {
+            val aid = cur.getLong(1)
+            if (!firstOf.containsKey(aid)) firstOf[aid] = cur.getLong(0)
+          }
+        }
+        for ((aid, id) in firstOf) {
+          try {
+            val p = albumCover(dir, aid, Uri.withAppendedPath(base, id.toString()))
+            if (p.isNotEmpty()) out.put(aid.toString(), p)
+          } catch (_: Throwable) {
+          }
+        }
+      } catch (_: Throwable) {
+      }
+      invoke.resolve(JSObject().put("covers", out))
     }.start()
   }
 
@@ -336,11 +377,11 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
           android.graphics.BitmapFactory.decodeStream(it, null, opts)
         }
       }
-    } catch (_: Exception) {
+    } catch (_: Throwable) {
     }
     val b = bmp
     if (b == null) {
-      try { none.createNewFile() } catch (_: Exception) {}
+      try { none.createNewFile() } catch (_: Throwable) {}
       return ""
     }
     return try {
@@ -355,7 +396,7 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
       save(b, 96, File(dir, "a${albumId}_s.jpg"))
       save(b, 512, big)
       big.absolutePath
-    } catch (_: Exception) {
+    } catch (_: Throwable) {
       ""
     } finally {
       b.recycle()

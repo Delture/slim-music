@@ -31,6 +31,7 @@ export interface NativeAudio {
   albumArt: string;
   /** 原生生成的封面缓存文件（512px，同目录 _s.jpg 为 96px）；无封面为空 */
   cover?: string;
+  albumId?: number;
   /** MediaStore TRACK：碟号*1000 + 音轨号 */
   track?: number;
   year?: number;
@@ -42,6 +43,16 @@ export async function queryLocalAudio(): Promise<NativeAudio[]> {
   if (!granted) throw new Error('未授予音频读取权限');
   const r = await nativeCall<{ tracks: NativeAudio[] }>('queryAudio');
   return r.tracks ?? [];
+}
+
+/** 后台补齐缺失的专辑封面；失败返回空对象（不影响曲库） */
+export async function generateAlbumCovers(): Promise<Record<string, string>> {
+  try {
+    const r = await nativeCall<{ covers: Record<string, string> }>('albumCovers');
+    return r?.covers ?? {};
+  } catch {
+    return {};
+  }
 }
 
 export async function openExternal(url: string): Promise<boolean> {

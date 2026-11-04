@@ -10,7 +10,7 @@ import type { LocalTrack, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
 import CoverThumb from '../components/CoverThumb.vue';
 import Icon from '../components/Icon.vue';
-import { isAndroid, queryLocalAudio } from '../lib/native';
+import { generateAlbumCovers, isAndroid, queryLocalAudio } from '../lib/native';
 
 type Grouping = 'album' | 'artist' | 'folder';
 type SortBy = 'smart' | 'title' | 'artist' | 'album' | 'duration' | 'added';
@@ -123,9 +123,11 @@ async function scan() {
     if (isAndroid) {
       const list = await queryLocalAudio();
       const fileOf = new Map<string, string>();
+      const albumOf = new Map<string, number>();
       const tracks: Track[] = list.map((a) => {
         const id = 'local:' + a.uri;
         fileOf.set(id, a.path || a.uri);
+        if (a.albumId != null) albumOf.set(id, a.albumId);
         const tr = a.track ?? 0;
         return {
           id,
@@ -143,8 +145,28 @@ async function scan() {
           addedMs: a.addedMs || null,
         };
       });
-      const enriched = await api.localEnrich(tracks);
+      // 拼音 / 艺人拆分失败也要显示曲库：退回到前端最小处理
+      let enriched: LocalTrack[];
+      try {
+        enriched = await api.localEnrich(tracks);
+      } catch (e) {
+        console.warn('localEnrich failed', e);
+        enriched = tracks.map((t) => ({
+          ...t,
+          searchKey: norm([t.title, ...t.artists, t.album].join(' ')),
+          sortKey: norm(t.title),
+        }));
+      }
       apply(enriched, (t) => fileOf.get(t.id) ?? t.path ?? '');
+      // 封面在列表显示后再后台生成，完成后一次性回填
+      void generateAlbumCovers().then((covers) => {
+        if (!Object.keys(covers).length) return;
+        all.value = all.value.map((t) => {
+          const aid = albumOf.get(t.id);
+          const c = aid != null ? covers[String(aid)] : undefined;
+          return c && c !== t.cover ? { ...t, cover: c } : t;
+        });
+      });
     } else {
       apply(await api.scanLocal(), (t) => t.path ?? '');
     }
