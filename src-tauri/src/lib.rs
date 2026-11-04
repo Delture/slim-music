@@ -116,6 +116,7 @@ async fn playlist_tracks(
     state: State<'_, AppState>,
     id: i64,
     refresh: Option<bool>,
+    liked: Option<bool>,
 ) -> R<cache::CacheHit<Vec<Track>>> {
     let refresh = refresh.unwrap_or(false);
     let key = format!("playlist_{id}");
@@ -126,7 +127,15 @@ async fn playlist_tracks(
         }
     }
     let c = cookie(&state).await;
-    match ncm::playlist_tracks(&c, id).await {
+    let fetched = if liked.unwrap_or(false) {
+        match ncm::profile(&c).await {
+            Ok(Some(p)) => ncm::liked_tracks(&c, p.user_id).await,
+            _ => ncm::playlist_tracks(&c, id).await,
+        }
+    } else {
+        ncm::playlist_tracks(&c, id).await
+    };
+    match fetched {
         Ok(tracks) => {
             if enabled {
                 let _ = state.cache.write_json(&key, &tracks);

@@ -133,3 +133,19 @@ export function openNowPlaying() {
 export function closeNowPlaying() {
   session.nowPlaying = false;
 }
+
+/** 窗口聚焦 / 回到前台时的同步信号（防抖：距上次 >60s 才触发；无轮询） */
+export const resumeSync = reactive({ tick: 0 });
+let lastResumeSync = Date.now();
+function onResume() {
+  if (document.visibilityState === 'hidden') return;
+  if (Date.now() - lastResumeSync < 60_000) return;
+  lastResumeSync = Date.now();
+  if (!session.profile) return;
+  void refreshLikedIds();
+  resumeSync.tick++;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', onResume);
+  document.addEventListener('visibilitychange', onResume);
+}

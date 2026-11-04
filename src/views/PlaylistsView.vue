@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { dialog } from '../lib/dialog';
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
-import { session } from '../lib/session';
+import { resumeSync, session } from '../lib/session';
 import type { Playlist, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
 import Icon from '../components/Icon.vue';
@@ -51,21 +51,56 @@ async function loadLists(refresh = false) {
       lists.value[0];
     if (keep) {
       // 窄屏只预选，不自动钻进详情，避免侧栏占满宽度
-      await open(keep, false, !narrow.value);
+      await open(keep, true, !narrow.value);
     } else {
       active.value = null;
       tracks.value = [];
       mobileDetail.value = false;
     }
     if (!refresh && hit.fromCache) {
-      void api.myPlaylists(true).then((h) => {
-        lists.value = h.data;
-        fromCache.value = false;
-      });
+      void api.myPlaylists(true).then((h) => applyFreshLists(h.data)).catch(() => {});
     }
   } catch (e) {
     err.value = String(e);
   }
+}
+
+/** 新歌单列表到达：替换列表；若当前歌单 trackCount 变化则重拉曲目 */
+function applyFreshLists(fresh: Playlist[]) {
+  const cur = active.value;
+  lists.value = fresh;
+  fromCache.value = false;
+  if (!cur) return;
+  const next = fresh.find((l) => l.id === cur.id);
+  if (!next) return;
+  active.value = next;
+  if (next.trackCount !== cur.trackCount || next.trackCount !== tracks.value.length) {
+    void refreshTracks(next);
+  }
+}
+
+/** 强制从网络拉取曲目并替换 UI（新数组，保证虚拟列表重渲染） */
+async function refreshTracks(p: Playlist) {
+  try {
+    const h = await api.playlistTracks(p.id, true, p.isLiked);
+    if (active.value?.id === p.id) {
+      tracks.value = h.data.slice();
+      fromCache.value = false;
+    }
+  } catch {
+    /* 保留缓存 */
+  }
+}
+
+/** 静默刷新：歌单列表 + 当前歌单曲目 */
+async function syncNow() {
+  if (!session.profile) return;
+  try {
+    applyFreshLists((await api.myPlaylists(true)).data);
+  } catch {
+    /* ignore */
+  }
+  if (active.value) await refreshTracks(active.value);
 }
 
 async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true) {
@@ -74,19 +109,12 @@ async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true)
   loading.value = true;
   err.value = '';
   try {
-    const hit = await api.playlistTracks(p.id, false);
+    const hit = await api.playlistTracks(p.id, false, p.isLiked);
     if (active.value?.id !== p.id) return;
     tracks.value = hit.data;
     fromCache.value = hit.fromCache;
     loading.value = false;
-    if (doBackgroundRefresh && (hit.fromCache || hit.ageSecs > 0)) {
-      void api.playlistTracks(p.id, true).then((h) => {
-        if (active.value?.id === p.id) {
-          tracks.value = h.data;
-          fromCache.value = false;
-        }
-      });
-    }
+    if (doBackgroundRefresh && (hit.fromCache || hit.ageSecs > 0)) void refreshTracks(p);
   } catch (e) {
     if (active.value?.id === p.id) {
       err.value = String(e);
@@ -115,6 +143,19 @@ async function menuPlayAll() {
   // Ensure tracks for that playlist
   if (active.value?.id !== p.id) await open(p, false, false);
   if (tracks.value.length) playList(tracks.value);
+}
+
+async function menuRefresh() {
+  const p = menu.target;
+  closeMenu();
+  if (!p || busy.value) return;
+  busy.value = true;
+  try {
+    if (active.value?.id !== p.id) await open(p, false, false);
+    await syncNow();
+  } finally {
+    busy.value = false;
+  }
 }
 
 async function menuUnsubscribe() {
@@ -161,6 +202,7 @@ onMounted(() => {
   mql.addEventListener('change', syncNarrow);
   if (session.profile) void loadLists(false);
 });
+watch(() => resumeSync.tick, () => void syncNow());
 onUnmounted(() => {
   mql?.removeEventListener('change', syncNarrow);
 });
@@ -208,6 +250,7 @@ onUnmounted(() => {
       @click.stop
     >
       <div @click="menuPlayAll">播放全部</div>
+      <div :class="{ disabled: busy }" @click="menuRefresh">刷新</div>
       <div v-if="menuCanUnsubscribe" :class="{ disabled: busy }" @click="menuUnsubscribe">取消收藏</div>
       <div v-if="menuCanDelete" class="danger" :class="{ disabled: busy }" @click="menuDelete">删除歌单</div>
     </div>

@@ -196,7 +196,7 @@ pub async fn playlist_tracks(cookie: &Option<String>, id: i64) -> R<Vec<Track>> 
     let mut all = Vec::new();
     let mut offset = 0;
     loop {
-        let query = q(cookie).param("id", &id.to_string()).param("limit", "500").param("offset", &offset.to_string());
+        let query = q(cookie).param("id", &id.to_string()).param("limit", "500").param("offset", &offset.to_string()).param("s", "0");
         let res = ok(create_client(None).playlist_track_all(&query).await)?;
         let page = tracks_at(&res.body["songs"]);
         let n = page.len();
@@ -220,9 +220,28 @@ pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option
         .map(ncm_https_url))
 }
 
+/// 「我喜欢的音乐」：用 likelist（实时、按收藏时间倒序）+ song/detail 构建，
+/// 避免 v6/playlist/detail 被网易云 CDN 缓存导致手机端新收藏不同步。
+pub async fn liked_tracks(cookie: &Option<String>, uid: i64) -> R<Vec<Track>> {
+    let ids = liked_ids(cookie, uid).await?;
+    let mut all = Vec::with_capacity(ids.len());
+    for chunk in ids.chunks(500) {
+        let joined = chunk.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
+        let query = q(cookie).param("ids", &joined);
+        let res = ok(create_client(None).song_detail(&query).await)?;
+        let mut page = tracks_at(&res.body["songs"]);
+        // song/detail 不保证顺序，按 likelist 顺序重排
+        let pos: std::collections::HashMap<i64, usize> = chunk.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+        page.sort_by_key(|t| t.ncm_id.and_then(|id| pos.get(&id).copied()).unwrap_or(usize::MAX));
+        all.extend(page);
+    }
+    Ok(all)
+}
+
 /// 喜欢歌曲的ID列表
 pub async fn liked_ids(cookie: &Option<String>, uid: i64) -> R<Vec<i64>> {
-    let query = q(cookie).param("uid", &uid.to_string());
+    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let query = q(cookie).param("uid", &uid.to_string()).param("timestamp", &ts.to_string());
     let res = ok(create_client(None).likelist(&query).await)?;
     Ok(res.body["ids"]
         .as_array()
