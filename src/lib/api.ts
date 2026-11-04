@@ -3,6 +3,7 @@ import type {
   CacheHit,
   CacheStats,
   LocalPlaylist,
+  LocalTrack,
   LyricPayload,
   Playlist,
   PlaySrc,
@@ -35,7 +36,9 @@ export const api = {
   getPlaybackSession: () => invoke<PlaybackSession>('get_playback_session'),
   savePlaybackSession: (session: PlaybackSession) =>
     invoke<void>('save_playback_session', { session }),
-  scanLocal: () => invoke<Track[]>('scan_local'),
+  scanLocal: () => invoke<LocalTrack[]>('scan_local'),
+  localCached: () => invoke<LocalTrack[]>('local_cached'),
+  localEnrich: (tracks: Track[]) => invoke<LocalTrack[]>('local_enrich', { tracks }),
   likedIds: () => invoke<number[]>('liked_ids'),
   likeTrack: (id: number, like: boolean) => invoke<void>('like_track', { id, like }),
   playlistSubscribe: (id: number, subscribe: boolean) =>

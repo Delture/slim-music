@@ -29,6 +29,10 @@ export interface NativeAudio {
   durationMs: number;
   path: string;
   albumArt: string;
+  /** MediaStore TRACK：碟号*1000 + 音轨号 */
+  track?: number;
+  year?: number;
+  addedMs?: number;
 }
 
 export async function queryLocalAudio(): Promise<NativeAudio[]> {

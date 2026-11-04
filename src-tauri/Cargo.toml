@@ -1,6 +1,6 @@
 [package]
 name = "slim-music"
-version = "0.9.0"
+version = "0.10.0"
 description = "精简自用网易云 + 本地音乐播放器"
 edition = "2021"
 license = "MIT"
@@ -21,6 +21,10 @@ tokio = { version = "1", features = ["sync", "fs", "io-util", "rt", "macros"] }
 ncm-api-rs = "=0.1.0"
 lofty = "0.22"
 walkdir = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+chardetng = "1"
+encoding_rs = "0.8"
+pinyin = { version = "0.11", default-features = false, features = ["plain"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 futures-util = "0.3"

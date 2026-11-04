@@ -1,62 +1,564 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+// 本地音乐：左侧分组（专辑 / 艺人 / 文件夹，虚拟列表）+ 右侧歌曲（虚拟列表）。
+// 桌面端先读后端索引秒开，再后台增量扫描；Android 走 MediaStore。
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { useVirtualizer } from '@tanstack/vue-virtual';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import { session } from '../lib/session';
-import type { Track } from '../lib/types';
+import type { LocalTrack, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
+import CoverThumb from '../components/CoverThumb.vue';
+import Icon from '../components/Icon.vue';
 import { isAndroid, queryLocalAudio } from '../lib/native';
 
-const tracks = ref<Track[]>([]);
+type Grouping = 'album' | 'artist' | 'folder';
+type SortBy = 'smart' | 'title' | 'artist' | 'album' | 'duration' | 'added';
+interface Group {
+  key: string;
+  name: string;
+  sub: string;
+  cover: string | null;
+  tracks: LocalTrack[];
+}
+
+const ALL = '\u0000all';
+const SORT_LABELS: Record<SortBy, string> = {
+  smart: '默认排序',
+  title: '按标题',
+  artist: '按歌手',
+  album: '按专辑',
+  duration: '按时长',
+  added: '最近添加',
+};
+const sorts = Object.keys(SORT_LABELS) as SortBy[];
+const GROUP_LABELS: Record<Grouping, string> = { album: '专辑', artist: '艺人', folder: '文件夹' };
+const GROUP_ICONS: Record<Grouping, string> = { album: 'album', artist: 'artist', folder: 'folder' };
+
+const all = shallowRef<LocalTrack[]>([]);
+/** 曲目 id → 所在文件夹（Android 的播放 path 是 content://，文件夹另存） */
+const folders = new Map<string, string>();
+const hidden = ref<{ count: number; exts: string[] }>({ count: 0, exts: [] });
 const filter = ref('');
 const loading = ref(false);
 const err = ref('');
+const grouping = ref<Grouping>('album');
+const selected = ref(ALL);
+const sortBy = ref<SortBy>('smart');
+const sortOpen = ref(false);
+const sortRoot = ref<HTMLElement | null>(null);
+const narrow = ref(false);
+const mobileDetail = ref(false);
 
-const shown = computed(() => {
-  const f = filter.value.trim().toLowerCase();
-  if (!f) return tracks.value;
-  return tracks.value.filter(t => [t.title, t.album, ...t.artists].some(s => s.toLowerCase().includes(f)));
-});
+const collator = new Intl.Collator('zh-Hans-CN-u-co-pinyin', { sensitivity: 'base', numeric: true });
+
+// ---------- 平台可播放格式过滤 ----------
+const MIME: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg; codecs="opus"',
+  aiff: 'audio/aiff',
+  aif: 'audio/aiff',
+  ape: 'audio/ape',
+  wma: 'audio/x-ms-wma',
+  wv: 'audio/wavpack',
+};
+/** Android 走 Media3（ExoPlayer），以下格式无内置解码器 */
+const ANDROID_DENY = new Set(['ape', 'wma', 'wv']);
+const playCache = new Map<string, boolean>();
+let probe: HTMLAudioElement | null = null;
+function extOf(p: string) {
+  const m = /\.([a-z0-9]+)$/i.exec(p);
+  return m ? m[1].toLowerCase() : '';
+}
+function canPlayExt(ext: string): boolean {
+  if (!ext) return true;
+  if (isAndroid) return !ANDROID_DENY.has(ext);
+  let ok = playCache.get(ext);
+  if (ok == null) {
+    probe ??= document.createElement('audio');
+    ok = !!MIME[ext] && probe.canPlayType(MIME[ext]) !== '';
+    playCache.set(ext, ok);
+  }
+  return ok;
+}
+function dirOf(p: string) {
+  const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+  return i > 0 ? p.slice(0, i) : p;
+}
+function baseName(p: string) {
+  const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+  return i >= 0 ? p.slice(i + 1) : p;
+}
+
+function apply(list: LocalTrack[], filePath: (t: LocalTrack) => string) {
+  const out: LocalTrack[] = [];
+  const bad = new Set<string>();
+  let n = 0;
+  folders.clear();
+  for (const t of list) {
+    const fp = filePath(t);
+    const ext = extOf(fp);
+    if (!canPlayExt(ext)) {
+      n++;
+      bad.add(ext);
+      continue;
+    }
+    folders.set(t.id, dirOf(fp));
+    out.push(t);
+  }
+  hidden.value = { count: n, exts: [...bad] };
+  all.value = out;
+}
 
 async function scan() {
+  if (loading.value) return;
   loading.value = true;
   err.value = '';
   try {
     if (isAndroid) {
       const list = await queryLocalAudio();
-      tracks.value = list.map((a) => ({
-        id: 'local:' + a.uri,
-        source: 'local',
-        title: a.title,
-        artists: a.artist ? [a.artist] : [],
-        album: a.album,
-        durationMs: a.durationMs,
-        cover: null,
-        path: a.uri,
-        ncmId: null,
-      }));
-    } else tracks.value = await api.scanLocal();
+      const fileOf = new Map<string, string>();
+      const tracks: Track[] = list.map((a) => {
+        const id = 'local:' + a.uri;
+        fileOf.set(id, a.path || a.uri);
+        const tr = a.track ?? 0;
+        return {
+          id,
+          source: 'local',
+          title: a.title,
+          artists: a.artist ? [a.artist] : [],
+          album: a.album,
+          durationMs: a.durationMs,
+          cover: a.albumArt || null,
+          path: a.uri,
+          ncmId: null,
+          trackNo: tr % 1000 || null,
+          discNo: Math.floor(tr / 1000) || null,
+          year: a.year || null,
+          addedMs: a.addedMs || null,
+        };
+      });
+      const enriched = await api.localEnrich(tracks);
+      apply(enriched, (t) => fileOf.get(t.id) ?? t.path ?? '');
+    } else {
+      apply(await api.scanLocal(), (t) => t.path ?? '');
+    }
   } catch (e) {
     err.value = String(e);
   } finally {
     loading.value = false;
   }
 }
-onMounted(() => (isAndroid || session.settings.localFolders.length) && scan());
+
+async function init() {
+  if (isAndroid) return scan();
+  if (!session.settings.localFolders.length) return;
+  try {
+    const cached = await api.localCached();
+    if (cached.length) apply(cached, (t) => t.path ?? '');
+  } catch {
+    /* 无索引：直接扫描 */
+  }
+  void scan();
+}
+
+// ---------- 分组 ----------
+const groups = computed<Group[]>(() => {
+  const m = new Map<string, Group>();
+  const g = grouping.value;
+  const add = (key: string, name: string, sub: string, t: LocalTrack) => {
+    let x = m.get(key);
+    if (!x) {
+      x = { key, name, sub, cover: null, tracks: [] };
+      m.set(key, x);
+    }
+    if (!x.cover && t.cover) x.cover = t.cover;
+    x.tracks.push(t);
+  };
+  for (const t of all.value) {
+    if (g === 'album') {
+      const who = t.albumArtist || t.artists[0] || '';
+      add(`${who}\u0001${t.album}`, t.album || '未知专辑', who || '未知歌手', t);
+    } else if (g === 'artist') {
+      const list = t.artists.length ? t.artists : ['未知歌手'];
+      for (const a of list) add(a, a, '', t);
+    } else {
+      const d = folders.get(t.id) ?? '';
+      add(d, baseName(d) || d, d, t);
+    }
+  }
+  return [...m.values()].sort((a, b) => collator.compare(a.name, b.name));
+});
+
+const groupMap = computed(() => new Map(groups.value.map((g) => [g.key, g])));
+const current = computed(() => (selected.value === ALL ? null : groupMap.value.get(selected.value) ?? null));
+const title = computed(() => current.value?.name ?? '全部歌曲');
+
+watch(grouping, () => {
+  selected.value = ALL;
+  void nextTick(() => sideV.value.scrollToOffset(0));
+});
+watch(groupMap, (m) => {
+  if (selected.value !== ALL && !m.has(selected.value)) selected.value = ALL;
+});
+
+// ---------- 筛选 + 排序 ----------
+function norm(s: string) {
+  return s
+    .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/\u3000/g, ' ')
+    .toLowerCase();
+}
+function cmpAlbumOrder(a: Track, b: Track) {
+  return (
+    (a.discNo ?? 0) - (b.discNo ?? 0) ||
+    (a.trackNo ?? 0) - (b.trackNo ?? 0) ||
+    0
+  );
+}
+const shown = computed<LocalTrack[]>(() => {
+  let list = current.value?.tracks ?? all.value;
+  const terms = norm(filter.value).split(/\s+/).filter(Boolean);
+  if (terms.length) list = list.filter((t) => terms.every((q) => t.searchKey.includes(q)));
+  const s = sortBy.value;
+  const byTitle = (a: LocalTrack, b: LocalTrack) =>
+    a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0;
+  let cmp: (a: LocalTrack, b: LocalTrack) => number;
+  if (s === 'smart') {
+    cmp =
+      grouping.value === 'album' && current.value
+        ? (a, b) => cmpAlbumOrder(a, b) || byTitle(a, b)
+        : byTitle;
+  } else if (s === 'title') cmp = byTitle;
+  else if (s === 'artist')
+    cmp = (a, b) => collator.compare(a.artists[0] ?? '', b.artists[0] ?? '') || byTitle(a, b);
+  else if (s === 'album')
+    cmp = (a, b) => collator.compare(a.album, b.album) || cmpAlbumOrder(a, b) || byTitle(a, b);
+  else if (s === 'duration') cmp = (a, b) => a.durationMs - b.durationMs;
+  else cmp = (a, b) => (b.addedMs ?? 0) - (a.addedMs ?? 0);
+  return list.slice().sort(cmp);
+});
+
+function pickSort(s: SortBy) {
+  sortBy.value = s;
+  sortOpen.value = false;
+}
+function onDocClick(e: MouseEvent) {
+  if (sortOpen.value && sortRoot.value && !sortRoot.value.contains(e.target as Node)) sortOpen.value = false;
+}
+
+// ---------- 左侧虚拟列表 ----------
+const sideEl = ref<HTMLElement | null>(null);
+const SIDE_ROW = 52;
+const sideV = useVirtualizer(
+  computed(() => ({
+    count: groups.value.length + 1,
+    getScrollElement: () => sideEl.value,
+    estimateSize: () => SIDE_ROW,
+    overscan: 10,
+  })),
+);
+const sideRows = computed(() => sideV.value.getVirtualItems());
+
+function open(key: string) {
+  selected.value = key;
+  if (narrow.value) mobileDetail.value = true;
+}
+function backToGroups() {
+  mobileDetail.value = false;
+}
+
+let mql: MediaQueryList | null = null;
+const syncNarrow = () => {
+  narrow.value = !!mql?.matches;
+  if (!narrow.value) mobileDetail.value = false;
+};
+
+onMounted(() => {
+  mql = window.matchMedia('(max-width: 700px)');
+  syncNarrow();
+  mql.addEventListener('change', syncNarrow);
+  document.addEventListener('click', onDocClick);
+  void init();
+});
+onUnmounted(() => {
+  mql?.removeEventListener('change', syncNarrow);
+  document.removeEventListener('click', onDocClick);
+});
+watch(
+  () => session.settings.localFolders.join('\n'),
+  () => {
+    if (!isAndroid) void scan();
+  },
+);
 </script>
 
 <template>
-  <section>
-    <header class="head">
-      <h2 class="head-title">本地音乐</h2>
-      <input v-model="filter" class="grow" placeholder="筛选" />
-      <div class="head-actions">
-        <button class="btn-primary" :disabled="!shown.length" @click="playList(shown)">播放全部</button>
-        <button class="btn-secondary" :disabled="loading" @click="scan">{{ loading ? '扫描中…' : isAndroid ? '刷新' : '重新扫描' }}</button>
+  <section class="lv" :class="{ 'mobile-detail': mobileDetail }">
+    <aside class="side float-panel">
+      <div class="side-head">
+        <div class="seg" role="group" aria-label="分组">
+          <button
+            v-for="g in (['album', 'artist', 'folder'] as Grouping[])"
+            :key="g"
+            type="button"
+            :class="{ on: grouping === g }"
+            @click="grouping = g"
+          >
+            <Icon :name="GROUP_ICONS[g]" :size="14" />{{ GROUP_LABELS[g] }}
+          </button>
+        </div>
       </div>
-    </header>
-    <p v-if="!isAndroid && !session.settings.localFolders.length" class="muted">还没有添加文件夹，去「设置」里添加。</p>
-    <p v-if="err" class="error">{{ err }}</p>
-    <TrackList :tracks="shown" />
+      <div ref="sideEl" class="side-scroll">
+        <Transition name="tracks-swap" mode="out-in">
+          <div :key="grouping" class="virt" :style="{ height: sideV.getTotalSize() + 'px' }">
+            <div
+              v-for="r in sideRows"
+              :key="r.index === 0 ? ALL : groups[r.index - 1]?.key"
+              class="list-row item"
+              :class="{ on: (r.index === 0 ? ALL : groups[r.index - 1]?.key) === selected }"
+              :style="{ top: r.start + 'px', height: SIDE_ROW - 4 + 'px' }"
+              @click="open(r.index === 0 ? ALL : groups[r.index - 1].key)"
+            >
+              <template v-if="r.index === 0">
+                <span class="gicon"><Icon name="music" :size="16" /></span>
+                <span class="name">全部歌曲</span>
+                <small class="muted count">{{ all.length }}</small>
+              </template>
+              <template v-else-if="groups[r.index - 1]">
+                <CoverThumb
+                  v-if="grouping === 'album'"
+                  class="gcover"
+                  :src="groups[r.index - 1].cover"
+                  :icon-size="14"
+                />
+                <span v-else class="gicon"><Icon :name="GROUP_ICONS[grouping]" :size="16" /></span>
+                <span class="name">
+                  {{ groups[r.index - 1].name }}
+                  <small v-if="grouping === 'album'" class="muted gsub">{{ groups[r.index - 1].sub }}</small>
+                </span>
+                <small class="muted count">{{ groups[r.index - 1].tracks.length }}</small>
+              </template>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </aside>
+
+    <div class="body float-panel">
+      <header class="head">
+        <button v-if="narrow" class="back btn-ghost" type="button" @click="backToGroups">
+          <Icon name="chevron-left" :size="14" /> {{ GROUP_LABELS[grouping] }}
+        </button>
+        <h2 class="head-title">{{ title }}</h2>
+        <input v-model="filter" class="grow" placeholder="筛选（支持拼音 / 首字母）" />
+        <div class="head-actions">
+          <div ref="sortRoot" class="sm-select sort" :class="{ open: sortOpen }">
+            <button
+              type="button"
+              class="sm-select-trigger"
+              :aria-expanded="sortOpen"
+              aria-haspopup="listbox"
+              @click="sortOpen = !sortOpen"
+            >
+              <Icon name="sort" :size="14" />
+              <span>{{ SORT_LABELS[sortBy] }}</span>
+              <Icon class="chev" name="chevron-down" :size="14" />
+            </button>
+            <ul v-if="sortOpen" class="sm-select-menu" role="listbox">
+              <li
+                v-for="s in sorts"
+                :key="s"
+                role="option"
+                :aria-selected="sortBy === s"
+                :class="{ on: sortBy === s }"
+                tabindex="0"
+                @click="pickSort(s)"
+                @keydown.enter.prevent="pickSort(s)"
+              >
+                {{ SORT_LABELS[s] }}
+              </li>
+            </ul>
+          </div>
+          <button class="btn-primary" :disabled="!shown.length" @click="playList(shown)">播放全部</button>
+          <button class="btn-secondary" :disabled="loading" @click="scan">
+            {{ loading ? '扫描中…' : isAndroid ? '刷新' : '重新扫描' }}
+          </button>
+        </div>
+      </header>
+      <p v-if="!isAndroid && !session.settings.localFolders.length" class="muted note">
+        还没有添加文件夹，去「设置」里添加。
+      </p>
+      <p v-if="hidden.count" class="muted note">
+        已隐藏 {{ hidden.count }} 首当前平台无法播放的文件（{{ hidden.exts.join(' / ') }}）
+      </p>
+      <p v-if="err" class="error">{{ err }}</p>
+      <Transition name="tracks-swap" mode="out-in">
+        <div :key="grouping + selected" class="tracks-scroll">
+          <TrackList :tracks="shown" />
+        </div>
+      </Transition>
+    </div>
   </section>
 </template>
+
+<style scoped>
+.lv {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--chrome-gap);
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  overflow: visible;
+}
+.float-panel {
+  background: var(--panel-bg);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+}
+.side-head {
+  margin-bottom: var(--space-2);
+}
+.side-head .seg {
+  width: 100%;
+}
+.side-head .seg button {
+  flex: 1;
+  padding: 0 6px;
+}
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.virt {
+  position: relative;
+  width: 100%;
+}
+.item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  gap: var(--space-2);
+}
+.gcover {
+  width: 32px;
+  height: 32px;
+}
+.gicon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--fill-secondary);
+  color: var(--muted);
+}
+.item .name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.gsub {
+  font-size: 11px;
+  font-weight: 450;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item .count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.item.on .count {
+  color: var(--text-secondary);
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4);
+  overflow: hidden;
+}
+.head .head-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sort .sm-select-trigger {
+  gap: 6px;
+}
+.note {
+  font-size: 13px;
+  margin: 0 0 var(--space-2);
+}
+.tracks-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .lv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .lv:not(.mobile-detail) .body {
+    display: none;
+  }
+  .lv.mobile-detail .side {
+    display: none;
+  }
+  .lv.mobile-detail .body {
+    animation: sm-fade-in var(--dur) var(--ease-enter);
+  }
+}
+
+.tracks-swap-enter-active,
+.tracks-swap-leave-active {
+  transition:
+    opacity var(--dur) var(--ease-swift),
+    transform var(--dur) var(--ease-swift);
+}
+.tracks-swap-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.tracks-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+</style>

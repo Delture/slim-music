@@ -1,14 +1,15 @@
 //! 统一的数据模型：本地与网易云歌曲共用一个 Track。
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
+    #[default]
     Local,
     Netease,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     /// 全局唯一 id："ncm:<歌曲id>" 或 "local:<文件路径>"
@@ -18,12 +19,26 @@ pub struct Track {
     pub artists: Vec<String>,
     pub album: String,
     pub duration_ms: u64,
-    /// 封面 URL（网易云）；本地暂无（TODO）
+    /// 封面：网易云为 URL；本地为封面缓存文件绝对路径（桌面）或 content:// URI（Android）
     pub cover: Option<String>,
     /// 本地文件绝对路径
     pub path: Option<String>,
     /// 网易云歌曲 id
     pub ncm_id: Option<i64>,
+    /// 以下为本地标签扩展字段（网易云为空，不序列化）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub album_artist: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track_no: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disc_no: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    /// 文件修改时间（毫秒），用于「最近添加」排序
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -6,6 +6,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { api } from './api';
 import { isAndroid, nativeCall, nativeListen } from './native';
 import type { PlaybackSession, Track } from './types';
+import { coverSrc } from './format';
 
 export type Repeat = 'off' | 'all' | 'one';
 
@@ -331,7 +332,7 @@ async function loadCurrent(
         title: t.title,
         artist: t.artists.join(' / '),
         album: t.album,
-        artwork: t.cover ? t.cover.replace(/^http:\/\//i, 'https://') + '?param=512y512' : '',
+        artwork: t.cover ? coverSrc(t.cover, '512y512') : '',
         position: target,
         autoplay,
       });

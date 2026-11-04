@@ -263,7 +263,10 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
           MediaStore.Audio.Media.ALBUM_ID,
           MediaStore.Audio.Media.DURATION,
           MediaStore.Audio.Media.DATA,
-          MediaStore.Audio.Media.DISPLAY_NAME
+          MediaStore.Audio.Media.DISPLAY_NAME,
+          MediaStore.Audio.Media.TRACK,
+          MediaStore.Audio.Media.YEAR,
+          MediaStore.Audio.Media.DATE_ADDED
         )
         val base = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         activity.contentResolver.query(
@@ -279,6 +282,9 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
           val iDur = cur.getColumnIndexOrThrow(cols[5])
           val iData = cur.getColumnIndexOrThrow(cols[6])
           val iName = cur.getColumnIndexOrThrow(cols[7])
+          val iTrack = cur.getColumnIndexOrThrow(cols[8])
+          val iYear = cur.getColumnIndexOrThrow(cols[9])
+          val iAdded = cur.getColumnIndexOrThrow(cols[10])
           while (cur.moveToNext()) {
             val id = cur.getLong(iId)
             val artist = cur.getString(iArtist)
@@ -290,6 +296,9 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
               .put("durationMs", cur.getLong(iDur))
               .put("path", cur.getString(iData) ?: "")
               .put("albumArt", "content://media/external/audio/albumart/" + cur.getLong(iAlbumId))
+              .put("track", cur.getInt(iTrack))
+              .put("year", cur.getInt(iYear))
+              .put("addedMs", cur.getLong(iAdded) * 1000L)
             out.put(o)
           }
         }

@@ -64,6 +64,7 @@ pub fn to_track(v: &Value) -> Option<Track> {
             .map(|s| ncm_img_url(s, "200y200")),
         path: None,
         ncm_id: Some(id),
+        ..Default::default()
     })
 }
 

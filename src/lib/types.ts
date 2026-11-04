@@ -11,6 +11,19 @@ export interface Track {
   cover: string | null;
   path: string | null;
   ncmId: number | null;
+  /** 本地标签扩展字段（网易云为空） */
+  albumArtist?: string | null;
+  trackNo?: number | null;
+  discNo?: number | null;
+  year?: number | null;
+  genre?: string | null;
+  addedMs?: number | null;
+}
+
+/** 本地扫描结果：Track + 后端预计算的搜索 / 排序键（拼音） */
+export interface LocalTrack extends Track {
+  searchKey: string;
+  sortKey: string;
 }
 
 export interface Playlist {

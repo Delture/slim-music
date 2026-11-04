@@ -23,6 +23,7 @@ struct AppState {
     store: Store,
     cache: cache::NetCache,
     local_pls: local_playlists::LocalPlaylistStore,
+    library: local::Library,
     cookie: Mutex<Option<String>>,
     settings: Mutex<Settings>,
 }
@@ -281,9 +282,25 @@ async fn save_settings(state: State<'_, AppState>, settings: Settings) -> R<()> 
 }
 
 #[tauri::command]
-async fn scan_local(state: State<'_, AppState>) -> R<Vec<Track>> {
-    let folders = state.settings.lock().await.local_folders.clone();
-    tauri::async_runtime::spawn_blocking(move || local::scan(&folders))
+async fn scan_local(app: AppHandle) -> R<Vec<local::LocalTrack>> {
+    let folders = app.state::<AppState>().settings.lock().await.local_folders.clone();
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().library.scan(&folders))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Android：MediaStore 结果补上拼音搜索 / 排序键。
+#[tauri::command]
+async fn local_enrich(tracks: Vec<Track>) -> R<Vec<local::LocalTrack>> {
+    tauri::async_runtime::spawn_blocking(move || local::enrich(tracks))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 读取上次扫描的索引（不访问音频文件），用于秒开。
+#[tauri::command]
+async fn local_cached(app: AppHandle) -> R<Vec<local::LocalTrack>> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().library.cached())
         .await
         .map_err(|e| e.to_string())
 }
@@ -348,13 +365,13 @@ async fn get_local_lyric(
 
 async fn get_local_lyric_file(state: State<'_, AppState>, path: String) -> R<LyricPayload> {
     let enabled = state.settings.lock().await.cache_enabled;
-    let key = format!("lyric_local_{:x}", simple_hash(&path));
+    let key = format!("lyric_local2_{:x}", simple_hash(&path));
     if enabled {
         if let Some(hit) = state.cache.read_json::<LyricPayload>(&key) {
             return Ok(hit.data);
         }
     }
-    let payload = local::load_sidecar_lrc(&path)?;
+    let payload = local::load_local_lyric(&path)?;
     if enabled && !payload.raw.is_empty() {
         let _ = state.cache.write_json(&key, &payload);
     }
@@ -566,12 +583,14 @@ pub fn run() {
             let cache_root = app.path().app_cache_dir().unwrap_or_else(|_| dir.clone());
             #[cfg(desktop)]
             let cache_root = dir.clone();
+            let library = local::Library::new(&dir, &cache_root);
             let cache = cache::NetCache::new(cache_root);
             let store = Store::new(dir);
             let state = AppState {
                 cookie: Mutex::new(store.load_cookie()),
                 settings: Mutex::new(store.load_settings()),
                 local_pls,
+                library,
                 cache,
                 store,
             };
@@ -601,6 +620,8 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             login_qr_key,
+            local_cached,
+            local_enrich,
             login_qr_check,
             logout,
             get_profile,

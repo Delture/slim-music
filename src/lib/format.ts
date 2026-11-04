@@ -1,3 +1,4 @@
+import { convertFileSrc } from '@tauri-apps/api/core';
 export function fmtTime(sec: number): string {
   if (!isFinite(sec) || sec < 0) sec = 0;
   const m = Math.floor(sec / 60);
@@ -12,6 +13,14 @@ export function fmtTime(sec: number): string {
 export function coverSrc(url: string | null | undefined, size?: string): string {
   if (!url) return '';
   let u = url.trim();
+  // Android MediaStore 专辑图 / data URI：原样使用
+  if (/^(content|data|blob):/i.test(u)) return u;
+  // 本地封面缓存文件（桌面）：小尺寸用 _s.jpg 缩略图，走 asset 协议
+  if (!/^(https?:)?\/\//i.test(u)) {
+    const px = size ? parseInt(size, 10) : 0;
+    const p = px > 0 && px <= 200 ? u.replace(/\.jpg$/i, '_s.jpg') : u;
+    return convertFileSrc(p);
+  }
   if (u.startsWith('//')) u = `https:${u}`;
   else if (/^http:\/\//i.test(u)) u = `https://${u.slice(7)}`;
   if (size) {

@@ -34,7 +34,7 @@ const activeView = computed(() => pages.find((p) => p.key === page.value)!.view)
 const viewKey = computed(() => page.value);
 
 function isSplitKey(key: string) {
-  return key === 'playlists' || key === 'localPlaylists';
+  return key === 'playlists' || key === 'localPlaylists' || key === 'local';
 }
 
 function go(key: string) {
