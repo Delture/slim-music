@@ -52,6 +52,8 @@ pub struct LocalTrack {
     pub search_key: String,
     /// 标题排序键（拼音）
     pub sort_key: String,
+    /// 与 artists 一一对应的分组键：繁→简 + 小写，合并「坂本龍一 / 坂本龙一」
+    pub artist_keys: Vec<String>,
 }
 
 pub struct Library {
@@ -300,7 +302,7 @@ fn split_artists(v: &str) -> Vec<String> {
     for sep in [" feat. ", " ft. ", " Feat. ", " FEAT. ", " featuring "] {
         s = s.replace(sep, "/");
     }
-    s.split(['/', ';', '；', '、', '\0'])
+    s.split(['/', ';', '；', '、', ',', '，', '\0'])
         .map(|x| x.trim().to_string())
         .filter(|x| !x.is_empty())
         .collect()
@@ -364,14 +366,29 @@ pub fn enrich(tracks: Vec<Track>) -> Vec<LocalTrack> {
 fn finish(tracks: Vec<Track>) -> Vec<LocalTrack> {
     let mut out: Vec<LocalTrack> = tracks
         .into_iter()
-        .map(|t| {
+        .map(|mut t| {
+            // 统一拆分（Android MediaStore、旧索引都走这里）
+            let mut artists: Vec<String> = Vec::new();
+            for a in t.artists.iter().flat_map(|a| split_artists(a)) {
+                if !artists.iter().any(|x| x.eq_ignore_ascii_case(&a)) {
+                    artists.push(a);
+                }
+            }
+            t.artists = artists;
+            let artist_keys = t.artists.iter().map(|a| normalize(&fast2s::convert(a))).collect();
             let (py_title, ini_title) = pinyin_of(&t.title);
             let mut hay = format!("{} {} {}", t.title, t.artists.join(" "), t.album);
             let (py_ar, ini_ar) = pinyin_of(&t.artists.join(" "));
             let (py_al, _) = pinyin_of(&t.album);
             hay.push(' ');
             hay.push_str(&[py_title.as_str(), &ini_title, &py_ar, &ini_ar, &py_al].join(" "));
+            let simp = fast2s::convert(&hay);
+            if simp != hay {
+                hay.push(' ');
+                hay.push_str(&simp);
+            }
             LocalTrack {
+                artist_keys,
                 search_key: normalize(&hay),
                 sort_key: normalize(&py_title),
                 track: t,
@@ -467,6 +484,13 @@ pub fn load_local_lyric(audio_path: &str) -> Result<LyricPayload, String> {
     Ok(lyric_from_raw(raw))
 }
 
+/// Android 原生层返回的 .lrc 原始字节（base64），在此探测编码。
+pub fn lyric_from_b64(b64: &str) -> LyricPayload {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap_or_default();
+    lyric_from_raw(decode_text(&bytes))
+}
+
 /// 由原始 LRC 文本构造歌词；同一时间戳的第二行视为翻译（双语 LRC）。
 pub fn lyric_from_raw(raw: String) -> LyricPayload {
     let raw = raw.trim_start_matches('\u{feff}').to_string();
@@ -521,6 +545,11 @@ mod tests {
     fn artists() {
         assert_eq!(split_artists("Simon & Garfunkel"), vec!["Simon & Garfunkel"]);
         assert_eq!(split_artists("A / B、C feat. D"), vec!["A", "B", "C", "D"]);
+        assert_eq!(split_artists("蔡依林，周杰伦, X"), vec!["蔡依林", "周杰伦", "X"]);
+        let t = Track { artists: vec!["坂本龍一、Jaques Morelenbaum".into()], ..Default::default() };
+        let r = enrich(vec![t]);
+        assert_eq!(r[0].track.artists.len(), 2);
+        assert_eq!(r[0].artist_keys[0], "坂本龙一");
     }
 
     #[test]

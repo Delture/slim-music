@@ -24,6 +24,8 @@ export interface Track {
 export interface LocalTrack extends Track {
   searchKey: string;
   sortKey: string;
+  /** 与 artists 一一对应的分组键（繁→简、小写） */
+  artistKeys?: string[];
 }
 
 export interface Playlist {

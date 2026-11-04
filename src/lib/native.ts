@@ -29,6 +29,8 @@ export interface NativeAudio {
   durationMs: number;
   path: string;
   albumArt: string;
+  /** 原生生成的封面缓存文件（512px，同目录 _s.jpg 为 96px）；无封面为空 */
+  cover?: string;
   /** MediaStore TRACK：碟号*1000 + 音轨号 */
   track?: number;
   year?: number;

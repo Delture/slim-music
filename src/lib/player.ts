@@ -332,7 +332,11 @@ async function loadCurrent(
         title: t.title,
         artist: t.artists.join(' / '),
         album: t.album,
-        artwork: t.cover ? coverSrc(t.cover, '512y512') : '',
+        artwork: !t.cover
+          ? ''
+          : /^(https?:|\/\/|content:)/i.test(t.cover)
+            ? coverSrc(t.cover, '512y512')
+            : 'file://' + t.cover,
         position: target,
         autoplay,
       });

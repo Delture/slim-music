@@ -26,6 +26,7 @@ const listEl = ref<HTMLElement | null>(null);
 const rootEl = ref<HTMLElement | null>(null);
 
 const t = computed(() => current());
+const badCover = ref<string | null>(null);
 const repeatLabel = computed(
   () => ({ off: '不循环', all: '列表循环', one: '单曲循环' })[player.repeat],
 );
@@ -283,7 +284,7 @@ onUnmounted(() => {
     @touchcancel="onTouchEnd"
   >
     <div
-      v-if="t?.cover"
+      v-if="t?.cover && badCover !== t.cover"
       class="np-bg"
       :style="{ backgroundImage: `url(${coverSrc(t.cover, '500y500')})` }"
       aria-hidden="true"
@@ -298,7 +299,12 @@ onUnmounted(() => {
 
     <div class="stage">
       <div class="art">
-        <img v-if="t?.cover" :src="coverSrc(t.cover, '500y500')" class="cover" />
+        <img
+          v-if="t?.cover && badCover !== t.cover"
+          :src="coverSrc(t.cover, '500y500')"
+          class="cover"
+          @error="badCover = t.cover"
+        />
         <div v-else class="cover ph"><Icon name="music" :size="56" /></div>
         <div class="meta">
           <div class="title">

@@ -18,6 +18,8 @@ import SourceBadge from './SourceBadge.vue';
 import Icon from './Icon.vue';
 
 const t = computed(() => current());
+/** 封面加载失败的地址：显示占位图标而不是破图 */
+const badCover = ref<string | null>(null);
 const repeatLabel = computed(
   () => ({ off: '不循环', all: '列表循环', one: '单曲循环' })[player.repeat],
 );
@@ -171,7 +173,14 @@ async function onLike() {
 <template>
   <footer class="bar">
     <div class="now" title="打开播放页" @click="openNp">
-      <img v-if="t?.cover" :src="coverSrc(t.cover, '80y80')" class="cover" loading="lazy" decoding="async" />
+      <img
+        v-if="t?.cover && badCover !== t.cover"
+        :src="coverSrc(t.cover, '80y80')"
+        class="cover"
+        loading="lazy"
+        decoding="async"
+        @error="badCover = t.cover"
+      />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
       <div v-if="t" class="info">
         <div class="title">{{ t.title }} <SourceBadge :source="t.source" /></div>

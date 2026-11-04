@@ -134,7 +134,7 @@ async function scan() {
           artists: a.artist ? [a.artist] : [],
           album: a.album,
           durationMs: a.durationMs,
-          cover: a.albumArt || null,
+          cover: a.cover || null,
           path: a.uri,
           ncmId: null,
           trackNo: tr % 1000 || null,
@@ -183,10 +183,11 @@ const groups = computed<Group[]>(() => {
   for (const t of all.value) {
     if (g === 'album') {
       const who = t.albumArtist || t.artists[0] || '';
-      add(`${who}\u0001${t.album}`, t.album || '未知专辑', who || '未知歌手', t);
+      add(`${(t.artistKeys?.[0] ?? who).toLowerCase()}\u0001${t.album.toLowerCase()}`, t.album || '未知专辑', who || '未知歌手', t);
     } else if (g === 'artist') {
-      const list = t.artists.length ? t.artists : ['未知歌手'];
-      for (const a of list) add(a, a, '', t);
+      if (!t.artists.length) add('', '未知歌手', '', t);
+      // artistKeys：后端已拆分 + 繁→简 + 小写，同一艺人不同写法归为一组
+      t.artists.forEach((a, i) => add(t.artistKeys?.[i] ?? a, a, '', t));
     } else {
       const d = folders.get(t.id) ?? '';
       add(d, baseName(d) || d, d, t);

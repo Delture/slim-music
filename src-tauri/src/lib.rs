@@ -357,6 +357,9 @@ async fn get_local_lyric(
         })
         .await
         .map_err(|e| e.to_string())??;
+        if let Some(b) = v.get("lrcB64").and_then(|x| x.as_str()).filter(|s| !s.is_empty()) {
+            return Ok(local::lyric_from_b64(b));
+        }
         let raw = v.get("lrc").and_then(|x| x.as_str()).unwrap_or("").to_string();
         return Ok(local::lyric_from_raw(raw));
     }

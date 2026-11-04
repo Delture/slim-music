@@ -285,8 +285,14 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
           val iTrack = cur.getColumnIndexOrThrow(cols[8])
           val iYear = cur.getColumnIndexOrThrow(cols[9])
           val iAdded = cur.getColumnIndexOrThrow(cols[10])
+          val coverDir = File(activity.cacheDir, "local_covers").apply { mkdirs() }
+          val coverOf = HashMap<Long, String>()
           while (cur.moveToNext()) {
             val id = cur.getLong(iId)
+            val albumId = cur.getLong(iAlbumId)
+            val cover = coverOf.getOrPut(albumId) {
+              albumCover(coverDir, albumId, Uri.withAppendedPath(base, id.toString()))
+            }
             val artist = cur.getString(iArtist)
             val o = JSObject()
               .put("uri", Uri.withAppendedPath(base, id.toString()).toString())
@@ -295,7 +301,8 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
               .put("album", cur.getString(iAlbum) ?: "")
               .put("durationMs", cur.getLong(iDur))
               .put("path", cur.getString(iData) ?: "")
-              .put("albumArt", "content://media/external/audio/albumart/" + cur.getLong(iAlbumId))
+              .put("albumArt", "content://media/external/audio/albumart/" + albumId)
+              .put("cover", cover)
               .put("track", cur.getInt(iTrack))
               .put("year", cur.getInt(iYear))
               .put("addedMs", cur.getLong(iAdded) * 1000L)
@@ -309,12 +316,59 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
     }.start()
   }
 
+  /**
+   * 专辑封面 → 缓存 JPEG（512px + 96px 的 _s.jpg），WebView 通过 asset 协议加载。
+   * 每个专辑只生成一次；无封面写 .none 标记，避免重复解码。
+   */
+  private fun albumCover(dir: File, albumId: Long, audioUri: Uri): String {
+    val big = File(dir, "a$albumId.jpg")
+    if (big.exists()) return big.absolutePath
+    val none = File(dir, "a$albumId.none")
+    if (none.exists()) return ""
+    var bmp: android.graphics.Bitmap? = null
+    try {
+      bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        activity.contentResolver.loadThumbnail(audioUri, android.util.Size(512, 512), null)
+      } else {
+        val art = Uri.parse("content://media/external/audio/albumart/$albumId")
+        val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+        activity.contentResolver.openInputStream(art)?.use {
+          android.graphics.BitmapFactory.decodeStream(it, null, opts)
+        }
+      }
+    } catch (_: Exception) {
+    }
+    val b = bmp
+    if (b == null) {
+      try { none.createNewFile() } catch (_: Exception) {}
+      return ""
+    }
+    return try {
+      fun save(src: android.graphics.Bitmap, side: Int, f: File) {
+        val scale = minOf(1f, side.toFloat() / maxOf(src.width, src.height))
+        val out = if (scale < 1f)
+          android.graphics.Bitmap.createScaledBitmap(src, (src.width * scale).toInt().coerceAtLeast(1), (src.height * scale).toInt().coerceAtLeast(1), true)
+        else src
+        f.outputStream().use { out.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
+        if (out !== src) out.recycle()
+      }
+      save(b, 96, File(dir, "a${albumId}_s.jpg"))
+      save(b, 512, big)
+      big.absolutePath
+    } catch (_: Exception) {
+      ""
+    } finally {
+      b.recycle()
+    }
+  }
+
   /** 尝试读取音频旁同名 .lrc（受分区存储限制，读不到就返回空）。 */
   @Command
   fun readLrc(invoke: Invoke) {
     val uri = invoke.getArgs().getString("uri", null) ?: ""
     Thread {
       var text = ""
+      var raw: ByteArray? = null
       try {
         var path: String? = null
         activity.contentResolver.query(Uri.parse(uri), arrayOf(MediaStore.Audio.Media.DATA), null, null, null)?.use {
@@ -323,7 +377,7 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
         path?.let { p ->
           val f = File(p)
           val lrc = File(f.parentFile, f.nameWithoutExtension + ".lrc")
-          if (lrc.canRead()) text = lrc.readText()
+          if (lrc.canRead()) raw = lrc.readBytes()
           else {
             // MediaStore 中按文件名查找（部分机型将 .lrc 索引为 Files）
             val sel = "${MediaStore.MediaColumns.DATA} = ?"
@@ -333,14 +387,17 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
             )?.use { c ->
               if (c.moveToFirst()) {
                 val u = Uri.withAppendedPath(MediaStore.Files.getContentUri("external"), c.getLong(0).toString())
-                activity.contentResolver.openInputStream(u)?.use { s -> text = s.readBytes().toString(Charsets.UTF_8) }
+                activity.contentResolver.openInputStream(u)?.use { s -> raw = s.readBytes() }
               }
             }
           }
         }
       } catch (_: Exception) {
       }
-      invoke.resolve(JSObject().put("lrc", text))
+      // 原始字节交给 Rust 端探测编码（GBK / UTF-8 / UTF-16）
+      raw?.let { text = String(it, Charsets.UTF_8) }
+      val b64 = raw?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: ""
+      invoke.resolve(JSObject().put("lrc", text).put("lrcB64", b64))
     }.start()
   }
 
