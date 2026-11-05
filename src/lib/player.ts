@@ -58,7 +58,6 @@ let playingFromUrl = false;
 let recoverAttempts = 0;
 let recovering = false;
 let stallWatchTimer: number | undefined;
-let urlSwapTimer: number | undefined;
 let lastTickTime = 0;
 let lastTickAt = 0;
 const MAX_RECOVER = 3;
@@ -126,13 +125,6 @@ function clearStallWatch() {
   }
 }
 
-function clearUrlSwap() {
-  if (urlSwapTimer != null) {
-    window.clearTimeout(urlSwapTimer);
-    urlSwapTimer = undefined;
-  }
-}
-
 function noteProgress() {
   lastTickTime = audio.currentTime;
   lastTickAt = Date.now();
@@ -147,32 +139,28 @@ function armStallWatch(delayMs = STALL_MS) {
   }, delayMs);
 }
 
-/** 下载完成后把远程直链热切换到本地缓存，降低中途断流概率 */
-function scheduleUrlCacheSwap(token: number) {
-  clearUrlSwap();
-  if (NATIVE || !playingFromUrl) return;
-  urlSwapTimer = window.setTimeout(() => {
-    void (async () => {
-      if (token !== loadToken || !playingFromUrl || recovering) return;
-      const t = current();
-      if (!t || t.source !== 'netease' || t.ncmId == null) return;
-      try {
-        const src = await api.songPlaySrc(t.ncmId, false);
-        if (token !== loadToken || !src || src.kind !== 'file') {
-          scheduleUrlCacheSwap(token);
-          return;
-        }
-        const pos = audio.currentTime || player.currentTime || 0;
-        const wantPlay = player.playing || !audio.paused;
-        await applyDesktopSrc(src.value, true, wantPlay, pos, token);
-        playingFromUrl = false;
-        recoverAttempts = 0;
-        noteProgress();
-      } catch {
-        scheduleUrlCacheSwap(token);
-      }
-    })();
-  }, 2000);
+/**
+ * 暂停时静默切到已下完的本地缓存（不打断播放）。
+ * 播放中绝不换源——那会造成开头可闻的卡顿。
+ */
+async function promoteToCacheIfPaused(token: number) {
+  if (NATIVE || !playingFromUrl || recovering) return;
+  if (player.playing || !audio.paused) return;
+  const t = current();
+  if (!t || t.source !== 'netease' || t.ncmId == null) return;
+  try {
+    const src = await api.songPlaySrc(t.ncmId, false);
+    if (token !== loadToken || !src || src.kind !== 'file') return;
+    if (player.playing || !audio.paused) return;
+    const pos = audio.currentTime || player.currentTime || 0;
+    await applyDesktopSrc(convertFileSrc(src.value), true, false, pos, token);
+    if (token !== loadToken) return;
+    playingFromUrl = false;
+    recoverAttempts = 0;
+    noteProgress();
+  } catch {
+    /* 下次暂停再试 */
+  }
 }
 
 async function checkStallAndRecover() {
@@ -215,7 +203,6 @@ async function recoverPlayback(forceRefresh: boolean, seekTo?: number) {
   if (!t) return;
   recovering = true;
   clearStallWatch();
-  clearUrlSwap();
   const pos =
     seekTo != null && seekTo >= 0
       ? seekTo
@@ -314,7 +301,6 @@ async function loadCurrent(
   const token = ++loadToken;
   player.error = '';
   clearStallWatch();
-  clearUrlSwap();
   if (!opts?.forceRefresh) recoverAttempts = 0;
   try {
     const resolved = await resolveSrc(t, !!opts?.forceRefresh);
@@ -353,7 +339,6 @@ async function loadCurrent(
     await applyDesktopSrc(resolved.src, !resolved.fromUrl, autoplay, target, token);
     if (token !== loadToken) return;
     noteProgress();
-    if (playingFromUrl && autoplay) scheduleUrlCacheSwap(token);
     // 切歌/进队后立刻预取下一首（已缓存则跳过）
     maybePrefetchNext(true);
   } catch (e) {
@@ -570,6 +555,8 @@ audio.addEventListener('pause', () => {
   player.playing = false;
   clearStallWatch();
   schedulePersist(300);
+  // 暂停间隙切到本地缓存，恢复播放时不再依赖直链
+  void promoteToCacheIfPaused(loadToken);
 });
 audio.addEventListener('timeupdate', () => {
   player.currentTime = audio.currentTime;

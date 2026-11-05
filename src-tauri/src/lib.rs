@@ -163,7 +163,7 @@ async fn song_url(state: State<'_, AppState>, id: i64) -> R<Option<String>> {
     ncm::song_url(&c, id, &level).await
 }
 
-/// 播放地址：优先本地音频缓存，否则返回 URL 并后台下载。
+/// 播放地址：优先本地音频缓存，否则返回 URL 并后台下载（播放端不在播放中途切换音源）。
 /// `refresh=true` 时丢弃该曲缓存并重新取直链（卡顿/损坏恢复用）。
 #[tauri::command]
 async fn song_play_src(
