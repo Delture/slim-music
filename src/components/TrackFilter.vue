@@ -52,7 +52,13 @@ function clear() {
     background var(--dur-fast) var(--ease-swift),
     border-color var(--dur-fast) var(--ease-swift);
   min-width: 0;
-  flex: 1;
+  width: 100%;
+  /* 父级 .body 是纵向 flex：绝不能 flex:1，否则会纵向撑满半个面板 */
+  flex: 0 0 var(--btn-h);
+  align-self: stretch;
+  min-height: var(--btn-h);
+  max-height: var(--btn-h);
+  overflow: hidden;
   margin-bottom: var(--space-2);
 }
 .tf:focus-within {
