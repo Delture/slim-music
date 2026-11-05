@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { dialog } from '../lib/dialog';
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
 import { playList, player } from '../lib/player';
 import {
   createLocalPlaylist,
@@ -11,7 +11,10 @@ import {
   renameLocalPlaylist,
 } from '../lib/localPlaylists';
 import type { LocalPlaylist, Track } from '../lib/types';
+import { api } from '../lib/api';
+import { filterTracks } from '../lib/trackFilter';
 import TrackList from '../components/TrackList.vue';
+import TrackFilter from '../components/TrackFilter.vue';
 import Icon from '../components/Icon.vue';
 
 /** 特殊 id：镜像当前播放队列，不落盘 */
@@ -48,6 +51,24 @@ const activeTracks = computed(() =>
   isNowPlaying.value ? nowPlayingTracks.value : activeUser.value?.tracks ?? [],
 );
 
+const filter = ref('');
+/** 带拼音 searchKey 的副本；失败则用 activeTracks */
+const keyedTracks = shallowRef<Track[] | null>(null);
+const shown = computed(() => filterTracks(keyedTracks.value ?? activeTracks.value, filter.value));
+
+async function enrichActive() {
+  const id = activeId.value;
+  const list = activeTracks.value.slice();
+  keyedTracks.value = null;
+  if (!list.length) return;
+  try {
+    const enriched = await api.localEnrich(list);
+    if (activeId.value === id) keyedTracks.value = enriched;
+  } catch {
+    /* ignore */
+  }
+}
+
 function syncNarrow() {
   narrow.value = !!mql?.matches;
   if (!narrow.value) mobileDetail.value = false;
@@ -63,10 +84,12 @@ async function ensure() {
 
 function openNow() {
   activeId.value = NOW_PLAYING;
+  filter.value = '';
   if (narrow.value) mobileDetail.value = true;
 }
 function open(p: LocalPlaylist) {
   activeId.value = p.id;
+  filter.value = '';
   if (narrow.value) mobileDetail.value = true;
 }
 function backToLists() {
@@ -162,9 +185,15 @@ watch(
       !localPl.lists.some((p) => p.id === activeId.value)
     ) {
       activeId.value = NOW_PLAYING;
+      filter.value = '';
       if (narrow.value) mobileDetail.value = false;
     }
   },
+);
+watch(
+  () => [activeId.value, activeTracks.value.map((t) => t.id).join('\n')] as const,
+  () => void enrichActive(),
+  { immediate: true },
 );
 </script>
 
@@ -211,6 +240,7 @@ watch(
         </button>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
+      <TrackFilter v-if="activeTracks.length || filter.trim()" v-model="filter" />
       <!-- Soft fade/slide when switching selected playlist (not only row highlight). -->
       <Transition name="tracks-swap" mode="out-in">
         <p
@@ -218,11 +248,16 @@ watch(
           :key="'empty-' + activeId"
           class="muted empty-hint"
         >队列为空，去别处点一首歌开始听</p>
+        <p
+          v-else-if="filter.trim() && !shown.length"
+          :key="'nofilt-' + activeId"
+          class="muted empty-hint"
+        >没有匹配「{{ filter.trim() }}」的歌曲</p>
         <div v-else :key="activeId" class="tracks-scroll">
           <TrackList
-            :tracks="activeTracks"
+            :tracks="shown"
             :local-playlist-id="isNowPlaying ? null : activeUser?.id"
-            :show-reorder="!isNowPlaying && !!activeUser"
+            :show-reorder="!isNowPlaying && !!activeUser && !filter.trim()"
             @reorder="onReorder"
           />
         </div>

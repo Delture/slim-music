@@ -5,12 +5,15 @@ import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import { resumeSync, session } from '../lib/session';
 import type { Playlist, Track } from '../lib/types';
+import { filterTracks } from '../lib/trackFilter';
 import TrackList from '../components/TrackList.vue';
+import TrackFilter from '../components/TrackFilter.vue';
 import Icon from '../components/Icon.vue';
 
 const lists = ref<Playlist[]>([]);
 const active = ref<Playlist | null>(null);
 const tracks = ref<Track[]>([]);
+const filter = ref('');
 const err = ref('');
 const loading = ref(false);
 const busy = ref(false);
@@ -33,6 +36,19 @@ const menuCanUnsubscribe = computed(
 const menuCanDelete = computed(
   () => !!menu.target && menu.target.owned && !menu.target.isLiked,
 );
+
+const shown = computed(() => filterTracks(tracks.value, filter.value));
+
+/** 后台补拼音搜索键；失败不影响列表显示 */
+async function enrichInPlace(list: Track[], playlistId: number) {
+  if (!list.length) return;
+  try {
+    const enriched = await api.localEnrich(list);
+    if (active.value?.id === playlistId) tracks.value = enriched;
+  } catch {
+    /* ignore */
+  }
+}
 
 function syncNarrow() {
   narrow.value = !!mql?.matches;
@@ -86,6 +102,7 @@ async function refreshTracks(p: Playlist) {
     if (active.value?.id === p.id) {
       tracks.value = h.data.slice();
       fromCache.value = false;
+      void enrichInPlace(h.data, p.id);
     }
   } catch {
     /* 保留缓存 */
@@ -104,7 +121,9 @@ async function syncNow() {
 }
 
 async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true) {
+  const switched = active.value?.id !== p.id;
   active.value = p;
+  if (switched) filter.value = '';
   if (enterDetail && narrow.value) mobileDetail.value = true;
   loading.value = true;
   err.value = '';
@@ -114,6 +133,7 @@ async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true)
     tracks.value = hit.data;
     fromCache.value = hit.fromCache;
     loading.value = false;
+    void enrichInPlace(hit.data, p.id);
     if (doBackgroundRefresh && (hit.fromCache || hit.ageSecs > 0)) void refreshTracks(p);
   } catch (e) {
     if (active.value?.id === p.id) {
@@ -235,10 +255,16 @@ onUnmounted(() => {
         <span v-if="loading && !tracks.length" class="muted tiny">加载中…</span>
       </header>
       <p v-if="err" class="error">{{ err }}</p>
+      <TrackFilter v-model="filter" />
       <!-- Soft fade/slide when switching selected playlist (not only row highlight). -->
       <Transition name="tracks-swap" mode="out-in">
-        <div :key="active.id" class="tracks-scroll">
-          <TrackList :tracks="tracks" />
+        <p
+          v-if="filter.trim() && !shown.length"
+          :key="'empty-' + active.id"
+          class="muted empty-hint"
+        >没有匹配「{{ filter.trim() }}」的歌曲</p>
+        <div v-else :key="active.id" class="tracks-scroll">
+          <TrackList :tracks="shown" />
         </div>
       </Transition>
     </div>
@@ -295,6 +321,11 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+.empty-hint {
+  padding: 48px 24px;
+  text-align: center;
+  font-size: 14px;
 }
 .side-title {
   display: none;
