@@ -88,7 +88,7 @@ impl Library {
 
     /// 只读缓存（启动时秒开）；不访问磁盘上的音频文件。
     pub fn cached(&self) -> Vec<LocalTrack> {
-        finish(self.load().entries.into_values().map(|e| e.track).collect())
+        finish(self.load().entries.into_values().map(|e| e.track).collect(), true)
     }
 
     /// 增量扫描：仅解析新增/变化的文件，删除已不存在的条目。
@@ -135,7 +135,7 @@ impl Library {
         }
         self.fill_covers(&mut next);
         self.save(&next);
-        finish(next.entries.into_values().map(|e| e.track).collect())
+        finish(next.entries.into_values().map(|e| e.track).collect(), true)
     }
 
     /// 封面：按专辑键去重；缺失时读一次内嵌图片或同目录 cover.jpg，缩放成两种尺寸。
@@ -359,11 +359,13 @@ fn read_track(p: &Path, mtime: u64) -> Track {
 }
 
 pub fn enrich(tracks: Vec<Track>) -> Vec<LocalTrack> {
-    finish(tracks)
+    // 必须保留入参顺序：网易云「我喜欢的音乐」按收藏时间；本机歌单按用户排列。
+    finish(tracks, false)
 }
 
-/// 预计算搜索 / 排序键（拼音全拼 + 首字母），按标题排序。
-fn finish(tracks: Vec<Track>) -> Vec<LocalTrack> {
+/// 预计算搜索 / 排序键（拼音全拼 + 首字母）。
+/// `sort_by_title`：仅本地曲库扫描用；歌单 enrich 必须为 false。
+fn finish(tracks: Vec<Track>, sort_by_title: bool) -> Vec<LocalTrack> {
     let mut out: Vec<LocalTrack> = tracks
         .into_iter()
         .map(|mut t| {
@@ -395,7 +397,9 @@ fn finish(tracks: Vec<Track>) -> Vec<LocalTrack> {
             }
         })
         .collect();
-    out.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    if sort_by_title {
+        out.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    }
     out
 }
 
@@ -539,6 +543,30 @@ mod tests {
         let p = lyric_from_raw("[00:01.00]Hello\n[00:01.00]你好\n[00:02.00]World".into());
         assert_eq!(p.lines.len(), 2);
         assert_eq!(p.lines[0].translation.as_deref(), Some("你好"));
+    }
+
+    #[test]
+    fn enrich_preserves_order() {
+        let tracks = vec![
+            Track {
+                title: "斑马".into(),
+                ..Default::default()
+            },
+            Track {
+                title: "苹果".into(),
+                ..Default::default()
+            },
+            Track {
+                title: "啊啊".into(),
+                ..Default::default()
+            },
+        ];
+        let r = enrich(tracks);
+        assert_eq!(r[0].track.title, "斑马");
+        assert_eq!(r[1].track.title, "苹果");
+        assert_eq!(r[2].track.title, "啊啊");
+        // 若按拼音排序会变成 啊啊、斑马、苹果
+        assert!(r[0].sort_key > r[2].sort_key);
     }
 
     #[test]

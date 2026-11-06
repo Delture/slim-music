@@ -39,7 +39,7 @@ const menuCanDelete = computed(
 
 const shown = computed(() => filterTracks(tracks.value, filter.value));
 
-/** 后台补拼音搜索键；失败不影响列表显示 */
+/** 后台补拼音搜索键（保留歌单原有顺序，含「我喜欢的音乐」收藏时间序）；失败不影响列表显示 */
 async function enrichInPlace(list: Track[], playlistId: number) {
   if (!list.length) return;
   try {
