@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SlimMusic v0.8.2 design tokens — pen.dev philosophy (variables once,
+   SlimMusic v0.11.0 design tokens — pen.dev philosophy (variables once,
    components inherit). ONE spacing / radius / button / list-row / badge /
    header system. Charcoal layers + floating chrome. OPPO Sans 4.0.
    ========================================================================== */
@@ -44,9 +44,10 @@
   --surface-0-solid: var(--surface-chrome-solid);
   --bg: var(--surface-1);
 
-  --hover: rgba(0, 0, 0, 0.05);
-  --selected: rgba(0, 0, 0, 0.09);
-  --fill-secondary: rgba(209, 209, 214, 0.42);
+  /* Calmer fills — selected reads as soft chip, not muddy block */
+  --hover: rgba(0, 0, 0, 0.045);
+  --selected: rgba(0, 0, 0, 0.08);
+  --fill-secondary: rgba(209, 209, 214, 0.38);
 
   --border: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.14);
@@ -55,12 +56,18 @@
   --text-secondary: rgba(0, 0, 0, 0.58);
   --muted: rgba(0, 0, 0, 0.42);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 28px -6px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.06);
-  --shadow-cover: 0 6px 12px -2px rgba(0, 0, 0, 0.16), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-chrome: 0 8px 28px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04),
+  /* Elevation ladder (BoardUI-feel depth; solid panels, no live blur) */
+  --elev-0: none;
+  --elev-1: 0 8px 28px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.035),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --elev-2: 0 10px 28px -4px rgba(0, 0, 0, 0.14), 0 4px 10px rgba(0, 0, 0, 0.06);
+  --elev-3: 0 18px 40px -8px rgba(0, 0, 0, 0.22), 0 6px 14px rgba(0, 0, 0, 0.08);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-md: var(--elev-2);
+  --shadow-lg: var(--elev-3);
+  --shadow-cover: 0 6px 12px -2px rgba(0, 0, 0, 0.16), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-chrome: var(--elev-1);
   --shadow-bar: var(--shadow-chrome);
 
   --vibrancy: saturate(180%) blur(22px);
@@ -96,8 +103,16 @@
   --panel-bg: #f5f5f7;
   --panel-border: var(--chrome-border);
   --panel-radius: var(--chrome-radius);
-  --panel-shadow: var(--chrome-shadow);
+  --panel-shadow: var(--elev-1);
   --panel-divider: 0.5px solid var(--border);
+  /* Shared split-view sidebar width (playlists / local / local playlists) */
+  --side-w: 240px;
+  /* Empty states + context menus (shared recipe) */
+  --empty-pad: var(--space-6) var(--space-5);
+  --menu-pad: var(--space-1);
+  --menu-item-py: 10px;
+  --menu-item-px: 14px;
+  --dlg-scrim: rgba(0, 0, 0, 0.22);
 
   /* ---- ONE spacing scale ---- */
   --space-1: 4px;
@@ -130,7 +145,8 @@
   --row-h: 40px;
   --row-px: var(--space-3);
   --row-py: var(--space-2);
-  --row-radius: var(--radius-md);
+  /* 8px — same rounded-rect grammar as buttons/badges (never pill) */
+  --row-radius: var(--radius);
   --row-gap: var(--space-3);
   --row-font: 14px;
   --row-weight: 550;
@@ -202,9 +218,9 @@
   --surface-0-solid: var(--surface-chrome-solid);
   --bg: var(--surface-1);
 
-  --hover: rgba(255, 255, 255, 0.08);
-  --selected: rgba(255, 255, 255, 0.12);
-  --fill-secondary: rgba(255, 255, 255, 0.1);
+  --hover: rgba(255, 255, 255, 0.07);
+  --selected: rgba(255, 255, 255, 0.11);
+  --fill-secondary: rgba(255, 255, 255, 0.09);
 
   --border: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.16);
@@ -213,12 +229,18 @@
   --text-secondary: rgba(255, 255, 255, 0.58);
   --muted: rgba(255, 255, 255, 0.42);
 
+  --elev-1: 0 10px 32px rgba(0, 0, 0, 0.42), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --elev-2: 0 12px 32px rgba(0, 0, 0, 0.48), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --elev-3: 0 20px 44px rgba(0, 0, 0, 0.55), 0 8px 18px rgba(0, 0, 0, 0.35);
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.5);
+  --shadow-md: var(--elev-2);
+  --shadow-lg: var(--elev-3);
   --shadow-cover: 0 8px 20px rgba(0, 0, 0, 0.45);
-  --shadow-chrome: 0 10px 32px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-chrome: var(--elev-1);
   --shadow-bar: var(--shadow-chrome);
+  --panel-shadow: var(--elev-1);
+  --dlg-scrim: rgba(0, 0, 0, 0.45);
 
   --accent-soft: color-mix(in srgb, var(--accent) 28%, transparent);
   --accent-soft-strong: color-mix(in srgb, var(--accent) 38%, transparent);
@@ -615,7 +637,7 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   background: var(--surface-3);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--elev-2);
   max-height: 280px;
   overflow: auto;
   animation: sm-scale-in var(--dur-fast) var(--ease-enter) both;
@@ -801,6 +823,42 @@ input[type='checkbox'] {
 /* Play icon optical center helper */
 .play-icon {
   transform: translateX(var(--play-optical-x));
+}
+
+
+/* ---------- Shared empty / menu recipes ---------- */
+.sm-empty {
+  padding: var(--empty-pad);
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.sm-menu {
+  position: fixed;
+  background: var(--surface-3);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--menu-pad);
+  box-shadow: var(--elev-2);
+  z-index: 40;
+  min-width: 160px;
+  animation: sm-scale-in var(--dur) var(--ease-enter);
+  transform-origin: top left;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.sm-menu > div,
+.sm-menu-item {
+  padding: var(--menu-item-py) var(--menu-item-px);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-swift);
+}
+.sm-menu > div:hover,
+.sm-menu-item:hover {
+  background: var(--fill-secondary);
 }
 
 /* ---------- Mobile: floating bottom tab bar ---------- */

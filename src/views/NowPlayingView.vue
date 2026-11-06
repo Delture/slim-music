@@ -405,7 +405,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
   flex-shrink: 0;
   position: relative;
   z-index: 2;
@@ -454,7 +454,7 @@ onUnmounted(() => {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(280px, 40%) 1fr;
-  gap: 40px;
+  gap: var(--space-6);
   align-items: stretch;
   position: relative;
   z-index: 1;
@@ -464,15 +464,15 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: var(--space-5);
   min-height: 0;
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 .cover {
   width: min(100%, 400px);
   max-height: min(400px, 50vh);
   aspect-ratio: 1;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   object-fit: cover;
   box-shadow: var(--shadow-lg);
   border: 0.5px solid rgba(0, 0, 0, 0.06);
@@ -498,12 +498,12 @@ onUnmounted(() => {
 }
 .sub {
   color: var(--text-secondary);
-  margin-top: 8px;
+  margin-top: var(--space-2);
   font-size: 15px;
   opacity: 0.85;
 }
 .like {
-  margin-top: 16px;
+  margin-top: var(--space-4);
   background: none;
   border: 0;
   color: var(--muted);
@@ -529,7 +529,7 @@ onUnmounted(() => {
   -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
 }
 .line {
-  padding: 14px 12px;
+  padding: var(--space-3);
   font-size: 18px;
   color: var(--muted);
   cursor: pointer;
@@ -577,8 +577,8 @@ onUnmounted(() => {
 }
 .dock {
   /* Blend into cover/lyrics page — no floating card chrome */
-  margin-top: 20px;
-  padding: 12px 8px 4px;
+  margin-top: var(--space-5);
+  padding: var(--space-3) var(--space-2) var(--space-1);
   max-width: 520px;
   width: 100%;
   margin-left: auto;
@@ -594,7 +594,7 @@ onUnmounted(() => {
 }
 .progress {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
   font-size: 12px;
   color: var(--muted);
@@ -651,8 +651,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  margin-top: 12px;
+  gap: var(--space-5);
+  margin-top: var(--space-3);
 }
 .ctrls button {
   background: none;
@@ -728,7 +728,7 @@ onUnmounted(() => {
     height: 120px;
     max-height: 120px;
     flex-shrink: 0;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
   }
   .meta {
     text-align: left;

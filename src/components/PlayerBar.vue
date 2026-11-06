@@ -279,14 +279,13 @@ async function onLike() {
   gap: var(--space-4);
   padding: var(--space-2) var(--space-5);
   min-height: 72px;
-  /* Own floating panel chrome (do NOT leave transparent — that made the bar
-     look full-bleed immersive and let square parents show through corners). */
-  background: var(--panel-bg);
+  /* Chrome lives on parent .player only — avoid double border/shadow. */
+  background: transparent;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border: var(--panel-border);
-  border-radius: var(--panel-radius);
-  box-shadow: var(--panel-shadow);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
   isolation: isolate;
   z-index: 20;
@@ -368,12 +367,12 @@ async function onLike() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
 }
 .ctrls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
 }
 .ctrls button {
   background: none;
@@ -436,7 +435,7 @@ async function onLike() {
 }
 .progress {
   display: flex;
-  gap: 10px;
+  gap: var(--space-3);
   align-items: center;
   width: 100%;
   font-size: 11px;
@@ -507,7 +506,7 @@ async function onLike() {
 }
 .vol {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
   justify-content: flex-end;
   color: var(--muted);

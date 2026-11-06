@@ -283,7 +283,7 @@ watch(
 /* Four-panel shell: middle (list) + right (tracks) as TWO detached float panels. */
 .pl {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
   gap: var(--chrome-gap); /* window bg must show between list + tracks */
   min-width: 0;
   min-height: 0;
@@ -377,22 +377,24 @@ watch(
   flex-shrink: 0;
 }
 .empty-hint {
-  padding: var(--space-5) var(--space-3);
+  padding: var(--empty-pad);
 }
 .ctx {
   position: fixed;
   background: var(--surface-3);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 6px;
-  box-shadow: var(--shadow-lg);
+  padding: var(--menu-pad);
+  box-shadow: var(--elev-2);
   z-index: 40;
   min-width: 160px;
   animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .ctx div {
-  padding: 10px 14px;
+  padding: var(--menu-item-py) var(--menu-item-px);
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 14px;

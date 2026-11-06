@@ -41,9 +41,9 @@ function clear() {
 .tf {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   height: var(--btn-h);
-  padding: 0 10px 0 12px;
+  padding: 0 var(--space-3) 0 var(--space-3);
   border-radius: var(--btn-radius);
   background: var(--fill-secondary);
   border: 0.5px solid transparent;

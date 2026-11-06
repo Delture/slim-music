@@ -433,7 +433,7 @@ watch(
 <style scoped>
 .lv {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
   gap: var(--chrome-gap);
   min-width: 0;
   min-height: 0;
@@ -465,7 +465,7 @@ watch(
 }
 .side-head .seg button {
   flex: 1;
-  padding: 0 6px;
+  padding: 0 var(--space-1);
 }
 .side-scroll {
   flex: 1;
@@ -535,7 +535,7 @@ watch(
   text-overflow: ellipsis;
 }
 .sort .sm-select-trigger {
-  gap: 6px;
+  gap: var(--space-1);
 }
 .note {
   font-size: 13px;

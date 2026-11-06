@@ -50,8 +50,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true));
 .sm-dlg-backdrop {
   position: fixed; inset: 0; z-index: 10000;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.28);
-  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: var(--dlg-scrim);
+  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
 }
 .sm-dlg {
   width: 360px; max-width: 100%;
@@ -59,9 +59,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true));
   background: var(--panel-bg);
   border: var(--panel-border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--panel-shadow);
-  padding: 20px;
-  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: var(--elev-3);
+  padding: var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-3);
   font-family: var(--font-ui);
   color: var(--text);
 }
@@ -83,7 +83,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true));
 .sm-dlg-enter-from .sm-dlg, .sm-dlg-leave-to .sm-dlg { transform: translateY(6px) scale(0.97); opacity: 0; }
 
 @media (max-width: 700px) {
-  .sm-dlg { width: 100%; max-width: 420px; border-radius: var(--radius-xl); padding: 20px 18px 18px; }
+  .sm-dlg { width: 100%; max-width: 420px; border-radius: var(--radius-xl); padding: var(--space-5) var(--space-4) var(--space-4); }
   .sm-dlg-actions button { flex: 1; min-height: 44px; height: 44px; }
   .sm-dlg-input { min-height: 44px; font-size: 16px; }
 }

@@ -20,29 +20,30 @@ import { dismissUpdate, installUpdate, updater } from '../lib/updater';
 <style scoped>
 .update-prompt {
   position: fixed;
-  right: 16px;
+  right: var(--space-4);
   bottom: 96px;
   z-index: 1000;
   width: 240px;
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-lg);
-  background: var(--surface-3);
-  border: 0.5px solid var(--border);
+  background: var(--panel-bg);
+  border: var(--panel-border);
   color: inherit;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--elev-2);
   font-size: 13px;
   animation: sm-scale-in var(--dur) var(--ease-enter);
-  -webkit-backdrop-filter: var(--vibrancy);
-  backdrop-filter: var(--vibrancy);
+  /* Solid panel — same wireframe as chrome; no live vibrancy blur */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .title {
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .bar {
   height: 4px;

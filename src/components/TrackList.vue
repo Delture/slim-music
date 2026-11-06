@@ -278,7 +278,7 @@ function move(i: number, dir: -1 | 1) {
   gap: var(--row-gap);
   align-items: center;
   /* Equal top/bottom padding so cover is optically centered and never clips row bg */
-  padding: 10px var(--row-px);
+  padding: var(--space-3) var(--row-px);
   border-radius: var(--row-radius);
   user-select: none;
   min-width: 0;
@@ -428,7 +428,7 @@ function move(i: number, dir: -1 | 1) {
 }
 .empty {
   color: var(--muted);
-  padding: 48px 24px;
+  padding: var(--empty-pad);
   text-align: center;
   font-size: 15px;
 }
@@ -437,8 +437,8 @@ function move(i: number, dir: -1 | 1) {
   background: var(--surface-3);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 6px;
-  box-shadow: var(--shadow-lg);
+  padding: var(--menu-pad);
+  box-shadow: var(--elev-2);
   z-index: 30;
   min-width: 200px;
   max-height: 70vh;
@@ -450,7 +450,7 @@ function move(i: number, dir: -1 | 1) {
   backdrop-filter: none;
 }
 .menu div {
-  padding: 10px 14px;
+  padding: var(--menu-item-py) var(--menu-item-px);
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 14px;
@@ -476,8 +476,8 @@ function move(i: number, dir: -1 | 1) {
 @media (max-width: 700px) {
   .row {
     grid-template-columns: 48px minmax(0, 1fr) 44px;
-    gap: 10px;
-    padding: 10px 4px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-1);
     contain-intrinsic-size: auto 64px;
   }
   .row .no,
