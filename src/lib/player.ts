@@ -1,6 +1,7 @@
 // 播放器：一个 <audio> + 队列。本地文件走 asset 协议，网易云按需取 URL。
 // 队列 / 当前曲 / 进度写入 playback.json（防抖），启动时恢复。
-// 网易云直链可能中途 stalled；waiting/stalled/error 超时后重取 URL 或切到已下完的缓存，并保持进度。
+// 网易云：边播边后台下载；播放中不换源。卡住 / 回到前台时静默恢复。
+// 播放栏错误只显示短中文，不把 ncm-api / OS 英文原文抛给用户。
 import { reactive } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { api } from './api';
@@ -116,6 +117,46 @@ function isAbortError(e: unknown): boolean {
     (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError') ||
     (!!e && typeof e === 'object' && 'name' in e && (e as { name: string }).name === 'AbortError')
   );
+}
+
+/** 播放栏可见错误：只给需要用户处理的短中文；技术原文进 console。 */
+function friendlyPlayError(e: unknown, title?: string | null): string {
+  const raw = String(e ?? '').trim();
+  if (raw) console.warn('[player]', raw);
+  const lower = raw.toLowerCase();
+  const tip = title?.trim() ? `「${title.trim()}」` : '';
+  if (/authentication required|auth required|请先登录|未登录|301/.test(lower) || /登录/.test(raw) && /过期|失效|重新/.test(raw)) {
+    return '登录已过期，请到「设置」重新扫码登录';
+  }
+  if (/无版权|需要 vip|需要vip|\bvip\b/.test(lower) || /copyright/i.test(raw)) {
+    return tip ? `无法播放${tip}（无版权或需要 VIP）` : '无法播放（无版权或需要 VIP）';
+  }
+  if (/rate limit|rate limited|风控|限流|503/.test(lower)) {
+    return '请求过于频繁，请稍后再试';
+  }
+  // ncm-api-rs: Invalid parameter: Unknown error（常见于直链过期后再取 URL 失败）
+  if (
+    /invalid parameter|unknown error|failed to fetch|networkerror|timeout|timed out|http request failed|api error|json error|crypto error/.test(
+      lower,
+    )
+  ) {
+    return tip ? `暂时无法播放${tip}，请稍后重试` : '暂时无法播放，请稍后重试';
+  }
+  // 纯英文 / 技术堆栈 → 泛化
+  if (!raw || /^[\x00-\x7F]+$/.test(raw)) {
+    return tip ? `播放出错：${title!.trim()}` : '播放出错';
+  }
+  return raw.length > 60 ? (tip ? `播放出错：${title!.trim()}` : '播放出错') : raw;
+}
+
+function nearEnd(): boolean {
+  const d = player.duration || audio.duration || 0;
+  const t = audio.currentTime || player.currentTime || 0;
+  return d > 0 && t >= d - 0.85;
+}
+
+function wantsPlayback(): boolean {
+  return player.playing || !audio.paused;
 }
 
 function clearStallWatch() {
@@ -343,7 +384,7 @@ async function loadCurrent(
     maybePrefetchNext(true);
   } catch (e) {
     if (token !== loadToken || isAbortError(e)) return;
-    player.error = String(e);
+    player.error = friendlyPlayError(e, current()?.title);
   } finally {
     if (token === loadToken) schedulePersist(400);
   }
@@ -371,7 +412,9 @@ export function enqueue(t: Track) {
 export function togglePlay() {
   if (NATIVE) {
     if (!nat.hasSrc) return void loadCurrent(true);
-    void nativeCall(player.playing ? 'pause' : 'play').catch((e) => (player.error = String(e)));
+    void nativeCall(player.playing ? 'pause' : 'play').catch((e) => {
+      player.error = friendlyPlayError(e, current()?.title);
+    });
     schedulePersist(300);
     return;
   }
@@ -544,6 +587,7 @@ audio.addEventListener('play', () => {
   schedulePersist(500);
 });
 audio.addEventListener('playing', () => {
+  player.error = '';
   noteProgress();
   clearStallWatch();
   // 真正开播后重置计数，允许后续再遇 stall 时再恢复
@@ -590,14 +634,20 @@ audio.addEventListener('error', () => {
   const code = audio.error?.code;
   if (code === 1) return;
   if (recovering) return;
+  // 后台挂起后直链失效、曲目已播完或本就暂停：不弹红字、不强制打网易云
+  if (!wantsPlayback() || nearEnd()) {
+    player.playing = false;
+    player.error = '';
+    return;
+  }
   if (recoverAttempts < MAX_RECOVER) {
     recoverAttempts += 1;
-    // 网络/解码错误：作废可能损坏的缓存并重取
-    void recoverPlayback(true);
+    // 先尝试已下完的缓存；再失败才作废重取
+    void recoverPlayback(recoverAttempts > 1 || !playingFromUrl);
     return;
   }
   player.playing = false;
-  player.error = `播放出错：${current()?.title ?? ''}`;
+  player.error = friendlyPlayError('playback error', current()?.title);
 });
 audio.volume = player.volume;
 
@@ -629,8 +679,8 @@ if (NATIVE) {
         next(true);
         break;
       case 'error':
-        player.error = `播放出错：${current()?.title ?? ''}`;
         console.warn(e.message);
+        player.error = friendlyPlayError(e.message || 'playback error', current()?.title);
         break;
       case 'remote':
         if (e.action === 'next') next();
@@ -651,3 +701,28 @@ if (NATIVE) {
   navigator.mediaSession.setActionHandler('nexttrack', () => next());
   navigator.mediaSession.setActionHandler('previoustrack', prev);
 }
+
+/** 回到前台：清掉过期红字；若仍在播且媒体已坏，静默重挂（不中途换源逻辑：仅 recover）。 */
+function onAppForeground() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!player.error && !(audio.error && wantsPlayback())) return;
+  if (!wantsPlayback() || nearEnd()) {
+    player.error = '';
+    return;
+  }
+  if (NATIVE) {
+    player.error = '';
+    return;
+  }
+  if (audio.error || audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE || audio.readyState === 0) {
+    player.error = '';
+    void recoverPlayback(playingFromUrl ? recoverAttempts > 0 : false);
+  } else {
+    player.error = '';
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', onAppForeground);
+  document.addEventListener('visibilitychange', onAppForeground);
+}
+

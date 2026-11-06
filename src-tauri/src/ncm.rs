@@ -212,7 +212,13 @@ pub async fn playlist_tracks(cookie: &Option<String>, id: i64) -> R<Vec<Track>> 
 
 pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option<String>> {
     let query = q(cookie).param("id", &id.to_string()).param("level", level);
-    let res = ok(create_client(None).song_url_v1(&query).await)?;
+    let res = match create_client(None).song_url_v1(&query).await {
+        Ok(r) => ok(Ok(r))?,
+        Err(e) => {
+            // ncm-api-rs 英文：Invalid parameter: Unknown error 等 → 交给前端映射成中文
+            return Err(e.to_string());
+        }
+    };
     Ok(res
         .body
         .pointer("/data/0/url")
