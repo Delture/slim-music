@@ -279,13 +279,16 @@ async function onLike() {
   gap: var(--space-4);
   padding: var(--space-2) var(--space-5);
   min-height: 72px;
-  /* Chrome lives on parent .player only — avoid double border/shadow. */
-  background: transparent;
+  /* App mounts <PlayerBar class="player" /> on THIS root. Scoped .bar rules
+     beat global .player, so chrome must live here — otherwise the bar goes
+     flat (transparent / no shadow) and the layout feels top-heavy. */
+  background: var(--panel-bg);
+  background-color: var(--panel-bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
   overflow: hidden;
   isolation: isolate;
   z-index: 20;

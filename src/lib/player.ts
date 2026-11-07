@@ -58,6 +58,10 @@ const nat = { hasSrc: false, paused: true, time: 0 };
 let playingFromUrl = false;
 let recoverAttempts = 0;
 let recovering = false;
+/** 正在换源：忽略 load()/src 赋值触发的 pause，避免误跑 promote 打断首次播放 */
+let swappingSrc = false;
+/** 已成功挂到 audio / native 的曲目 id；与 current() 不一致时 togglePlay 应重载而非裸 play */
+let loadedId: string | null = null;
 let stallWatchTimer: number | undefined;
 let lastTickTime = 0;
 let lastTickAt = 0;
@@ -149,6 +153,13 @@ function friendlyPlayError(e: unknown, title?: string | null): string {
   return raw.length > 60 ? (tip ? `播放出错：${title!.trim()}` : '播放出错') : raw;
 }
 
+function isTransientPlayError(e: unknown): boolean {
+  const lower = String(e ?? '').toLowerCase();
+  return /invalid parameter|unknown error|failed to fetch|networkerror|timeout|timed out|http request failed|api error|json error|crypto error/.test(
+    lower,
+  );
+}
+
 function nearEnd(): boolean {
   const d = player.duration || audio.duration || 0;
   const t = audio.currentTime || player.currentTime || 0;
@@ -185,7 +196,7 @@ function armStallWatch(delayMs = STALL_MS) {
  * 播放中绝不换源——那会造成开头可闻的卡顿。
  */
 async function promoteToCacheIfPaused(token: number) {
-  if (NATIVE || !playingFromUrl || recovering) return;
+  if (NATIVE || !playingFromUrl || recovering || swappingSrc) return;
   if (player.playing || !audio.paused) return;
   const t = current();
   if (!t || t.source !== 'netease' || t.ncmId == null) return;
@@ -292,9 +303,17 @@ async function applyDesktopSrc(
   target: number,
   token: number,
 ) {
-  audio.src = src;
-  // 显式 load，避免沿用上一曲缓冲状态
-  audio.load();
+  swappingSrc = true;
+  try {
+    audio.src = src;
+    // 显式 load，避免沿用上一曲缓冲状态
+    audio.load();
+  } finally {
+    // pause/emptied 可能同步触发；微任务后再放开，盖住同步 pause 回调
+    queueMicrotask(() => {
+      swappingSrc = false;
+    });
+  }
   if (target > 0) {
     await new Promise<void>((resolve) => {
       let settled = false;
@@ -335,7 +354,7 @@ async function applyDesktopSrc(
 async function loadCurrent(
   autoplay = true,
   seekTo?: number,
-  opts?: { forceRefresh?: boolean },
+  opts?: { forceRefresh?: boolean; retried?: boolean },
 ) {
   const t = current();
   if (!t) return;
@@ -347,6 +366,7 @@ async function loadCurrent(
     const resolved = await resolveSrc(t, !!opts?.forceRefresh);
     if (token !== loadToken) return;
     if (!resolved) {
+      loadedId = null;
       player.error = `无法播放「${t.title}」（无版权或需要 VIP），已跳过`;
       return next(true);
     }
@@ -372,6 +392,7 @@ async function loadCurrent(
       nat.time = target;
       player.currentTime = target;
       if (t.durationMs) player.duration = t.durationMs / 1000;
+      loadedId = t.id;
       if (!autoplay) player.playing = false;
       maybePrefetchNext(true);
       return;
@@ -379,11 +400,20 @@ async function loadCurrent(
     const target = seekTo != null && seekTo > 0 ? seekTo : 0;
     await applyDesktopSrc(resolved.src, !resolved.fromUrl, autoplay, target, token);
     if (token !== loadToken) return;
+    loadedId = t.id;
     noteProgress();
     // 切歌/进队后立刻预取下一首（已缓存则跳过）
     maybePrefetchNext(true);
   } catch (e) {
     if (token !== loadToken || isAbortError(e)) return;
+    // 搜索结果第一次点播放时，取直链偶发 Invalid parameter：静默重试一次
+    if (!opts?.retried && isTransientPlayError(e)) {
+      return loadCurrent(autoplay, seekTo, {
+        forceRefresh: true,
+        retried: true,
+      });
+    }
+    if (token === loadToken) loadedId = null;
     player.error = friendlyPlayError(e, current()?.title);
   } finally {
     if (token === loadToken) schedulePersist(400);
@@ -394,6 +424,7 @@ async function loadCurrent(
 export function playList(list: Track[], startIndex = 0) {
   player.queue = [...list];
   buildOrder(Math.max(0, Math.min(startIndex, list.length - 1)));
+  loadedId = null; // 切队后旧 audio 源失效，等 loadCurrent 成功再对齐
   void loadCurrent();
 }
 
@@ -410,15 +441,17 @@ export function enqueue(t: Track) {
 }
 
 export function togglePlay() {
+  const cur = current();
   if (NATIVE) {
-    if (!nat.hasSrc) return void loadCurrent(true);
+    if (!nat.hasSrc || !cur || loadedId !== cur.id) return void loadCurrent(true);
     void nativeCall(player.playing ? 'pause' : 'play').catch((e) => {
       player.error = friendlyPlayError(e, current()?.title);
     });
     schedulePersist(300);
     return;
   }
-  if (!audio.src) return void loadCurrent(true);
+  // 队列已切到新歌但首次 load 失败时，audio 仍是旧源/空：必须重载，不能裸 play
+  if (!audio.src || !cur || loadedId !== cur.id) return void loadCurrent(true);
   if (audio.paused) {
     void audio.play().catch((e) => {
       if (isAbortError(e)) return;
@@ -599,6 +632,8 @@ audio.addEventListener('pause', () => {
   player.playing = false;
   clearStallWatch();
   schedulePersist(300);
+  // 换源触发的 pause 不 promote，否则会用 autoplay:false 盖掉首次 play
+  if (swappingSrc || recovering) return;
   // 暂停间隙切到本地缓存，恢复播放时不再依赖直链
   void promoteToCacheIfPaused(loadToken);
 });
