@@ -325,10 +325,19 @@ async function resolveSrc(
   if (NATIVE) {
     if (t.source === 'local' && t.path) return { src: t.path, fromUrl: false };
     if (t.source === 'netease' && t.ncmId != null) {
-      const got = await api.songPlaySrc(t.ncmId, forceRefresh);
-      if (!got) return null;
-      if (got.kind === 'file') return { src: got.value, fromUrl: false };
-      return { src: got.value.replace(/^http:\/\//i, 'https://'), fromUrl: true };
+      try {
+        const got = await api.songPlaySrc(t.ncmId, forceRefresh);
+        if (!got) return null;
+        if (got.kind === 'file') return { src: got.value, fromUrl: false };
+        return { src: got.value.replace(/^http:\/\//i, 'https://'), fromUrl: true };
+      } catch (e) {
+        playLog('url_fail', {
+          ncmId: t.ncmId,
+          forceRefresh,
+          err: String(e ?? '').slice(0, 360),
+        });
+        throw e;
+      }
     }
     return null;
   }
@@ -336,11 +345,21 @@ async function resolveSrc(
     return { src: convertFileSrc(t.path), fromUrl: false };
   }
   if (t.source === 'netease' && t.ncmId != null) {
-    const got = await api.songPlaySrc(t.ncmId, forceRefresh);
-    if (!got) return null;
-    if (got.kind === 'file') return { src: convertFileSrc(got.value), fromUrl: false };
-    // 防御：后端已升 https，这里再兜一层，避免旧会话/异常路径残留 http
-    return { src: got.value.replace(/^http:\/\//i, 'https://'), fromUrl: true };
+    try {
+      const got = await api.songPlaySrc(t.ncmId, forceRefresh);
+      if (!got) return null;
+      if (got.kind === 'file') return { src: convertFileSrc(got.value), fromUrl: false };
+      // 防御：后端已升 https，这里再兜一层，避免旧会话/异常路径残留 http
+      return { src: got.value.replace(/^http:\/\//i, 'https://'), fromUrl: true };
+    } catch (e) {
+      // Rust 侧错误已含 id/level/各端点结果（无 cookie）
+      playLog('url_fail', {
+        ncmId: t.ncmId,
+        forceRefresh,
+        err: String(e ?? '').slice(0, 360),
+      });
+      throw e;
+    }
   }
   return null;
 }

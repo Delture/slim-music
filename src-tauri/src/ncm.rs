@@ -210,21 +210,95 @@ pub async fn playlist_tracks(cookie: &Option<String>, id: i64) -> R<Vec<Track>> 
     Ok(all)
 }
 
-pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option<String>> {
-    let query = q(cookie).param("id", &id.to_string()).param("level", level);
-    let res = match create_client(None).song_url_v1(&query).await {
-        Ok(r) => ok(Ok(r))?,
-        Err(e) => {
-            // ncm-api-rs 英文：Invalid parameter: Unknown error 等 → 交给前端映射成中文
-            return Err(e.to_string());
-        }
-    };
-    Ok(res
-        .body
-        .pointer("/data/0/url")
+/// 音质 level → 旧版 song/url 的 br（v1 挂掉时的兜底）。
+fn level_to_br(level: &str) -> &'static str {
+    match level {
+        "standard" => "128000",
+        "higher" => "192000",
+        "exhigh" => "320000",
+        // lossless / hires / sky / jymaster 等：尽量要最高
+        _ => "999000",
+    }
+}
+
+fn url_from_data0(body: &Value) -> Option<String> {
+    body.pointer("/data/0/url")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
-        .map(ncm_https_url))
+        .map(ncm_https_url)
+}
+
+/// 取播放直链。优先 song_url_v1；网易云/加密路径偶发对 v1 返回怪 code（被映射成
+/// Invalid parameter）时，依次回退 download/v1（v1_302）与旧版 song/url。
+/// 错误信息只含 id/level/端点结果，不含 cookie。
+pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option<String>> {
+    let client = create_client(None);
+    let mut stages: Vec<String> = Vec::new();
+
+    // 1) player/url/v1（按 level，可到 hires）
+    {
+        let query = q(cookie).param("id", &id.to_string()).param("level", level);
+        match client.song_url_v1(&query).await {
+            Ok(r) => {
+                if r.status == 200 {
+                    if let Some(url) = url_from_data0(&r.body) {
+                        return Ok(Some(url));
+                    }
+                    stages.push(format!("v1:ok_empty(code={:?})", r.body.get("code")));
+                } else {
+                    stages.push(format!("v1:status={}", r.status));
+                }
+            }
+            Err(e) => stages.push(format!("v1:{e}")),
+        }
+    }
+
+    // 2) download/url/v1 → redirectUrl（ncm-api-rs 的 song_url_v1_302）
+    {
+        let query = q(cookie).param("id", &id.to_string()).param("level", level);
+        match client.song_url_v1_302(&query).await {
+            Ok(r) => {
+                if let Some(url) = r
+                    .body
+                    .get("redirectUrl")
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                {
+                    return Ok(Some(ncm_https_url(url)));
+                }
+                if let Some(url) = url_from_data0(&r.body) {
+                    return Ok(Some(url));
+                }
+                stages.push(format!("v1_302:ok_empty(status={})", r.status));
+            }
+            Err(e) => stages.push(format!("v1_302:{e}")),
+        }
+    }
+
+    // 3) 旧版 player/url（br）
+    {
+        let br = level_to_br(level);
+        let query = q(cookie).param("id", &id.to_string()).param("br", br);
+        match client.song_url(&query).await {
+            Ok(r) => {
+                if r.status == 200 || r.status == 302 {
+                    if let Some(url) = url_from_data0(&r.body) {
+                        return Ok(Some(url));
+                    }
+                    // 无版权 / VIP：各端都空，返回 None（前端跳过）
+                    stages.push(format!("v0:ok_empty(code={:?},br={br})", r.body.get("code")));
+                    return Ok(None);
+                }
+                stages.push(format!("v0:status={}", r.status));
+            }
+            Err(e) => stages.push(format!("v0:{e}")),
+        }
+    }
+
+    Err(format!(
+        "取直链失败 id={id} level={level} | {}",
+        stages.join(" → ")
+    ))
 }
 
 /// 「我喜欢的音乐」：顺序以歌单自身 trackIds 为准（`at` 为收藏时间，按其倒序）；
@@ -430,6 +504,15 @@ mod tests {
     }
 
     // 联网测试：cargo test -- --ignored
+    #[test]
+    fn level_to_br_mapping() {
+        assert_eq!(super::level_to_br("standard"), "128000");
+        assert_eq!(super::level_to_br("higher"), "192000");
+        assert_eq!(super::level_to_br("exhigh"), "320000");
+        assert_eq!(super::level_to_br("hires"), "999000");
+        assert_eq!(super::level_to_br("lossless"), "999000");
+    }
+
     #[tokio::test]
     #[ignore]
     async fn anonymous_search_and_qr_key() {
