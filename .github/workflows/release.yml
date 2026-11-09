@@ -40,6 +40,8 @@ jobs:
     needs: create-release
     strategy:
       fail-fast: false
+      # Avoid Mac/Win racing on latest.json upload (v0.11.5 draft stuck).
+      max-parallel: 1
       matrix:
         include:
           - platform: macos-latest

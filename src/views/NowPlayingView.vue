@@ -12,7 +12,13 @@ import {
   toggleShuffle,
 } from '../lib/player';
 import { closeNowPlaying, isLiked, session, toggleLike } from '../lib/session';
-import { setNowPlayingTitlebar } from '../lib/titlebar';
+import {
+  isWinNowPlayingChrome,
+  setNowPlayingTitlebar,
+  winClose,
+  winMinimize,
+  winToggleMaximize,
+} from '../lib/titlebar';
 import { setTrayLyricLines, clearTrayLyric } from '../lib/tray';
 import { coverSrc, fmtTime } from '../lib/format';
 import { loadLocalLyricCached, loadLyricCached, peekLyric, peekLyricForTrack } from '../lib/lyrics';
@@ -262,6 +268,13 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') closeNowPlaying();
 }
 
+const showWinChrome = isWinNowPlayingChrome();
+
+function onTitleDblClick() {
+  if (!showWinChrome) return;
+  void winToggleMaximize();
+}
+
 onMounted(() => {
   // 打开时已在 openNowPlaying 切 overlay；这里再确保一次（含直接挂载路径）
   void setNowPlayingTitlebar(true);
@@ -294,8 +307,30 @@ onUnmounted(() => {
       :style="{ backgroundImage: `url(${coverSrc(t.cover, '500y500')})` }"
       aria-hidden="true"
     ></div>
-    <!-- macOS overlay：顶栏全宽拖拽条（返回键在其下方，保持可点） -->
-    <div class="np-title-drag" data-tauri-drag-region aria-hidden="true"></div>
+    <!-- 桌面沉浸：顶栏全宽拖拽条（返回键在其下方，保持可点） -->
+    <div
+      class="np-title-drag"
+      data-tauri-drag-region
+      aria-hidden="true"
+      @dblclick="onTitleDblClick"
+    ></div>
+    <div v-if="showWinChrome" class="np-win-controls">
+      <button type="button" class="np-win-btn" title="最小化" aria-label="最小化" @click="winMinimize">
+        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+          <rect x="1" y="5.5" width="10" height="1" fill="currentColor" />
+        </svg>
+      </button>
+      <button type="button" class="np-win-btn" title="最大化" aria-label="最大化" @click="winToggleMaximize">
+        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+      <button type="button" class="np-win-btn close" title="关闭" aria-label="关闭" @click="winClose">
+        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+          <path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.2" fill="none" />
+        </svg>
+      </button>
+    </div>
     <div class="top">
       <button class="back" type="button" aria-label="返回" title="返回" @click="closeNowPlaying">
         <Icon name="chevron-left" :size="18" />
@@ -789,14 +824,15 @@ onUnmounted(() => {
 
 <style>
 /*
- * macOS Now Playing overlay — MUST be unscoped.
- * Vue scoped `:global(html.sm-np-overlay) .child` was compiled to just
- * `html.sm-np-overlay { … }`, so padding / drag strip never applied to .np
- * (返回键叠红绿灯、顶栏无法拖动).
+ * Desktop Now Playing immersive chrome — MUST be unscoped.
+ * Vue scoped `:global(html.sm-np-*) .child` was compiled away before (0.11.5).
  */
 .np-title-drag {
   display: none;
   pointer-events: none;
+}
+.np-win-controls {
+  display: none;
 }
 html.sm-np-overlay {
   --np-mac-titlebar: 56px;
@@ -812,11 +848,64 @@ html.sm-np-overlay .np-title-drag {
   z-index: 5;
 }
 html.sm-np-overlay .np {
-  /* 内容（含返回键）整体落在红绿灯 / 拖拽条下方 */
   padding-top: calc(var(--np-mac-titlebar) + env(safe-area-inset-top, 0px));
 }
 html.sm-np-overlay .np > .top {
   position: relative;
-  z-index: 6; /* 返回键可点；与拖拽条纵向错开，不互相遮挡 */
+  z-index: 6;
+}
+
+/* Windows：去系统标题栏后自绘拖拽条 + 最小/最大/关闭 */
+html.sm-np-win {
+  --np-win-titlebar: 36px;
+}
+html.sm-np-win .np-title-drag {
+  display: block;
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--np-win-titlebar);
+  z-index: 5;
+}
+html.sm-np-win .np-win-controls {
+  display: flex;
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: var(--np-win-titlebar);
+  z-index: 7;
+  align-items: stretch;
+}
+html.sm-np-win .np-win-btn {
+  width: 46px;
+  height: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text, #e8e8e8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  opacity: 0.85;
+}
+html.sm-np-win .np-win-btn:hover {
+  background: color-mix(in srgb, #fff 14%, transparent);
+  opacity: 1;
+}
+html.sm-np-win .np-win-btn.close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+html.sm-np-win .np {
+  padding-top: calc(var(--np-win-titlebar) + env(safe-area-inset-top, 0px));
+}
+html.sm-np-win .np > .top {
+  position: relative;
+  z-index: 6;
 }
 </style>
