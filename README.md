@@ -7,15 +7,15 @@
 
 ## 预览
 
-浅色主题 · 网易云红强调色（示例界面）：
+浅色主题 · 网易云红强调色（实机界面）：
 
 <p align="center">
   <img src="docs/screenshots/01-daily.png" alt="每日推荐" width="720" />
 </p>
 
-| 我的歌单 | 本地音乐 |
+| 我的歌单 | 播放列表 |
 |:---:|:---:|
-| <img src="docs/screenshots/02-playlists.png" alt="我的歌单" width="360" /> | <img src="docs/screenshots/03-local.png" alt="本地音乐" width="360" /> |
+| <img src="docs/screenshots/02-playlists.png" alt="我的歌单" width="360" /> | <img src="docs/screenshots/03-queue.png" alt="播放列表" width="360" /> |
 
 <p align="center">
   <img src="docs/screenshots/04-now-playing.png" alt="播放页" width="720" />
