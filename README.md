@@ -3,7 +3,6 @@
 轻量音乐播放器：**本地音乐 + 网易云**（每日推荐 / 搜索 / 我的歌单）。  
 [Tauri 2](https://tauri.app/) + Rust + Vue 3，支持 **macOS / Windows / Android**。
 
-> 作者：[Yuhua Zhang](https://github.com/Delture)（Delture）
 
 ## 预览
 
