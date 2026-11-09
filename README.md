@@ -1,123 +1,122 @@
 # SlimMusic
 
-自用的精简音乐播放器：**本地音乐 + 网易云（每日推荐 / 搜索 / 我的歌单）**。
-Tauri 2 + Rust + Vue 3，支持 **macOS、Windows、Android** 三端（均已实测可用）。网易云接口由Rust直接调用。
+轻量音乐播放器：**本地音乐 + 网易云**（每日推荐 / 搜索 / 我的歌单）。  
+[Tauri 2](https://tauri.app/) + Rust + Vue 3，支持 **macOS / Windows / Android**。
 
-> 作者：[Yuhua Zhang](https://github.com/Delture)（Delture）。
+> 作者：[Yuhua Zhang](https://github.com/Delture)（Delture）
+
+## 预览
+
+浅色主题 · 网易云红强调色（示例界面）：
+
+<p align="center">
+  <img src="docs/screenshots/01-daily.png" alt="每日推荐" width="720" />
+</p>
+
+| 我的歌单 | 本地音乐 |
+|:---:|:---:|
+| <img src="docs/screenshots/02-playlists.png" alt="我的歌单" width="360" /> | <img src="docs/screenshots/03-local.png" alt="本地音乐" width="360" /> |
+
+<p align="center">
+  <img src="docs/screenshots/04-now-playing.png" alt="播放页" width="720" />
+</p>
+
+四块浮动面板（侧栏 / 内容 / 列表 / 底栏）共用同一套背景与描边；播放页支持沉浸式封面背景。
 
 ## 功能
 
 | 页面 | 说明 |
 |---|---|
-| 每日推荐 | 需要登录 |
+| 每日推荐 | 登录后同步当日推荐 |
 | 搜索 | 单曲搜索，可加载更多 |
-| 我的歌单 | 中间歌单列 + 右侧曲目两块浮动面板；右键歌单可播放全部 / 取消收藏 / 删除 |
-| 本地音乐 | 扫描设置里的文件夹（mp3/flac/m4a/aac/wav/ogg/opus/aiff/aif/ape/wma/wv），lofty 读标签，同名 .lrc 作歌词，可筛选 |
-| 播放列表 | 同四面板布局（侧栏 / 列表 / 曲目 / 底栏）；右键列表项：播放全部 / 重命名 / 删除；JSON 持久化 |
-| 播放列表 → 正在播放 | 查看当前播放队列 |
-| 设置 | 扫码登录 / 退出、主题（浅色/深色/跟随系统）、强调色（网易云红 / 陶土橙）、网易云音质、本地文件夹、歌单/音频缓存 |
+| 我的歌单 | 歌单列 + 曲目列两块浮动面板；支持歌单内搜索；右键可播放全部 / 取消收藏 / 删除 |
+| 本地音乐 | 扫描自选文件夹；按专辑 / 艺人 / 文件夹分组；标签、内嵌封面与同名 `.lrc`；拼音筛选 |
+| 播放列表 | 本地队列管理（播放全部 / 重命名 / 删除）；可与网易云曲目混排 |
+| 播放页 | 点底栏封面进入：大封面 + 滚动歌词（含翻译）；桌面端沉浸标题栏 |
+| 设置 | 扫码登录、主题（浅 / 深 / 跟随系统）、强调色（红 / 陶土橙）、音质、本地文件夹、缓存与关于 |
 
-- **红心 / 取消喜欢**、**取消收藏歌单**、**删除自建歌单**
-- **播放页**：点底部栏封面进入，左侧大封面 + 右侧滚动歌词（含翻译，歌词有磁盘缓存）；关闭或进后台时停止歌词滚动与进度条动画
-- **记忆**：音量、随机、循环模式持久化；启动时恢复上次队列和进度（保持暂停）
-- **缓存**：歌单元数据 + 音频磁盘缓存（LRU，校验 Content-Length），设置里可调；直链卡顿会自动重试/切缓存；接近曲末或切歌时后台预取下一首
-- **关窗不停播**：点击窗口关闭按钮后隐藏窗口，托盘/菜单栏继续；托盘右键：显示、播放/暂停、上下首、退出
-- **Android**：后台播放、通知栏/锁屏媒体控制、耳机按键、读取系统媒体库中的本地音乐、手机专用布局、登录二维码可保存到相册或直接在网易云音乐中打开
-- 进度条用 rAF 写 DOM，拖动期间由用户输入控制进度；列表封面进入视口后再加载（小尺寸解码）
+- **红心 / 取消喜欢**，歌单收藏与删除
+- **本地 + 网易云混播**：每首歌带来源标记；双击行、点序号 ▶ / 封面，或右键「从这首开始播放」即可把当前列表设为队列
+- **启动记忆**：音量、随机、循环与上次队列（保持暂停，不自动续播）
+- **缓存**：歌单 / 歌词 / 音频磁盘缓存（LRU）；切歌预取下一首
+- **关窗不停播**（桌面）：隐藏到托盘 / 菜单栏；右键可显示、播放控制、退出
+- **Android**：后台播放、通知栏与锁屏控制、耳机按键、系统媒体库、手机布局；登录二维码可保存或跳转网易云
 
-播放规则：**双击行**、**单击序号 ▶ 或封面**、右键 **「从这首开始播放」**，都会把当前整张列表设为播放队列，从该曲开始往后播。
-右键「添加到播放队列末尾」可以把本地和网易云歌曲混在一个队列里。
-支持上一首 / 下一首 / 进度拖动 / 音量 / 随机 / 循环（列表、单曲）。每首歌在列表和播放条上都带「本地 / 网易云」来源标记。
+本地扫描支持常见有损 / 无损格式（mp3、flac、m4a、aac、wav、ogg、opus、aiff、ape、wma、wv 等）。具体能否播放取决于标签解析与目标平台 WebView / 解码能力。
 
-本地文件的扫描支持与播放支持分别取决于标签解析器和目标平台WebView；WMA等格式请在目标设备确认解码能力。
+## 下载
 
-## 下载 / 安装
+到 [Releases](https://github.com/Delture/slim-music/releases) 下载最新安装包：
 
-到 [GitHub Releases](https://github.com/Delture/slim-music/releases) 下载对应安装包：
+| 平台 | 文件 | 备注 |
+|---|---|---|
+| macOS（Apple Silicon） | `.dmg` | 未签名：首次请右键「打开」，或 `xattr -cr /Applications/SlimMusic.app` |
+| Windows（x64） | `-setup.exe` | 若遇 SmartScreen：更多信息 → 仍要运行 |
+| Android（arm64） | `.apk` | 允许「安装未知来源应用」 |
 
-- **macOS**（Apple Silicon）：`.dmg`。应用未签名，首次打开请在「应用程序」里右键 →「打开」，或执行 `xattr -cr /Applications/SlimMusic.app`
-- **Windows**（x64）：`-setup.exe`。若出现 SmartScreen 提示，点「更多信息」→「仍要运行」
-- **Android**（arm64）：`.apk`。安装时需允许「安装未知来源应用」
+应用内可检查更新（设置 → 关于；启动时也会检查一次）。桌面端下载后安装并重启；Android 调起系统安装器。
 
-### 应用内更新
+## 开发
 
-0.2.0 起支持应用内更新：启动时自动检查一次，也可在「设置 → 关于」手动检查。桌面端下载后自动安装并重启；Android 下载 APK 后调起系统安装器。
-
-## 字体许可
-
-本软件界面使用 [OPPO Sans 4.0](https://open.oppomobile.com/new/developmentDoc/info?id=13223) 字体。版权归 OPPO 广东移动通信有限公司所有，按官方许可免费嵌入使用（含商用）；未对字体文件做改编。许可全文见 [`src/assets/fonts/OPPOSans-LICENSE.txt`](src/assets/fonts/OPPOSans-LICENSE.txt)。
-
-## 开发与构建
-
-### 准备环境
+### 环境
 
 **macOS**
+
 ```bash
 xcode-select --install
-curl https://sh.rustup.rs -sSf | sh      # Rust
-brew install node                        # Node 20+
+curl https://sh.rustup.rs -sSf | sh   # Rust
+brew install node                     # Node 20+
 ```
 
 **Windows**
-- 安装 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)，勾选「使用 C++ 的桌面开发」
-- 安装 [Rust](https://rustup.rs/)（msvc 工具链）和 Node 20+
-- WebView2：Windows 10/11 一般已自带
 
-### 运行
+- [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（勾选「使用 C++ 的桌面开发」）
+- [Rust](https://rustup.rs/)（msvc）+ Node 20+
+- WebView2（Win10/11 一般已自带）
+
+### 命令
+
 ```bash
 npm install
-npm run tauri dev        # 开发模式（Vite 热更新 + Rust）
-npm run tauri build      # 打包：macOS 生成 .app/.dmg，Windows 生成 NSIS 安装包
-```
-Android 打包（需 Android SDK/NDK，并先 `npx tauri android init`）：`npx tauri android build --apk`
-
-其他命令：`npm run typecheck`（前端类型检查）；`cd src-tauri && cargo check`；`cargo test -- --ignored`（联网冒烟测试：匿名搜索 + 获取二维码 key）。
-
-数据保存在系统应用数据目录（identifier `dev.slimmusic.app`）：
-- `settings.json`：音质、文件夹、音量、缓存、主题、强调色
-- `cookie.txt`：网易云登录cookie，明文保存，请按私有文件保管
-- `playback.json`：上次播放队列与进度
-- `local_playlists.json`：本地播放列表
-- `cache/`：歌单、歌词与音频缓存
-
-## 架构
-
-界面变量和共享样式见 [设计说明](design/README.md)。
-
-```
-src/                      前端 (Vue 3 + TS，无路由/状态库)
-  App.vue                 侧边栏 + 页面注册表（增删页面只改这里）
-  lib/types.ts            Track / Playlist / Settings 类型（与 Rust model.rs 对应）
-  lib/api.ts              所有 invoke 调用
-  lib/player.ts           播放器：单个 <audio> + 队列/顺序/随机/循环
-  lib/session.ts          登录态、设置
-  components/TrackList.vue  通用歌曲列表（播放入口、右键菜单）
-  components/PlayerBar.vue  底部播放条
-  components/SourceBadge.vue 来源标记
-  views/*.vue             六个导航页及独立播放视图
-src-tauri/src/
-  lib.rs                  #[tauri::command] 注册、AppState（cookie、设置）
-  ncm.rs                  网易云接口（基于 ncm-api-rs）→ 统一 Track
-  local.rs                本地扫描（walkdir + lofty）
-  settings.rs             设置 / cookie 的 JSON 持久化
-  model.rs                Track { source: Local | Netease, ... }
-  cache.rs                音频和元数据缓存
-  local_playlists.rs      本地播放列表持久化
-  mobile.rs               Android原生接口桥接
+npm run tauri dev     # 开发
+npm run tauri build   # 打包：macOS .app/.dmg，Windows NSIS
 ```
 
-- 本地歌曲：`convertFileSrc(path)` 走 Tauri asset 协议，交给 `<audio>` 播放。`tauri.conf.json` 里 assetProtocol 的 scope 是 `**`，访问范围可按实际音乐目录配置。
-- 网易云歌曲：播放时才调用 `song_url`，按设置里的音质取直链；取不到（无版权 / 需要 VIP）就自动跳过。
-- 用到的网易云接口（ncm-api-rs 方法）：`login_qr_key`、`login_qr_check`、`user_account`、`recommend_songs`、`cloudsearch`、`user_playlist`、`playlist_track_all`、`song_url_v1`、`likelist`、`like`、`playlist_subscribe`、`playlist_delete`、`lyric`。
+Android（需 SDK/NDK，并先 `npx tauri android init`）：
 
-## TODO
+```bash
+npx tauri android build --apk
+```
 
-- [ ] 本地歌曲内嵌封面
+其他：`npm run typecheck`；`cd src-tauri && cargo check`；`cargo test -- --ignored`（联网冒烟：匿名搜索 + 二维码 key）。
+
+数据目录 identifier：`dev.slimmusic.app` — `settings.json`、`cookie.txt`（登录态，请按私有文件保管）、`playback.json`、`local_playlists.json`、`cache/`。
+
+界面变量与共享样式见 [设计说明](design/README.md)。
+
+### 结构概览
+
+```
+src/                 Vue 3 + TS（无路由 / 无状态库）
+  App.vue            侧栏 + 页面注册
+  lib/               invoke、播放器、会话、歌词等
+  components/        列表、播放条、通用控件
+  views/             各导航页与播放页
+src-tauri/src/       Rust 命令、网易云、本地扫描、缓存、Android 桥接
+```
+
+- 本地曲：`convertFileSrc` → asset 协议 → `<audio>`
+- 网易云曲：播放时按音质取直链；无版权 / VIP 不可播则跳过
+
+## 路线图
+
 - [ ] 列表循环空播上限
 - [ ] 解灰（可参考 Yokaze unm；GPL-3.0）
 - [ ] 浏览并收藏别人的歌单
+- [ ] 本地第二轮：文件夹监听、MediaStore 变更、m3u、与网易云匹配
 
-## 许可
+## 字体与许可
 
-本项目代码：MIT。
-依赖 `ncm-api-rs` 0.1.0（crates.io，WTFPL），作者 SPlayer-Dev，移植自 NeteaseCloudMusicApiEnhanced。
+界面字体：[OPPO Sans 4.0](https://open.oppomobile.com/new/developmentDoc/info?id=13223)（版权归 OPPO，按官方许可免费嵌入；未改编）。全文见 [`src/assets/fonts/OPPOSans-LICENSE.txt`](src/assets/fonts/OPPOSans-LICENSE.txt)。
+
+代码：**MIT**。依赖 `ncm-api-rs` 0.1.0（WTFPL，SPlayer-Dev，移植自 NeteaseCloudMusicApiEnhanced）。
