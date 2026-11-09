@@ -13,6 +13,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { QUALITY_LABELS, type AccentId, type CacheStats, type Quality, type ThemeAppearance } from '../lib/types';
 import { ACCENT_COLORS, ACCENT_LABELS, THEME_LABELS } from '../lib/theme';
 import Icon from '../components/Icon.vue';
+import SmSelect from '../components/SmSelect.vue';
 
 const qrSvg = ref('');
 const qrUrl = ref('');
@@ -64,22 +65,10 @@ async function removeFolder(i: number) {
   await saveSettings();
 }
 const qualities = Object.keys(QUALITY_LABELS) as Quality[];
-const qualityOpen = ref(false);
-const qualityRoot = ref<HTMLElement | null>(null);
 
-function pickQuality(q: Quality) {
-  session.settings.quality = q;
-  qualityOpen.value = false;
+function onQualityChange() {
   void saveSettings();
 }
-
-function onDocPointer(e: PointerEvent) {
-  if (!qualityOpen.value) return;
-  const el = qualityRoot.value;
-  if (el && !el.contains(e.target as Node)) qualityOpen.value = false;
-}
-onMounted(() => document.addEventListener('pointerdown', onDocPointer));
-onUnmounted(() => document.removeEventListener('pointerdown', onDocPointer));
 const accents = Object.keys(ACCENT_LABELS) as AccentId[];
 const themes = Object.keys(THEME_LABELS) as ThemeAppearance[];
 const stats = ref<CacheStats | null>(null);
@@ -233,32 +222,12 @@ async function saveQr() {
 
     <div class="settings-card">
       <h3>音质（网易云）</h3>
-      <div ref="qualityRoot" class="sm-select" :class="{ open: qualityOpen }">
-        <button
-          type="button"
-          class="sm-select-trigger"
-          :aria-expanded="qualityOpen"
-          aria-haspopup="listbox"
-          @click="qualityOpen = !qualityOpen"
-        >
-          <span>{{ QUALITY_LABELS[session.settings.quality] }}</span>
-          <Icon class="chev" name="chevron-down" :size="14" />
-        </button>
-        <ul v-if="qualityOpen" class="sm-select-menu" role="listbox">
-          <li
-            v-for="q in qualities"
-            :key="q"
-            role="option"
-            :aria-selected="session.settings.quality === q"
-            :class="{ on: session.settings.quality === q }"
-            tabindex="0"
-            @click="pickQuality(q)"
-            @keydown.enter.prevent="pickQuality(q)"
-          >
-            {{ QUALITY_LABELS[q] }}
-          </li>
-        </ul>
-      </div>
+      <SmSelect
+        v-model="session.settings.quality"
+        :options="qualities"
+        :labels="QUALITY_LABELS"
+        @change="onQualityChange"
+      />
       <p class="muted tip">无损 / Hi-Res 需要对应会员；拿不到时网易云会返回较低音质或空地址。</p>
     </div>
 

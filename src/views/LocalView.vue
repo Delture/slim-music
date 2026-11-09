@@ -10,6 +10,7 @@ import type { LocalTrack, Track } from '../lib/types';
 import TrackList from '../components/TrackList.vue';
 import CoverThumb from '../components/CoverThumb.vue';
 import Icon from '../components/Icon.vue';
+import SmSelect from '../components/SmSelect.vue';
 import { generateAlbumCovers, isAndroid, queryLocalAudio } from '../lib/native';
 
 type Grouping = 'album' | 'artist' | 'folder';
@@ -45,8 +46,6 @@ const err = ref('');
 const grouping = ref<Grouping>('album');
 const selected = ref(ALL);
 const sortBy = ref<SortBy>('smart');
-const sortOpen = ref(false);
-const sortRoot = ref<HTMLElement | null>(null);
 const narrow = ref(false);
 const mobileDetail = ref(false);
 
@@ -267,13 +266,6 @@ const shown = computed<LocalTrack[]>(() => {
   return list.slice().sort(cmp);
 });
 
-function pickSort(s: SortBy) {
-  sortBy.value = s;
-  sortOpen.value = false;
-}
-function onDocClick(e: MouseEvent) {
-  if (sortOpen.value && sortRoot.value && !sortRoot.value.contains(e.target as Node)) sortOpen.value = false;
-}
 
 // ---------- 左侧虚拟列表 ----------
 const sideEl = ref<HTMLElement | null>(null);
@@ -306,12 +298,10 @@ onMounted(() => {
   mql = window.matchMedia('(max-width: 700px)');
   syncNarrow();
   mql.addEventListener('change', syncNarrow);
-  document.addEventListener('click', onDocClick);
   void init();
 });
 onUnmounted(() => {
   mql?.removeEventListener('change', syncNarrow);
-  document.removeEventListener('click', onDocClick);
 });
 watch(
   () => session.settings.localFolders.join('\n'),
@@ -381,33 +371,13 @@ watch(
         <h2 class="head-title">{{ title }}</h2>
         <input v-model="filter" class="grow" placeholder="筛选（支持拼音 / 首字母）" />
         <div class="head-actions">
-          <div ref="sortRoot" class="sm-select sort" :class="{ open: sortOpen }">
-            <button
-              type="button"
-              class="sm-select-trigger"
-              :aria-expanded="sortOpen"
-              aria-haspopup="listbox"
-              @click="sortOpen = !sortOpen"
-            >
-              <Icon name="sort" :size="14" />
-              <span>{{ SORT_LABELS[sortBy] }}</span>
-              <Icon class="chev" name="chevron-down" :size="14" />
-            </button>
-            <ul v-if="sortOpen" class="sm-select-menu" role="listbox">
-              <li
-                v-for="s in sorts"
-                :key="s"
-                role="option"
-                :aria-selected="sortBy === s"
-                :class="{ on: sortBy === s }"
-                tabindex="0"
-                @click="pickSort(s)"
-                @keydown.enter.prevent="pickSort(s)"
-              >
-                {{ SORT_LABELS[s] }}
-              </li>
-            </ul>
-          </div>
+          <SmSelect
+            class="sort"
+            v-model="sortBy"
+            :options="sorts"
+            :labels="SORT_LABELS"
+            icon="sort"
+          />
           <button class="btn-primary" :disabled="!shown.length" @click="playList(shown)">播放全部</button>
           <button class="btn-secondary" :disabled="loading" @click="scan">
             {{ loading ? '扫描中…' : isAndroid ? '刷新' : '重新扫描' }}
@@ -534,7 +504,7 @@ watch(
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.sort .sm-select-trigger {
+.sort :deep(.sm-select-trigger) {
   gap: var(--space-1);
 }
 .note {

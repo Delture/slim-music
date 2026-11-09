@@ -71,6 +71,8 @@ let lastSrcError = '';
 /** 曲末 ended / near-end error 去重，避免连跳两首 */
 let lastEndAdvanceAt = 0;
 let stallWatchTimer: number | undefined;
+/** 用户连点上/下一首时合并为一次 load，避免并发取链 */
+let skipLoadTimer: number | undefined;
 let lastTickTime = 0;
 let lastTickAt = 0;
 const MAX_RECOVER = 3;
@@ -146,11 +148,11 @@ function friendlyPlayError(e: unknown, title?: string | null): string {
   if (/rate limit|rate limited|风控|限流|503/.test(lower)) {
     return '请求过于频繁，请稍后再试';
   }
-  // ncm-api-rs: Invalid parameter: Unknown error（常见于直链过期后再取 URL 失败）
+  // ncm-api-rs: Invalid parameter / 取直链失败（连点切歌、直链过期等）
   if (
     /invalid parameter|unknown error|failed to fetch|networkerror|timeout|timed out|http request failed|api error|json error|crypto error/.test(
       lower,
-    )
+    ) || /取直链失败/.test(raw)
   ) {
     return tip ? `暂时无法播放${tip}，请稍后重试` : '暂时无法播放，请稍后重试';
   }
@@ -162,9 +164,12 @@ function friendlyPlayError(e: unknown, title?: string | null): string {
 }
 
 function isTransientPlayError(e: unknown): boolean {
-  const lower = String(e ?? '').toLowerCase();
-  return /invalid parameter|unknown error|failed to fetch|networkerror|timeout|timed out|http request failed|api error|json error|crypto error/.test(
-    lower,
+  const raw = String(e ?? '');
+  const lower = raw.toLowerCase();
+  return (
+    /invalid parameter|unknown error|failed to fetch|networkerror|timeout|timed out|http request failed|api error|json error|crypto error/.test(
+      lower,
+    ) || /取直链失败/.test(raw)
   );
 }
 
@@ -429,6 +434,10 @@ async function loadCurrent(
 ) {
   const t = current();
   if (!t) return;
+  if (skipLoadTimer != null) {
+    window.clearTimeout(skipLoadTimer);
+    skipLoadTimer = undefined;
+  }
   const token = ++loadToken;
   player.error = '';
   clearStallWatch();
@@ -580,6 +589,19 @@ export function togglePlay() {
   schedulePersist(300);
 }
 
+/** 用户连点切歌：立刻作废在途 load，短暂合并后再取链 */
+function scheduleUserSkipLoad() {
+  loadToken++;
+  loadInFlight = true;
+  player.error = '';
+  clearStallWatch();
+  if (skipLoadTimer != null) window.clearTimeout(skipLoadTimer);
+  skipLoadTimer = window.setTimeout(() => {
+    skipLoadTimer = undefined;
+    void loadCurrent(true);
+  }, 140);
+}
+
 export function next(auto = false) {
   if (!player.order.length) return;
   if (auto && player.repeat === 'one') {
@@ -597,7 +619,9 @@ export function next(auto = false) {
     schedulePersist(300);
     return;
   }
-  void loadCurrent();
+  // 曲末自动切歌立即加载；手动连点合并，减少 Invalid parameter
+  if (auto) void loadCurrent();
+  else scheduleUserSkipLoad();
 }
 
 export function prev() {
@@ -608,7 +632,7 @@ export function prev() {
     return;
   }
   player.pos = player.pos > 0 ? player.pos - 1 : player.order.length - 1;
-  void loadCurrent();
+  scheduleUserSkipLoad();
 }
 
 function curTime(): number {

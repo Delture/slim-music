@@ -642,6 +642,12 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   overflow: auto;
   animation: sm-scale-in var(--dur-fast) var(--ease-enter) both;
 }
+/* Teleport 到 body：避开 .main-col / .float-panel 的 overflow 与动画层叠裁切 */
+.sm-select-menu.portal {
+  position: fixed;
+  right: auto;
+  z-index: 10050;
+}
 .sm-select-menu li {
   padding: var(--row-py) var(--row-px);
   border-radius: var(--row-radius);
