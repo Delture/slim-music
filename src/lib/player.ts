@@ -8,6 +8,7 @@ import { api } from './api';
 import { isAndroid, nativeCall, nativeListen } from './native';
 import type { PlaybackSession, Track } from './types';
 import { coverSrc } from './format';
+import { playLog, playLogError } from './playLog';
 
 export type Repeat = 'off' | 'all' | 'one';
 
@@ -62,6 +63,13 @@ let recovering = false;
 let swappingSrc = false;
 /** 已成功挂到 audio / native 的曲目 id；与 current() 不一致时 togglePlay 应重载而非裸 play */
 let loadedId: string | null = null;
+/** loadCurrent 进行中：禁止 promote 用 autoplay:false 打断切歌 */
+let loadInFlight = false;
+/** 最近一次取源结果，供红字日志 */
+let lastSrcKind: 'file' | 'url' | 'none' | 'error' = 'none';
+let lastSrcError = '';
+/** 曲末 ended / near-end error 去重，避免连跳两首 */
+let lastEndAdvanceAt = 0;
 let stallWatchTimer: number | undefined;
 let lastTickTime = 0;
 let lastTickAt = 0;
@@ -160,6 +168,48 @@ function isTransientPlayError(e: unknown): boolean {
   );
 }
 
+function snapshotCtx(extra?: Record<string, unknown>): Record<string, unknown> {
+  const t = current();
+  return {
+    title: t?.title ?? null,
+    id: t?.id ?? null,
+    ncmId: t?.ncmId ?? null,
+    pos: player.pos,
+    queueLen: player.queue.length,
+    playing: player.playing,
+    loadedId,
+    loadInFlight,
+    swappingSrc,
+    playingFromUrl,
+    recoverAttempts,
+    lastSrcKind,
+    lastSrcError: lastSrcError || undefined,
+    audioError: !NATIVE && audio.error ? audio.error.code : undefined,
+    readyState: NATIVE ? undefined : audio.readyState,
+    paused: NATIVE ? nat.paused : audio.paused,
+    currentTime: Math.round((NATIVE ? nat.time : audio.currentTime) * 10) / 10,
+    duration: Math.round((player.duration || 0) * 10) / 10,
+    ...extra,
+  };
+}
+
+function setVisibleError(msg: string, extra?: Record<string, unknown>) {
+  player.error = msg;
+  playLogError(msg, snapshotCtx(extra));
+}
+
+/** 曲自然结束或近曲末媒体错误：只推进一次 */
+function advanceFromEnd() {
+  const now = Date.now();
+  if (now - lastEndAdvanceAt < 600) {
+    playLog('end_dedupe', snapshotCtx({ sinceMs: now - lastEndAdvanceAt }));
+    return;
+  }
+  lastEndAdvanceAt = now;
+  playLog('advance_from_end', snapshotCtx());
+  next(true);
+}
+
 function nearEnd(): boolean {
   const d = player.duration || audio.duration || 0;
   const t = audio.currentTime || player.currentTime || 0;
@@ -196,7 +246,9 @@ function armStallWatch(delayMs = STALL_MS) {
  * 播放中绝不换源——那会造成开头可闻的卡顿。
  */
 async function promoteToCacheIfPaused(token: number) {
-  if (NATIVE || !playingFromUrl || recovering || swappingSrc) return;
+  if (NATIVE || !playingFromUrl || recovering || swappingSrc || loadInFlight) return;
+  // 曲末前后不要 promote，交给 ended / near-end 切歌
+  if (nearEnd()) return;
   if (player.playing || !audio.paused) return;
   const t = current();
   if (!t || t.source !== 'netease' || t.ncmId == null) return;
@@ -239,7 +291,7 @@ async function checkStallAndRecover() {
     } catch {
       /* ignore */
     }
-    player.error = `播放卡住：${t.title}`;
+    setVisibleError(`播放卡住：${t.title}`, { reason: 'stall_max' });
     return;
   }
 
@@ -303,51 +355,51 @@ async function applyDesktopSrc(
   target: number,
   token: number,
 ) {
+  // 整个换源 + play/seek 期间都视为 swapping，避免 pause 回调误跑 promote
   swappingSrc = true;
   try {
     audio.src = src;
     // 显式 load，避免沿用上一曲缓冲状态
     audio.load();
+    if (target > 0) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            audio.currentTime = Math.min(target, audio.duration || target);
+          } catch {
+            /* ignore */
+          }
+          audio.removeEventListener('loadedmetadata', onMeta);
+          window.clearTimeout(timer);
+          resolve();
+        };
+        const onMeta = () => finish();
+        const timer = window.setTimeout(finish, 8000);
+        if (audio.readyState >= 1) finish();
+        else audio.addEventListener('loadedmetadata', onMeta);
+      });
+      if (token !== loadToken) return;
+      player.currentTime = audio.currentTime;
+    }
+    if (autoplay) {
+      try {
+        await audio.play();
+      } catch (e) {
+        // 切歌时前一次 play() 被 abort 是正常的，不当错误
+        if (token !== loadToken || isAbortError(e)) return;
+        throw e;
+      }
+    } else {
+      // 预加载到可 seek，界面显示曲目与进度，等用户按播放
+      player.playing = false;
+    }
   } finally {
-    // pause/emptied 可能同步触发；微任务后再放开，盖住同步 pause 回调
     queueMicrotask(() => {
       swappingSrc = false;
     });
-  }
-  if (target > 0) {
-    await new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        try {
-          audio.currentTime = Math.min(target, audio.duration || target);
-        } catch {
-          /* ignore */
-        }
-        audio.removeEventListener('loadedmetadata', onMeta);
-        window.clearTimeout(timer);
-        resolve();
-      };
-      const onMeta = () => finish();
-      const timer = window.setTimeout(finish, 8000);
-      if (audio.readyState >= 1) finish();
-      else audio.addEventListener('loadedmetadata', onMeta);
-    });
-    if (token !== loadToken) return;
-    player.currentTime = audio.currentTime;
-  }
-  if (autoplay) {
-    try {
-      await audio.play();
-    } catch (e) {
-      // 切歌时前一次 play() 被 abort 是正常的，不当错误
-      if (token !== loadToken || isAbortError(e)) return;
-      throw e;
-    }
-  } else {
-    // 预加载到可 seek，界面显示曲目与进度，等用户按播放
-    player.playing = false;
   }
 }
 
@@ -361,15 +413,35 @@ async function loadCurrent(
   const token = ++loadToken;
   player.error = '';
   clearStallWatch();
+  loadInFlight = true;
+  lastSrcKind = 'none';
+  lastSrcError = '';
   if (!opts?.forceRefresh) recoverAttempts = 0;
+  playLog('load', snapshotCtx({
+    autoplay,
+    seekTo: seekTo ?? 0,
+    forceRefresh: !!opts?.forceRefresh,
+    retried: !!opts?.retried,
+  }));
   try {
-    const resolved = await resolveSrc(t, !!opts?.forceRefresh);
+    let resolved: { src: string; fromUrl: boolean } | null;
+    try {
+      resolved = await resolveSrc(t, !!opts?.forceRefresh);
+    } catch (e) {
+      lastSrcKind = 'error';
+      lastSrcError = String(e ?? '');
+      throw e;
+    }
     if (token !== loadToken) return;
     if (!resolved) {
       loadedId = null;
-      player.error = `无法播放「${t.title}」（无版权或需要 VIP），已跳过`;
+      lastSrcKind = 'none';
+      setVisibleError(`无法播放「${t.title}」（无版权或需要 VIP），已跳过`, {
+        reason: 'no_url',
+      });
       return next(true);
     }
+    lastSrcKind = resolved.fromUrl ? 'url' : 'file';
     playingFromUrl = resolved.fromUrl;
     if (NATIVE) {
       const target = seekTo != null && seekTo > 0 ? seekTo : 0;
@@ -406,17 +478,34 @@ async function loadCurrent(
     maybePrefetchNext(true);
   } catch (e) {
     if (token !== loadToken || isAbortError(e)) return;
-    // 搜索结果第一次点播放时，取直链偶发 Invalid parameter：静默重试一次
+    // 搜索 / 切歌取直链偶发 Invalid parameter：静默重试一次
     if (!opts?.retried && isTransientPlayError(e)) {
+      playLog('load_retry', snapshotCtx({ err: String(e ?? '') }));
+      await new Promise((r) => window.setTimeout(r, 220));
+      if (token !== loadToken) return;
       return loadCurrent(autoplay, seekTo, {
         forceRefresh: true,
         retried: true,
       });
     }
-    if (token === loadToken) loadedId = null;
-    player.error = friendlyPlayError(e, current()?.title);
+    if (token === loadToken) {
+      loadedId = null;
+      player.playing = false;
+      try {
+        audio.pause();
+      } catch {
+        /* ignore */
+      }
+    }
+    setVisibleError(friendlyPlayError(e, current()?.title), {
+      reason: 'load_fail',
+      raw: String(e ?? ''),
+    });
   } finally {
-    if (token === loadToken) schedulePersist(400);
+    if (token === loadToken) {
+      loadInFlight = false;
+      schedulePersist(400);
+    }
   }
 }
 
@@ -425,6 +514,7 @@ export function playList(list: Track[], startIndex = 0) {
   player.queue = [...list];
   buildOrder(Math.max(0, Math.min(startIndex, list.length - 1)));
   loadedId = null; // 切队后旧 audio 源失效，等 loadCurrent 成功再对齐
+  playLog('play_list', { len: list.length, startIndex, shuffle: player.shuffle });
   void loadCurrent();
 }
 
@@ -445,20 +535,29 @@ export function togglePlay() {
   if (NATIVE) {
     if (!nat.hasSrc || !cur || loadedId !== cur.id) return void loadCurrent(true);
     void nativeCall(player.playing ? 'pause' : 'play').catch((e) => {
-      player.error = friendlyPlayError(e, current()?.title);
+      setVisibleError(friendlyPlayError(e, current()?.title), { reason: 'native_toggle' });
     });
     schedulePersist(300);
     return;
   }
-  // 队列已切到新歌但首次 load 失败时，audio 仍是旧源/空：必须重载，不能裸 play
-  if (!audio.src || !cur || loadedId !== cur.id) return void loadCurrent(true);
+  // 媒体已坏 / 未对齐当前曲：必须重载（曲末 error 后裸 play 只会再失败）
+  const mediaBroken = !!audio.error || audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE;
+  if (!audio.src || !cur || loadedId !== cur.id || mediaBroken) {
+    playLog('toggle_reload', snapshotCtx({ mediaBroken }));
+    return void loadCurrent(true, undefined, { forceRefresh: mediaBroken });
+  }
   if (audio.paused) {
+    playLog('toggle_play', snapshotCtx());
     void audio.play().catch((e) => {
       if (isAbortError(e)) return;
-      // 元素可能已卡死：重挂载到当前进度
-      void recoverPlayback(playingFromUrl ? recoverAttempts > 0 : true);
+      playLog('toggle_play_fail', snapshotCtx({ err: String(e ?? '') }));
+      // 元素可能已卡死：强制重取源
+      void recoverPlayback(true);
     });
-  } else audio.pause();
+  } else {
+    playLog('toggle_pause', snapshotCtx());
+    audio.pause();
+  }
   schedulePersist(300);
 }
 
@@ -618,6 +717,7 @@ audio.addEventListener('play', () => {
   player.error = '';
   noteProgress();
   schedulePersist(500);
+  playLog('playing', snapshotCtx());
 });
 audio.addEventListener('playing', () => {
   player.error = '';
@@ -632,8 +732,9 @@ audio.addEventListener('pause', () => {
   player.playing = false;
   clearStallWatch();
   schedulePersist(300);
-  // 换源触发的 pause 不 promote，否则会用 autoplay:false 盖掉首次 play
-  if (swappingSrc || recovering) return;
+  // 换源 / 加载中 / 恢复中的 pause 不 promote
+  if (swappingSrc || recovering || loadInFlight) return;
+  playLog('pause', snapshotCtx({ nearEnd: nearEnd() }));
   // 暂停间隙切到本地缓存，恢复播放时不再依赖直链
   void promoteToCacheIfPaused(loadToken);
 });
@@ -650,7 +751,7 @@ audio.addEventListener('timeupdate', () => {
   }
 });
 audio.addEventListener('durationchange', () => (player.duration = audio.duration || 0));
-audio.addEventListener('ended', () => next(true));
+audio.addEventListener('ended', () => advanceFromEnd());
 audio.addEventListener('waiting', () => {
   if (!player.playing && audio.paused) return;
   armStallWatch(STALL_MS);
@@ -668,9 +769,19 @@ audio.addEventListener('error', () => {
   // 1 = MEDIA_ERR_ABORTED（切歌打断），忽略
   const code = audio.error?.code;
   if (code === 1) return;
-  if (recovering) return;
-  // 后台挂起后直链失效、曲目已播完或本就暂停：不弹红字、不强制打网易云
-  if (!wantsPlayback() || nearEnd()) {
+  if (recovering || swappingSrc || loadInFlight) {
+    playLog('media_error_ignored', snapshotCtx({ code }));
+    return;
+  }
+  playLog('media_error', snapshotCtx({ code, wants: wantsPlayback(), nearEnd: nearEnd() }));
+  // 流式直链在曲末常抛 error 且不再触发 ended → 以前会静默停住，点播放再红字
+  if (nearEnd()) {
+    player.error = '';
+    advanceFromEnd();
+    return;
+  }
+  // 本就暂停（如后台挂起）：不弹红字、不强制打网易云
+  if (!wantsPlayback()) {
     player.playing = false;
     player.error = '';
     return;
@@ -682,7 +793,10 @@ audio.addEventListener('error', () => {
     return;
   }
   player.playing = false;
-  player.error = friendlyPlayError('playback error', current()?.title);
+  setVisibleError(friendlyPlayError('playback error', current()?.title), {
+    reason: 'media_error_max',
+    code,
+  });
 });
 audio.volume = player.volume;
 
@@ -711,11 +825,13 @@ if (NATIVE) {
         maybePrefetchNext(false);
         break;
       case 'ended':
-        next(true);
+        advanceFromEnd();
         break;
       case 'error':
         console.warn(e.message);
-        player.error = friendlyPlayError(e.message || 'playback error', current()?.title);
+        setVisibleError(friendlyPlayError(e.message || 'playback error', current()?.title), {
+          reason: 'native_error',
+        });
         break;
       case 'remote':
         if (e.action === 'next') next();

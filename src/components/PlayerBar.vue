@@ -16,6 +16,7 @@ import { coverSrc, fmtTime } from '../lib/format';
 import { isLiked, openNowPlaying, session, toggleLike } from '../lib/session';
 import SourceBadge from './SourceBadge.vue';
 import Icon from './Icon.vue';
+import { copyPlayLog } from '../lib/playLog';
 
 const t = computed(() => current());
 /** 封面加载失败的地址：显示占位图标而不是破图 */
@@ -168,6 +169,11 @@ async function onLike() {
     void dialog.alert(String(err));
   }
 }
+
+async function onCopyErrorLog() {
+  const ok = await copyPlayLog();
+  void dialog.alert(ok ? '已复制播放诊断日志，可发给开发者' : '暂无日志');
+}
 </script>
 
 <template>
@@ -240,7 +246,7 @@ async function onLike() {
         </div>
         <span ref="timeDurEl" class="time">0:00</span>
       </div>
-      <div v-if="player.error" class="err">{{ player.error }}</div>
+      <div v-if="player.error" class="err" title="点击复制诊断日志" role="button" @click="onCopyErrorLog">{{ player.error }}</div>
     </div>
 
     <div class="vol">
@@ -506,7 +512,11 @@ async function onLike() {
 .err {
   color: #c62f2f;
   font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }
+.err:hover { opacity: 0.85; }
 .vol {
   display: flex;
   gap: var(--space-2);

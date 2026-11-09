@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { refreshProfile, saveSettings, session, setAppearance } from '../lib/session';
 import { coverSrc } from '../lib/format';
 import { clearLyricMemory } from '../lib/lyrics';
+import { clearPlayLogAll, copyPlayLog } from '../lib/playLog';
 import { checkUpdate, updater } from '../lib/updater';
 import { getVersion } from '@tauri-apps/api/app';
 import { QUALITY_LABELS, type AccentId, type CacheStats, type Quality, type ThemeAppearance } from '../lib/types';
@@ -113,6 +114,32 @@ async function clearCache() {
 }
 
 onMounted(refreshStats);
+
+const logBusy = ref(false);
+async function onCopyPlayLog() {
+  logBusy.value = true;
+  try {
+    const ok = await copyPlayLog();
+    void dialog.alert(ok ? '播放诊断日志已复制到剪贴板' : '暂无日志可复制');
+  } catch (e) {
+    void dialog.alert(String(e));
+  } finally {
+    logBusy.value = false;
+  }
+}
+async function onClearPlayLog() {
+  if (!(await dialog.confirm('清空播放日志', '内存与本地 play-log.txt', { confirmText: '清空' }))) return;
+  logBusy.value = true;
+  try {
+    await clearPlayLogAll();
+    void dialog.alert('已清空');
+  } catch (e) {
+    void dialog.alert(String(e));
+  } finally {
+    logBusy.value = false;
+  }
+}
+
 onMounted(async () => {
   updater.current ||= await getVersion().catch(() => '');
 });
@@ -269,6 +296,15 @@ async function saveQr() {
       <div class="row">
         <button :disabled="cacheBusy" @click="refreshStats">刷新用量</button>
         <button :disabled="cacheBusy" @click="clearCache">清空缓存</button>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <h3>播放诊断</h3>
+      <p class="muted tip">播放栏出现红字时会自动记录上下文（曲目、音源、loadedId 等），不上传。可复制后发给开发者排查。</p>
+      <div class="row">
+        <button :disabled="logBusy" @click="onCopyPlayLog">复制播放日志</button>
+        <button :disabled="logBusy" @click="onClearPlayLog">清空日志</button>
       </div>
     </div>
 

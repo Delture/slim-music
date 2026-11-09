@@ -185,4 +185,46 @@ impl Store {
         fs::write(self.file("playback.json"), json).map_err(|e| e.to_string())
     }
 
+    /// 追加播放诊断日志；超过约 256KB 时截断保留后半段。
+    pub fn append_play_log(&self, text: &str) -> Result<(), String> {
+        if text.is_empty() {
+            return Ok(());
+        }
+        let path = self.file("play-log.txt");
+        {
+            use std::io::Write;
+            let mut f = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(|e| e.to_string())?;
+            f.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        const MAX: u64 = 256 * 1024;
+        let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+        if meta.len() > MAX {
+            let raw = fs::read(&path).map_err(|e| e.to_string())?;
+            let keep = &raw[raw.len() / 2..];
+            // 尽量从下一行开始，避免截断半行
+            let start = keep
+                .iter()
+                .position(|&b| b == b'\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            fs::write(&path, &keep[start..]).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub fn read_play_log(&self) -> String {
+        fs::read_to_string(self.file("play-log.txt")).unwrap_or_default()
+    }
+
+    pub fn clear_play_log(&self) -> Result<(), String> {
+        let p = self.file("play-log.txt");
+        if p.exists() {
+            fs::remove_file(p).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
 }

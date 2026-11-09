@@ -256,6 +256,22 @@ fn cache_clear(state: State<'_, AppState>) -> R<cache::CacheStats> {
 }
 
 
+
+#[tauri::command]
+fn append_play_log(state: State<'_, AppState>, text: String) -> R<()> {
+    state.store.append_play_log(&text)
+}
+
+#[tauri::command]
+fn read_play_log(state: State<'_, AppState>) -> R<String> {
+    Ok(state.store.read_play_log())
+}
+
+#[tauri::command]
+fn clear_play_log(state: State<'_, AppState>) -> R<()> {
+    state.store.clear_play_log()
+}
+
 #[tauri::command]
 fn get_playback_session(state: State<'_, AppState>) -> R<PlaybackSession> {
     Ok(state.store.load_playback())
@@ -637,6 +653,9 @@ pub fn run() {
             prefetch_song_audio,
             cache_stats,
             cache_clear,
+            append_play_log,
+            read_play_log,
+            clear_play_log,
             get_playback_session,
             save_playback_session,
             get_settings,
