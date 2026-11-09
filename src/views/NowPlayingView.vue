@@ -12,6 +12,7 @@ import {
   toggleShuffle,
 } from '../lib/player';
 import { closeNowPlaying, isLiked, session, toggleLike } from '../lib/session';
+import { setNowPlayingTitlebar } from '../lib/titlebar';
 import { setTrayLyricLines, clearTrayLyric } from '../lib/tray';
 import { coverSrc, fmtTime } from '../lib/format';
 import { loadLocalLyricCached, loadLyricCached, peekLyric, peekLyricForTrack } from '../lib/lyrics';
@@ -262,6 +263,8 @@ function onKey(e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  // 打开时已在 openNowPlaying 切 overlay；这里再确保一次（含直接挂载路径）
+  void setNowPlayingTitlebar(true);
   startAnim();
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('keydown', onKey);
@@ -270,6 +273,8 @@ onUnmounted(() => {
   stopAnim();
   document.removeEventListener('visibilitychange', onVisibility);
   window.removeEventListener('keydown', onKey);
+  // Transition leave 结束后再恢复系统标题栏
+  void setNowPlayingTitlebar(false);
 });
 </script>
 
@@ -289,12 +294,14 @@ onUnmounted(() => {
       :style="{ backgroundImage: `url(${coverSrc(t.cover, '500y500')})` }"
       aria-hidden="true"
     ></div>
+    <!-- macOS overlay：标题栏区域可拖拽；左侧留给红绿灯，不盖住返回键 -->
+    <div class="np-title-drag" data-tauri-drag-region aria-hidden="true"></div>
     <div class="top">
       <button class="back" type="button" aria-label="返回" title="返回" @click="closeNowPlaying">
         <Icon name="chevron-left" :size="18" />
       </button>
-      <div class="grab" aria-hidden="true"></div>
-      <div class="top-spacer"></div>
+      <div class="grab" data-tauri-drag-region aria-hidden="true"></div>
+      <div class="top-spacer" data-tauri-drag-region></div>
     </div>
 
     <div class="stage">
@@ -776,5 +783,26 @@ onUnmounted(() => {
   .grab {
     display: none;
   }
+}
+
+/* macOS overlay 标题栏：内容延伸到红绿灯下方，返回键避开系统按钮 */
+.np-title-drag {
+  display: none;
+}
+:global(html.sm-np-overlay) .np-title-drag {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 78px;
+  right: 0;
+  height: 52px;
+  z-index: 2;
+}
+:global(html.sm-np-overlay) .np {
+  /* 52px ≈ macOS 标题栏高度，让返回键落在红绿灯下方 */
+  padding-top: calc(52px + env(safe-area-inset-top));
+}
+:global(html.sm-np-overlay) .np > .top {
+  z-index: 3;
 }
 </style>

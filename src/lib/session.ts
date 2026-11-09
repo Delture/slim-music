@@ -4,6 +4,7 @@ import type { AccentId, Profile, Settings, ThemeAppearance } from './types';
 import { applyPlaybackPrefs, restorePlaybackSession, setVolume } from './player';
 import { refreshLocalPlaylists } from './localPlaylists';
 import { applyTheme, normalizeAccent, normalizeAppearance } from './theme';
+import { setNowPlayingTitlebar } from './titlebar';
 
 const defaultSettings = (): Settings => ({
   quality: 'exhigh',
@@ -128,6 +129,7 @@ export function persistPlaybackSettings(delayMs = 250) {
 }
 
 export function openNowPlaying() {
+  void setNowPlayingTitlebar(true);
   session.nowPlaying = true;
 }
 export function closeNowPlaying() {

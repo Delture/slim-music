@@ -15,7 +15,9 @@
     "core:tray:default",
     "dialog:allow-open",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "core:window:allow-set-title-bar-style",
+    "core:window:allow-start-dragging"
   ],
   "platforms": [
     "macOS",
