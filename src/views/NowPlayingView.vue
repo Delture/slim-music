@@ -294,7 +294,7 @@ onUnmounted(() => {
       :style="{ backgroundImage: `url(${coverSrc(t.cover, '500y500')})` }"
       aria-hidden="true"
     ></div>
-    <!-- macOS overlay：标题栏区域可拖拽；左侧留给红绿灯，不盖住返回键 -->
+    <!-- macOS overlay：顶栏全宽拖拽条（返回键在其下方，保持可点） -->
     <div class="np-title-drag" data-tauri-drag-region aria-hidden="true"></div>
     <div class="top">
       <button class="back" type="button" aria-label="返回" title="返回" @click="closeNowPlaying">
@@ -785,24 +785,38 @@ onUnmounted(() => {
   }
 }
 
-/* macOS overlay 标题栏：内容延伸到红绿灯下方，返回键避开系统按钮 */
+</style>
+
+<style>
+/*
+ * macOS Now Playing overlay — MUST be unscoped.
+ * Vue scoped `:global(html.sm-np-overlay) .child` was compiled to just
+ * `html.sm-np-overlay { … }`, so padding / drag strip never applied to .np
+ * (返回键叠红绿灯、顶栏无法拖动).
+ */
 .np-title-drag {
   display: none;
+  pointer-events: none;
 }
-:global(html.sm-np-overlay) .np-title-drag {
+html.sm-np-overlay {
+  --np-mac-titlebar: 56px;
+}
+html.sm-np-overlay .np-title-drag {
   display: block;
+  pointer-events: auto;
   position: absolute;
   top: 0;
-  left: 78px;
+  left: 0;
   right: 0;
-  height: 52px;
-  z-index: 2;
+  height: var(--np-mac-titlebar);
+  z-index: 5;
 }
-:global(html.sm-np-overlay) .np {
-  /* 52px ≈ macOS 标题栏高度，让返回键落在红绿灯下方 */
-  padding-top: calc(52px + env(safe-area-inset-top));
+html.sm-np-overlay .np {
+  /* 内容（含返回键）整体落在红绿灯 / 拖拽条下方 */
+  padding-top: calc(var(--np-mac-titlebar) + env(safe-area-inset-top, 0px));
 }
-:global(html.sm-np-overlay) .np > .top {
-  z-index: 3;
+html.sm-np-overlay .np > .top {
+  position: relative;
+  z-index: 6; /* 返回键可点；与拖拽条纵向错开，不互相遮挡 */
 }
 </style>
