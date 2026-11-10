@@ -5,6 +5,7 @@ import { isMobile } from '../lib/native';
 // 虚拟列表：只渲染视口附近行，消除长歌单上下滚动卡顿。
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useVirtualizer } from '@tanstack/vue-virtual';
+import { useAppMenuDismiss } from '../lib/appMenu';
 import type { Track } from '../lib/types';
 import { current, enqueue, playList } from '../lib/player';
 import { fmtTime } from '../lib/format';
@@ -43,6 +44,12 @@ const menu = reactive({
   /** add | remove | null */
   sub: null as null | 'add' | 'remove',
 });
+const menuEl = ref<HTMLElement | null>(null);
+const { openMenuAt, closeMenu: hideMenu } = useAppMenuDismiss(menu, menuEl);
+function closeMenu() {
+  hideMenu();
+  menu.sub = null;
+}
 
 const busy = ref(false);
 const rootEl = ref<HTMLElement | null>(null);
@@ -110,11 +117,9 @@ async function openMenu(e: MouseEvent, i: number) {
       /* ignore */
     }
   }
-  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, index: i, sub: null });
-}
-function closeMenu() {
-  menu.show = false;
+  menu.index = i;
   menu.sub = null;
+  openMenuAt(e);
 }
 function copyName() {
   const t = menuTrack.value;
@@ -166,7 +171,7 @@ function move(i: number, dir: -1 | 1) {
 </script>
 
 <template>
-  <div ref="rootEl" class="list" @click="closeMenu">
+  <div ref="rootEl" class="list">
     <div v-if="tracks.length" class="virt" :style="{ height: totalSize + 'px' }">
       <div
         v-for="vRow in virtualRows"
@@ -225,11 +230,14 @@ function move(i: number, dir: -1 | 1) {
     </div>
     <div v-else class="empty">暂无歌曲</div>
 
+    <Teleport to="body">
     <div
       v-if="menu.show"
+      ref="menuEl"
       class="menu"
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
       @click.stop
+      @pointerdown.stop
     >
       <template v-if="!menu.sub">
         <div @click="playAt(menu.index); closeMenu()">从这首开始播放</div>
@@ -258,6 +266,7 @@ function move(i: number, dir: -1 | 1) {
         </div>
       </template>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -439,7 +448,7 @@ function move(i: number, dir: -1 | 1) {
   border-radius: var(--radius-lg);
   padding: var(--menu-pad);
   box-shadow: var(--elev-2);
-  z-index: 30;
+  z-index: 9000;
   min-width: 200px;
   max-height: 70vh;
   overflow: auto;

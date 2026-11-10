@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { dialog } from '../lib/dialog';
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
+import { useAppMenuDismiss } from '../lib/appMenu';
 import { playList, player } from '../lib/player';
 import {
   createLocalPlaylist,
@@ -35,6 +36,8 @@ const menu = reactive({
   target: null as LocalPlaylist | null,
   isNow: false,
 });
+const menuEl = ref<HTMLElement | null>(null);
+const { openMenuAt, closeMenu: hideMenu } = useAppMenuDismiss(menu, menuEl);
 
 const nowPlayingTracks = computed<Track[]>(() => {
   if (!player.order.length) return [...player.queue];
@@ -97,17 +100,21 @@ function backToLists() {
 }
 
 function closeMenu() {
-  menu.show = false;
+  hideMenu();
   menu.target = null;
   menu.isNow = false;
 }
 
 function openMenuNow(e: MouseEvent) {
-  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, target: null, isNow: true });
+  menu.target = null;
+  menu.isNow = true;
+  openMenuAt(e);
 }
 
 function openMenuPl(e: MouseEvent, p: LocalPlaylist) {
-  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, target: p, isNow: false });
+  menu.target = p;
+  menu.isNow = false;
+  openMenuAt(e);
 }
 
 function menuPlayAll() {
@@ -198,7 +205,7 @@ watch(
 </script>
 
 <template>
-  <section class="pl" :class="{ 'mobile-detail': mobileDetail }" @click="closeMenu">
+  <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
     <aside class="side float-panel">
       <div class="side-head">
         <span>播放列表</span>
@@ -264,11 +271,14 @@ watch(
       </Transition>
     </div>
 
+    <Teleport to="body">
     <div
       v-if="menu.show"
+      ref="menuEl"
       class="ctx"
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
       @click.stop
+      @pointerdown.stop
     >
       <div @click="menuPlayAll">播放全部</div>
       <template v-if="menu.target">
@@ -276,6 +286,7 @@ watch(
         <div class="danger" @click="menuDelete">删除歌单</div>
       </template>
     </div>
+    </Teleport>
   </section>
 </template>
 
@@ -386,7 +397,7 @@ watch(
   border-radius: var(--radius-lg);
   padding: var(--menu-pad);
   box-shadow: var(--elev-2);
-  z-index: 40;
+  z-index: 9000;
   min-width: 160px;
   animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
