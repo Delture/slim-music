@@ -124,15 +124,50 @@ watch(
   { immediate: true },
 );
 
-watch(activeIdx, async (i) => {
-  // 后台 / 隐藏时不滚歌词，避免无意义 smooth scroll + 合成
-  if (typeof document !== 'undefined' && document.hidden) return;
+function isDocHidden() {
+  return typeof document !== 'undefined' && document.hidden;
+}
+
+/** 关窗隐藏 / 切到后台时置位；回到前台再对齐当前行。勿把普通聚焦当成手动离词。 */
+let lyricsSuspended = false;
+let unlistenFocus: (() => void) | null = null;
+let blurCheckTimer = 0;
+let npMounted = false;
+
+async function scrollToActive(behavior: ScrollBehavior = 'smooth') {
+  if (isDocHidden()) return;
   await nextTick();
   const root = listEl.value;
+  const i = activeIdx.value;
   const el = root?.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
   if (!root || !el || i < 0) return;
+  // 刚从隐藏恢复时 WebView 可能还没完成布局
+  if (root.clientHeight <= 0) {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    if (isDocHidden() || root.clientHeight <= 0) return;
+  }
   const top = el.offsetTop - root.clientHeight / 2 + el.offsetHeight / 2;
-  root.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  root.scrollTo({ top: Math.max(0, top), behavior });
+}
+
+function suspendLyricsFollow() {
+  lyricsSuspended = true;
+  stopAnim();
+}
+
+function resumeLyricsFollow(force = false) {
+  if (isDocHidden()) return;
+  startAnim();
+  if (!force && !lyricsSuspended) return;
+  lyricsSuspended = false;
+  // 隐藏期间 activeIdx 可能已走过很多行，立刻跳到当前行，而不是等下一句
+  void scrollToActive('auto');
+}
+
+watch(activeIdx, () => {
+  // 后台 / 隐藏时不滚歌词，避免无意义 smooth scroll + 合成
+  if (isDocHidden() || lyricsSuspended) return;
+  void scrollToActive('smooth');
 });
 
 async function onLike() {
@@ -198,8 +233,32 @@ function tick() {
   raf = requestAnimationFrame(tick);
 }
 function onVisibility() {
-  if (document.hidden) stopAnim();
-  else startAnim();
+  if (isDocHidden()) suspendLyricsFollow();
+  else resumeLyricsFollow(true);
+}
+
+function onWindowFocus() {
+  resumeLyricsFollow();
+}
+
+function onWindowBlur() {
+  if (blurCheckTimer) window.clearTimeout(blurCheckTimer);
+  // hide() 可能稍晚于 blur；短延迟后再查窗口是否真的不可见
+  blurCheckTimer = window.setTimeout(() => {
+    blurCheckTimer = 0;
+    void (async () => {
+      if (isDocHidden()) {
+        suspendLyricsFollow();
+        return;
+      }
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        if (!(await getCurrentWindow().isVisible())) suspendLyricsFollow();
+      } catch {
+        /* 非 Tauri / 查询失败：仅依赖 visibilitychange */
+      }
+    })();
+  }, 80);
 }
 function ratioFromEvent(e: PointerEvent) {
   const el = trackEl.value;
@@ -277,15 +336,45 @@ function onTitleDblClick() {
 
 onMounted(() => {
   // 打开时已在 openNowPlaying 切 overlay；这里再确保一次（含直接挂载路径）
+  npMounted = true;
   void setNowPlayingTitlebar(true);
   startAnim();
   document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('focus', onWindowFocus);
+  window.addEventListener('blur', onWindowBlur);
   window.addEventListener('keydown', onKey);
+  // 中途打开播放页（含关窗后再开 / 离开再进入）时，立刻对齐当前行
+  void scrollToActive('auto');
+  void (async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const unlisten = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+        if (focused) onWindowFocus();
+        else onWindowBlur();
+      });
+      if (!npMounted) {
+        unlisten();
+        return;
+      }
+      unlistenFocus = unlisten;
+    } catch {
+      /* 浏览器预览无窗口 API */
+    }
+  })();
 });
 onUnmounted(() => {
+  npMounted = false;
   stopAnim();
+  if (blurCheckTimer) {
+    window.clearTimeout(blurCheckTimer);
+    blurCheckTimer = 0;
+  }
   document.removeEventListener('visibilitychange', onVisibility);
+  window.removeEventListener('focus', onWindowFocus);
+  window.removeEventListener('blur', onWindowBlur);
   window.removeEventListener('keydown', onKey);
+  unlistenFocus?.();
+  unlistenFocus = null;
   // Transition leave 结束后再恢复系统标题栏
   void setNowPlayingTitlebar(false);
 });
