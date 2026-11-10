@@ -133,21 +133,104 @@ let lyricsSuspended = false;
 let unlistenFocus: (() => void) | null = null;
 let blurCheckTimer = 0;
 let npMounted = false;
+/** 初次对齐完成前用即时跳转，避免重进时从列表顶部 smooth 滚到当前行。 */
+let lyricsFollowSettled = false;
+let alignToken = 0;
+let alignTimer = 0;
+let lyricsRo: ResizeObserver | null = null;
+let lastLyricsHeight = 0;
 
-async function scrollToActive(behavior: ScrollBehavior = 'smooth') {
-  if (isDocHidden()) return;
+function clearAlignTimer() {
+  if (alignTimer) {
+    window.clearTimeout(alignTimer);
+    alignTimer = 0;
+  }
+}
+
+function activeLineEl(root: HTMLElement | null, i: number) {
+  if (!root || i < 0) return null;
+  return root.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
+}
+
+function frame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function scrollToActive(behavior: ScrollBehavior = 'smooth'): Promise<boolean> {
+  if (isDocHidden()) return false;
   await nextTick();
   const root = listEl.value;
   const i = activeIdx.value;
-  const el = root?.querySelector(`[data-i="${i}"]`) as HTMLElement | null;
-  if (!root || !el || i < 0) return;
-  // 刚从隐藏恢复时 WebView 可能还没完成布局
-  if (root.clientHeight <= 0) {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (isDocHidden() || root.clientHeight <= 0) return;
-  }
+  const el = activeLineEl(root, i);
+  if (!root || !el) return false;
+  // 入场动画 / 歌词刚插入时，列表或行可能尚未完成布局
+  if (root.clientHeight <= 0 || el.offsetHeight <= 0) return false;
   const top = el.offsetTop - root.clientHeight / 2 + el.offsetHeight / 2;
   root.scrollTo({ top: Math.max(0, top), behavior });
+  return true;
+}
+
+/**
+ * 挂载或歌词就绪后对齐当前行，并在布局 / 入场动画完成后再跳一次。
+ * 播放页是 v-if 重建，列表从 scrollTop 0 开始；若只在 nextTick 滚一次，
+ * 行还没量到尺寸或 sm-slide-up 结束重置滚动时就会停在开头，
+ * 且 activeIdx 不变就不会再触发跟随。
+ */
+function alignToActive(behavior: ScrollBehavior = 'auto') {
+  const token = ++alignToken;
+  clearAlignTimer();
+
+  const attempt = () => {
+    if (token !== alignToken || !npMounted || isDocHidden()) return Promise.resolve(false);
+    return scrollToActive(behavior);
+  };
+
+  void (async () => {
+    const deadline = performance.now() + 2000;
+    let ok = await attempt();
+    while (!ok && token === alignToken && npMounted && !isDocHidden() && performance.now() < deadline) {
+      await frame();
+      ok = await attempt();
+    }
+    if (token !== alignToken) return;
+    // 布局可能在随后几帧才稳定；入场动画结束时 transform 撤销也可能把 scrollTop 打回 0
+    await frame();
+    if (token !== alignToken) return;
+    ok = (await attempt()) || ok;
+    await frame();
+    if (token !== alignToken) return;
+    ok = (await attempt()) || ok;
+    alignTimer = window.setTimeout(() => {
+      alignTimer = 0;
+      if (token !== alignToken || !npMounted || isDocHidden()) return;
+      void scrollToActive(behavior).then((done) => {
+        if (done && token === alignToken) lyricsFollowSettled = true;
+      });
+    }, 360);
+    if (ok) lyricsFollowSettled = true;
+  })();
+}
+
+function bindLyricsObserver() {
+  unbindLyricsObserver();
+  const root = listEl.value;
+  if (!root || typeof ResizeObserver === 'undefined') return;
+  lastLyricsHeight = root.clientHeight;
+  lyricsRo = new ResizeObserver(() => {
+    const el = listEl.value;
+    if (!el) return;
+    const h = el.clientHeight;
+    if (h <= 0 || h === lastLyricsHeight) return;
+    lastLyricsHeight = h;
+    // 列表从 0 高变为可见，或入场/窗口变化改了高度：立刻对齐，勿等下一句
+    alignToActive('auto');
+  });
+  lyricsRo.observe(root);
+}
+
+function unbindLyricsObserver() {
+  lyricsRo?.disconnect();
+  lyricsRo = null;
 }
 
 function suspendLyricsFollow() {
@@ -161,14 +244,23 @@ function resumeLyricsFollow(force = false) {
   if (!force && !lyricsSuspended) return;
   lyricsSuspended = false;
   // 隐藏期间 activeIdx 可能已走过很多行，立刻跳到当前行，而不是等下一句
-  void scrollToActive('auto');
+  alignToActive('auto');
 }
 
 watch(activeIdx, () => {
   // 后台 / 隐藏时不滚歌词，避免无意义 smooth scroll + 合成
   if (isDocHidden() || lyricsSuspended) return;
-  void scrollToActive('smooth');
+  // 重进尚未对齐时不要从顶部慢慢滚，否则会闪回歌曲开头
+  void scrollToActive(lyricsFollowSettled ? 'smooth' : 'auto');
 });
+
+watch(
+  () => [loading.value, lines.value.length] as const,
+  () => {
+    if (!npMounted || loading.value || !lines.value.length) return;
+    alignToActive('auto');
+  },
+);
 
 async function onLike() {
   const id = t.value?.ncmId;
@@ -334,17 +426,27 @@ function onTitleDblClick() {
   void winToggleMaximize();
 }
 
+function onNpAnimationEnd(e: AnimationEvent) {
+  if (e.target !== rootEl.value) return;
+  if (!npMounted || !session.nowPlaying) return;
+  // sm-slide-up 结束、transform 撤销后再跳一次，避免滚动被重置到顶部
+  alignToActive('auto');
+}
+
 onMounted(() => {
   // 打开时已在 openNowPlaying 切 overlay；这里再确保一次（含直接挂载路径）
   npMounted = true;
+  lyricsFollowSettled = false;
   void setNowPlayingTitlebar(true);
   startAnim();
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('focus', onWindowFocus);
   window.addEventListener('blur', onWindowBlur);
   window.addEventListener('keydown', onKey);
-  // 中途打开播放页（含关窗后再开 / 离开再进入）时，立刻对齐当前行
-  void scrollToActive('auto');
+  rootEl.value?.addEventListener('animationend', onNpAnimationEnd);
+  bindLyricsObserver();
+  // 中途打开播放页（含关窗后再开 / 离开再进入）时对齐当前行，并等到布局就绪
+  alignToActive('auto');
   void (async () => {
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -364,6 +466,10 @@ onMounted(() => {
 });
 onUnmounted(() => {
   npMounted = false;
+  alignToken += 1;
+  lyricsFollowSettled = false;
+  clearAlignTimer();
+  unbindLyricsObserver();
   stopAnim();
   if (blurCheckTimer) {
     window.clearTimeout(blurCheckTimer);
@@ -373,6 +479,7 @@ onUnmounted(() => {
   window.removeEventListener('focus', onWindowFocus);
   window.removeEventListener('blur', onWindowBlur);
   window.removeEventListener('keydown', onKey);
+  rootEl.value?.removeEventListener('animationend', onNpAnimationEnd);
   unlistenFocus?.();
   unlistenFocus = null;
   // Transition leave 结束后再恢复系统标题栏
