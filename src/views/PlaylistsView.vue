@@ -4,6 +4,12 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useAppMenuDismiss } from '../lib/appMenu';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
+import {
+  forgetCachedPlaylistTracks,
+  getCachedPlaylistTracks,
+  playlistCacheEpoch,
+  setCachedPlaylistTracks,
+} from '../lib/playlistCache';
 import { resumeSync, session } from '../lib/session';
 import type { Playlist, Track } from '../lib/types';
 import { filterTracks } from '../lib/trackFilter';
@@ -43,14 +49,63 @@ const menuCanDelete = computed(
 const shown = computed(() => filterTracks(tracks.value, filter.value));
 
 /** 后台补拼音搜索键（保留歌单原有顺序，含「我喜欢的音乐」收藏时间序）；失败不影响列表显示 */
+function sameTrackIds(a: Track[], b: Track[]) {
+  return a.length === b.length && a.every((t, i) => t.id === b[i]?.id);
+}
+
 async function enrichInPlace(list: Track[], playlistId: number) {
   if (!list.length) return;
   try {
     const enriched = await api.localEnrich(list);
-    if (active.value?.id === playlistId) tracks.value = enriched;
+    if (active.value?.id !== playlistId) return;
+    // 后台刷新若已换了更新的曲目，不要用旧列表的拼音结果覆盖
+    if (tracks.value !== list && !sameTrackIds(tracks.value, list)) return;
+    tracks.value = enriched;
+    setCachedPlaylistTracks(playlistId, enriched);
   } catch {
     /* ignore */
   }
+}
+
+function rememberTracks(p: Playlist, list: Track[]) {
+  setCachedPlaylistTracks(p.id, list);
+}
+
+function showTracks(p: Playlist, list: Track[], cached: boolean) {
+  if (active.value?.id !== p.id) return;
+  tracks.value = list;
+  fromCache.value = cached;
+  loading.value = false;
+}
+
+const inflight = new Map<number, Promise<void>>();
+
+function loadTracks(p: Playlist, refresh: boolean, backgroundRefresh: boolean) {
+  const existing = !refresh ? inflight.get(p.id) : undefined;
+  if (existing) return existing;
+  let req!: Promise<void>;
+  req = (async () => {
+    try {
+      const hit = await api.playlistTracks(p.id, refresh, p.isLiked);
+      rememberTracks(p, hit.data);
+      if (active.value?.id === p.id) {
+        showTracks(p, hit.data, hit.fromCache);
+        void enrichInPlace(hit.data, p.id);
+        if (backgroundRefresh && !refresh && (hit.fromCache || hit.ageSecs > 0)) {
+          void refreshTracks(p);
+        }
+      }
+    } catch (e) {
+      if (active.value?.id === p.id) {
+        err.value = String(e);
+        loading.value = false;
+      }
+    } finally {
+      if (inflight.get(p.id) === req) inflight.delete(p.id);
+    }
+  })();
+  if (!refresh) inflight.set(p.id, req);
+  return req;
 }
 
 function syncNarrow() {
@@ -102,10 +157,11 @@ function applyFreshLists(fresh: Playlist[]) {
 async function refreshTracks(p: Playlist) {
   try {
     const h = await api.playlistTracks(p.id, true, p.isLiked);
+    const list = h.data.slice();
+    rememberTracks(p, list);
     if (active.value?.id === p.id) {
-      tracks.value = h.data.slice();
-      fromCache.value = false;
-      void enrichInPlace(h.data, p.id);
+      showTracks(p, list, false);
+      void enrichInPlace(list, p.id);
     }
   } catch {
     /* 保留缓存 */
@@ -128,22 +184,20 @@ async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true)
   active.value = p;
   if (switched) filter.value = '';
   if (enterDetail && narrow.value) mobileDetail.value = true;
-  loading.value = true;
   err.value = '';
-  try {
-    const hit = await api.playlistTracks(p.id, false, p.isLiked);
-    if (active.value?.id !== p.id) return;
-    tracks.value = hit.data;
-    fromCache.value = hit.fromCache;
-    loading.value = false;
-    void enrichInPlace(hit.data, p.id);
-    if (doBackgroundRefresh && (hit.fromCache || hit.ageSecs > 0)) void refreshTracks(p);
-  } catch (e) {
-    if (active.value?.id === p.id) {
-      err.value = String(e);
-      loading.value = false;
-    }
+
+  // 先换壳并开始过渡，不把动画和点击卡在曲目接口上。
+  const cached = getCachedPlaylistTracks(p.id);
+  if (cached) {
+    showTracks(p, cached, true);
+    void enrichInPlace(cached, p.id);
+    if (doBackgroundRefresh) void refreshTracks(p);
+    return;
   }
+
+  if (switched) tracks.value = [];
+  loading.value = true;
+  await loadTracks(p, false, doBackgroundRefresh);
 }
 
 function backToLists() {
@@ -208,6 +262,7 @@ async function menuUnsubscribe() {
   busy.value = true;
   try {
     await api.playlistSubscribe(p.id, false);
+    forgetCachedPlaylistTracks(p.id);
     if (active.value?.id === p.id) mobileDetail.value = false;
     await loadLists(true);
   } catch (e) {
@@ -226,8 +281,10 @@ async function menuDelete() {
   busy.value = true;
   try {
     await api.playlistDelete(p.id);
+    forgetCachedPlaylistTracks(p.id);
     if (active.value?.id === p.id) {
       active.value = null;
+      tracks.value = [];
       mobileDetail.value = false;
     }
     await loadLists(true);
@@ -245,6 +302,12 @@ onMounted(() => {
   if (session.profile) void loadLists(false);
 });
 watch(() => resumeSync.tick, () => void syncNow());
+watch(playlistCacheEpoch, () => {
+  if (!session.profile || !active.value) return;
+  tracks.value = [];
+  loading.value = true;
+  void open(active.value, true, false);
+});
 onUnmounted(() => {
   mql?.removeEventListener('change', syncNarrow);
 });
@@ -291,7 +354,8 @@ onUnmounted(() => {
           class="muted empty-hint"
         >没有匹配「{{ filter.trim() }}」的歌曲</p>
         <div v-else :key="active.id" class="tracks-scroll">
-          <TrackList :tracks="shown" />
+          <p v-if="loading && !tracks.length" class="muted empty-hint">加载中…</p>
+          <TrackList v-else :tracks="shown" />
         </div>
       </Transition>
     </div>

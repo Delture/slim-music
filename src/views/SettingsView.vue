@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { refreshProfile, saveSettings, session, setAppearance } from '../lib/session';
 import { coverSrc } from '../lib/format';
 import { clearLyricMemory } from '../lib/lyrics';
+import { clearPlaylistTrackMemory } from '../lib/playlistCache';
 import { clearPlayLogAll, copyPlayLog } from '../lib/playLog';
 import { checkUpdate, updater } from '../lib/updater';
 import { getVersion } from '@tauri-apps/api/app';
@@ -95,6 +96,7 @@ async function clearCache() {
   try {
     stats.value = await api.cacheClear();
     clearLyricMemory();
+    clearPlaylistTrackMemory();
   } catch (e) {
     void dialog.alert(String(e));
   } finally {
