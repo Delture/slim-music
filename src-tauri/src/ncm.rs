@@ -370,6 +370,21 @@ pub async fn playlist_subscribe(cookie: &Option<String>, id: i64, subscribe: boo
     Ok(())
 }
 
+/// 新建网易云歌单，返回新歌单 id
+pub async fn playlist_create(cookie: &Option<String>, name: &str) -> R<i64> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("请输入歌单名称".into());
+    }
+    let query = q(cookie).param("name", name);
+    let res = ok(create_client(None).playlist_create(&query).await)?;
+    res.body
+        .pointer("/playlist/id")
+        .or_else(|| res.body.get("id"))
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "已创建，但未返回歌单 id".into())
+}
+
 /// 删除自己创建的歌单（不要用于「我喜欢的音乐」）
 pub async fn playlist_delete(cookie: &Option<String>, id: i64) -> R<()> {
     let query = q(cookie).param("id", &id.to_string());

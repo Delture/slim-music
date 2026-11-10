@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { dialog } from '../lib/dialog';
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useAppMenuDismiss } from '../lib/appMenu';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import { resumeSync, session } from '../lib/session';
@@ -29,6 +30,8 @@ const menu = reactive({
   y: 0,
   target: null as Playlist | null,
 });
+const menuEl = ref<HTMLElement | null>(null);
+const { openMenuAt, closeMenu: hideMenu } = useAppMenuDismiss(menu, menuEl);
 
 const menuCanUnsubscribe = computed(
   () => !!menu.target && menu.target.subscribed && !menu.target.isLiked,
@@ -148,12 +151,31 @@ function backToLists() {
 }
 
 function closeMenu() {
-  menu.show = false;
+  hideMenu();
   menu.target = null;
 }
 
 async function openMenu(e: MouseEvent, p: Playlist) {
-  Object.assign(menu, { show: true, x: e.clientX, y: e.clientY, target: p });
+  menu.target = p;
+  openMenuAt(e);
+}
+
+async function onCreate() {
+  const name = await dialog.prompt('新建歌单', '新歌单');
+  if (!name?.trim() || busy.value) return;
+  busy.value = true;
+  try {
+    const id = await api.playlistCreate(name.trim());
+    const hit = await api.myPlaylists(true);
+    lists.value = hit.data;
+    fromCache.value = false;
+    const created = lists.value.find((l) => l.id === id);
+    if (created) await open(created, false, true);
+  } catch (e) {
+    void dialog.alert(String(e));
+  } finally {
+    busy.value = false;
+  }
 }
 
 async function menuPlayAll() {
@@ -229,10 +251,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="pl" :class="{ 'mobile-detail': mobileDetail }" @click="closeMenu">
+  <section class="pl" :class="{ 'mobile-detail': mobileDetail }">
     <div v-if="!session.profile" class="float-panel login-hint muted">请先在「设置」中扫码登录网易云。</div>
     <aside v-else class="side float-panel">
-      <div class="side-title">我的歌单</div>
+      <div class="side-head">
+        <span>我的歌单</span>
+        <button class="btn-icon link" type="button" title="新建歌单" @click="onCreate">
+          <Icon name="plus" :size="16" />
+        </button>
+      </div>
       <div
         v-for="p in lists"
         :key="p.id"
@@ -269,17 +296,21 @@ onUnmounted(() => {
       </Transition>
     </div>
 
+    <Teleport to="body">
     <div
       v-if="menu.show && menu.target"
+      ref="menuEl"
       class="ctx"
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
       @click.stop
+      @pointerdown.stop
     >
       <div @click="menuPlayAll">播放全部</div>
       <div :class="{ disabled: busy }" @click="menuRefresh">刷新</div>
       <div v-if="menuCanUnsubscribe" :class="{ disabled: busy }" @click="menuUnsubscribe">取消收藏</div>
       <div v-if="menuCanDelete" class="danger" :class="{ disabled: busy }" @click="menuDelete">删除歌单</div>
     </div>
+    </Teleport>
   </section>
 </template>
 
@@ -317,6 +348,26 @@ onUnmounted(() => {
   padding: var(--space-3) var(--space-4);
   overflow: hidden;
 }
+.side-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: -0.015em;
+  margin-bottom: var(--space-3);
+  min-height: var(--btn-h);
+  padding: 0 var(--row-px);
+}
+.link {
+  color: var(--accent);
+  background: transparent;
+}
+.link:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--accent);
+}
 .tracks-scroll {
   flex: 1;
   min-height: 0;
@@ -326,14 +377,6 @@ onUnmounted(() => {
   padding: var(--empty-pad);
   text-align: center;
   font-size: 14px;
-}
-.side-title {
-  display: none;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 24px;
-  margin-bottom: var(--space-3);
-  letter-spacing: -0.02em;
 }
 .item {
   justify-content: space-between;
@@ -384,7 +427,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: var(--menu-pad);
   box-shadow: var(--elev-2);
-  z-index: 40;
+  z-index: 9000;
   min-width: 160px;
   animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
@@ -418,8 +461,10 @@ onUnmounted(() => {
   .side {
     max-height: none;
   }
-  .side-title {
-    display: block;
+  .side-head {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    padding: 0;
   }
   .item {
     min-height: 48px;

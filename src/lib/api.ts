@@ -46,6 +46,7 @@ export const api = {
   likeTrack: (id: number, like: boolean) => invoke<void>('like_track', { id, like }),
   playlistSubscribe: (id: number, subscribe: boolean) =>
     invoke<void>('playlist_subscribe', { id, subscribe }),
+  playlistCreate: (name: string) => invoke<number>('playlist_create', { name }),
   playlistDelete: (id: number) => invoke<void>('playlist_delete', { id }),
   lyric: (id: number) => invoke<LyricPayload>('get_lyric', { id }),
   localLyric: (path: string) => invoke<LyricPayload>('get_local_lyric', { path }),
