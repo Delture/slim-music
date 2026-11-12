@@ -2,7 +2,7 @@
 import { dialog } from '../lib/dialog';
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useAppMenuDismiss } from '../lib/appMenu';
-import { playList, player } from '../lib/player';
+import { moveQueueTrack, playList, player, removeQueueTrack } from '../lib/player';
 import {
   createLocalPlaylist,
   deleteLocalPlaylist,
@@ -167,12 +167,45 @@ async function menuDelete() {
 }
 
 async function onReorder(e: { from: number; to: number }) {
-  if (isNowPlaying.value || !activeUser.value) return;
+  if (isNowPlaying.value) {
+    moveQueueTrack(e.from, e.to);
+    return;
+  }
+  if (!activeUser.value) return;
   try {
     await moveLocalTrack(activeUser.value.id, e.from, e.to);
   } catch (err) {
     void dialog.alert(String(err));
   }
+}
+
+/** 筛选后的下标映射回完整队列显示下标（同一首歌可能出现多次） */
+function queueDisplayIndex(shownIdx: number): number {
+  const t = shown.value[shownIdx];
+  if (!t) return -1;
+  const full = nowPlayingTracks.value;
+  if (!filter.value.trim()) {
+    return shownIdx >= 0 && shownIdx < full.length ? shownIdx : -1;
+  }
+  const id = t.id;
+  let k = 0;
+  for (let i = 0; i < shownIdx; i++) {
+    if (shown.value[i].id === id) k++;
+  }
+  let seen = 0;
+  for (let i = 0; i < full.length; i++) {
+    if (full[i].id === id) {
+      if (seen === k) return i;
+      seen++;
+    }
+  }
+  return -1;
+}
+
+function onRemoveFromQueue(shownIdx: number) {
+  if (!isNowPlaying.value) return;
+  const idx = queueDisplayIndex(shownIdx);
+  if (idx >= 0) removeQueueTrack(idx);
 }
 
 onMounted(() => {
@@ -264,8 +297,10 @@ watch(
           <TrackList
             :tracks="shown"
             :local-playlist-id="isNowPlaying ? null : activeUser?.id"
-            :show-reorder="!isNowPlaying && !!activeUser && !filter.trim()"
+            :queue-editable="isNowPlaying"
+            :show-reorder="(isNowPlaying || !!activeUser) && !filter.trim()"
             @reorder="onReorder"
+            @remove="onRemoveFromQueue"
           />
         </div>
       </Transition>

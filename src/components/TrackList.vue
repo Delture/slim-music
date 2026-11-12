@@ -28,12 +28,15 @@ const props = withDefaults(
     /** 当前若在某本机播放列表内，右键可「从本列表删除」 */
     localPlaylistId?: string | null;
     showReorder?: boolean;
+    /** 当前若为正在播放队列，右键可「从播放队列删除」 */
+    queueEditable?: boolean;
   }>(),
-  { localPlaylistId: null, showReorder: false },
+  { localPlaylistId: null, showReorder: false, queueEditable: false },
 );
 
 const emit = defineEmits<{
   reorder: [{ from: number; to: number }];
+  remove: [index: number];
 }>();
 
 const menu = reactive({
@@ -347,6 +350,10 @@ function move(i: number, dir: -1 | 1) {
       <template v-if="!menu.sub">
         <div @click="playAt(menu.index); closeMenu()">从这首开始播放</div>
         <div @click="enqueue(tracks[menu.index]); closeMenu()">添加到播放队列末尾</div>
+        <div
+          v-if="queueEditable"
+          @click="emit('remove', menu.index); closeMenu()"
+        >从播放队列删除</div>
         <div
           v-if="menuTrack?.source === 'netease' && session.profile"
           @click="onLike(menuTrack!, $event); closeMenu()"

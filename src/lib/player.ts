@@ -558,6 +558,101 @@ export function enqueue(t: Track) {
   }
 }
 
+/** 当前队列的显示顺序（随机时为打乱后的播放序） */
+function displayedQueue(): Track[] {
+  if (!player.order.length) return player.queue.slice();
+  return player.order.map((i) => player.queue[i]).filter(Boolean) as Track[];
+}
+
+function applyDisplayedQueue(list: Track[], pos: number) {
+  player.queue = list;
+  player.order = list.map((_, i) => i);
+  player.pos = pos;
+}
+
+function haltPlayback() {
+  loadToken++;
+  loadInFlight = false;
+  loadedId = null;
+  player.playing = false;
+  player.error = '';
+  player.currentTime = 0;
+  player.duration = 0;
+  clearStallWatch();
+  if (skipLoadTimer != null) {
+    window.clearTimeout(skipLoadTimer);
+    skipLoadTimer = undefined;
+  }
+  if (NATIVE) {
+    nat.hasSrc = false;
+    nat.time = 0;
+    void nativeCall('pause').catch(() => {});
+  } else {
+    try {
+      audio.pause();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * 按正在播放列表的显示顺序移动一首。
+ * 只改队列顺序，不重新加载当前曲、不重置进度。
+ */
+export function moveQueueTrack(from: number, to: number) {
+  const list = displayedQueue();
+  const n = list.length;
+  if (from === to || from < 0 || to < 0 || from >= n || to >= n) return;
+  const cur = current();
+  const [item] = list.splice(from, 1);
+  if (!item) return;
+  list.splice(to, 0, item);
+  let pos = 0;
+  if (cur) {
+    const exact = list.indexOf(cur);
+    pos = exact >= 0 ? exact : list.findIndex((t) => t.id === cur.id);
+    if (pos < 0) pos = Math.min(from, to);
+  }
+  applyDisplayedQueue(list, pos);
+  maybePrefetchNext(true);
+  schedulePersist(300);
+}
+
+/**
+ * 按显示顺序从当前播放队列移除一首。
+ * 移除的不是当前曲：只改队列，不重置正在播的进度。
+ * 移除当前曲：跳到下一项并按原播放状态加载；若已是最后一项则停在新的末首（不自动播放）；队列空则停止。
+ * 不会写入本机播放列表或网易云歌单。
+ */
+export function removeQueueTrack(displayIndex: number) {
+  const list = displayedQueue();
+  if (displayIndex < 0 || displayIndex >= list.length) return;
+  const removingCurrent = displayIndex === player.pos;
+  const wasPlaying = player.playing;
+  list.splice(displayIndex, 1);
+  if (!list.length) {
+    applyDisplayedQueue([], -1);
+    haltPlayback();
+    schedulePersist(200);
+    return;
+  }
+  if (removingCurrent) {
+    if (displayIndex < list.length) {
+      applyDisplayedQueue(list, displayIndex);
+      void loadCurrent(wasPlaying);
+    } else {
+      applyDisplayedQueue(list, list.length - 1);
+      void loadCurrent(false);
+    }
+    return;
+  }
+  const pos = displayIndex < player.pos ? player.pos - 1 : player.pos;
+  applyDisplayedQueue(list, pos);
+  maybePrefetchNext(true);
+  schedulePersist(300);
+}
+
 export function togglePlay() {
   const cur = current();
   if (NATIVE) {
