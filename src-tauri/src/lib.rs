@@ -6,6 +6,8 @@ mod mobile;
 mod model;
 mod ncm;
 mod settings;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod folder_watch;
 
 use model::{LyricPayload, Playlist, Profile, Track};
 use settings::{PlaybackSession, Settings, Store, QUALITY_LEVELS};
@@ -306,7 +308,11 @@ async fn save_settings(state: State<'_, AppState>, settings: Settings) -> R<()> 
         return Err(format!("未知音质: {}", settings.quality));
     }
     state.store.save_settings(&settings)?;
+    let folders = settings.local_folders.clone();
     *state.settings.lock().await = settings;
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    folder_watch::set_folders(&folders);
+    let _ = folders;
     Ok(())
 }
 
@@ -391,28 +397,39 @@ async fn get_local_lyric(
         })
         .await
         .map_err(|e| e.to_string())??;
+        let trans = v
+            .get("tlyricB64")
+            .and_then(|x| x.as_str())
+            .filter(|s| !s.is_empty());
         if let Some(b) = v.get("lrcB64").and_then(|x| x.as_str()).filter(|s| !s.is_empty()) {
-            return Ok(local::lyric_from_b64(b));
+            return Ok(local::lyric_from_b64_pair(b, trans));
         }
         let raw = v.get("lrc").and_then(|x| x.as_str()).unwrap_or("").to_string();
-        return Ok(local::lyric_from_raw(raw));
+        let t = v
+            .get("tlyric")
+            .and_then(|x| x.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        return Ok(local::lyric_from_raw_pair(raw, t));
     }
     get_local_lyric_file(state, path).await
 }
 
 async fn get_local_lyric_file(state: State<'_, AppState>, path: String) -> R<LyricPayload> {
     let enabled = state.settings.lock().await.cache_enabled;
-    let key = format!("lyric_local2_{:x}", simple_hash(&path));
+    // 缓存键含歌词源 mtime：改 .lrc 后不再用旧译文
+    let mtime = local::lyric_source_mtime(&path);
+    let key = format!("lyric_local3_{:x}_{mtime}", simple_hash(&path));
     if enabled {
         if let Some(hit) = state.cache.read_json::<LyricPayload>(&key) {
             return Ok(hit.data);
         }
     }
-    let payload = local::load_local_lyric(&path)?;
-    if enabled && !payload.raw.is_empty() {
-        let _ = state.cache.write_json(&key, &payload);
+    let loaded = local::load_local_lyric(&path)?;
+    if enabled && !loaded.payload.raw.is_empty() {
+        let _ = state.cache.write_json(&key, &loaded.payload);
     }
-    Ok(payload)
+    Ok(loaded.payload)
 }
 
 fn simple_hash(s: &str) -> u64 {
@@ -639,6 +656,7 @@ pub fn run() {
                 if let Some(tray) = app.handle().tray_by_id("main") {
                     let _ = tray.set_title(None::<&str>);
                 }
+                folder_watch::start(app.handle().clone());
             }
             Ok(())
         });

@@ -13,18 +13,21 @@ use lofty::tag::{ItemKey, Tag};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
 /// 可扫描的扩展名；能否在当前平台播放由前端 canPlayType 再过滤。
-pub const EXTS: [&str; 12] = [
-    "mp3", "flac", "m4a", "aac", "wav", "ogg", "opus", "aiff", "aif", "ape", "wma", "wv",
+pub const EXTS: [&str; 13] = [
+    "mp3", "flac", "m4a", "aac", "wav", "ogg", "oga", "opus", "aiff", "aif", "ape", "wma", "wv",
 ];
 
 const INDEX_VERSION: u32 = 1;
 const COVER_BIG: u32 = 512;
 const COVER_SMALL: u32 = 96;
-const FOLDER_COVERS: [&str; 5] = ["cover", "folder", "front", "album", "albumart"];
+const FOLDER_COVERS: [&str; 8] = [
+    "cover", "folder", "front", "album", "albumart", "artwork", "coverart", "frontcover",
+];
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Entry {
@@ -56,21 +59,38 @@ pub struct LocalTrack {
     pub artist_keys: Vec<String>,
 }
 
+/// 文件夹监听增量更新的结果（不含整库曲目，前端再读 cached）。
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyResult {
+    pub library_changed: bool,
+    /// 受影响的本地音频路径，前端据此作废歌词内存缓存
+    pub lyrics_changed: Vec<String>,
+}
+
 pub struct Library {
     index_path: PathBuf,
     cover_dir: PathBuf,
+    index: Mutex<Index>,
 }
 
 impl Library {
     pub fn new(data_dir: &Path, cache_dir: &Path) -> Self {
+        let index_path = data_dir.join("local_index.json");
+        let index = Self::read_index(&index_path);
         Self {
-            index_path: data_dir.join("local_index.json"),
+            index_path,
             cover_dir: cache_dir.join("local_covers"),
+            index: Mutex::new(index),
         }
     }
 
-    fn load(&self) -> Index {
-        std::fs::read(&self.index_path)
+    fn lock(&self) -> std::sync::MutexGuard<'_, Index> {
+        self.index.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn read_index(path: &Path) -> Index {
+        std::fs::read(path)
             .ok()
             .and_then(|b| serde_json::from_slice::<Index>(&b).ok())
             .filter(|i| i.version == INDEX_VERSION)
@@ -86,56 +106,142 @@ impl Library {
         }
     }
 
+    fn tracks_of(idx: &Index) -> Vec<LocalTrack> {
+        finish(idx.entries.values().map(|e| e.track.clone()).collect(), true)
+    }
+
     /// 只读缓存（启动时秒开）；不访问磁盘上的音频文件。
     pub fn cached(&self) -> Vec<LocalTrack> {
-        finish(self.load().entries.into_values().map(|e| e.track).collect(), true)
+        Self::tracks_of(&self.lock())
     }
 
     /// 增量扫描：仅解析新增/变化的文件，删除已不存在的条目。
     pub fn scan(&self, folders: &[String]) -> Vec<LocalTrack> {
-        let old = self.load();
-        let mut next = Index { version: INDEX_VERSION, entries: HashMap::new() };
+        let mut idx = self.lock();
+        self.scan_into(&mut idx, folders);
+        Self::tracks_of(&idx)
+    }
+
+    fn scan_into(&self, idx: &mut Index, folders: &[String]) {
+        let old = std::mem::take(&mut idx.entries);
+        idx.version = INDEX_VERSION;
         let mut seen = HashSet::new();
-        for folder in folders {
-            let walker = WalkDir::new(folder)
-                .follow_links(false)
-                .into_iter()
-                .filter_entry(|e| e.depth() == 0 || !is_hidden(e.file_name()));
-            for entry in walker.filter_map(Result::ok) {
-                if !entry.file_type().is_file() || !has_audio_ext(entry.path()) {
-                    continue;
+        for path in walk_audio(folders) {
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            let p = Path::new(&path);
+            let (mtime, size) = file_stat(p);
+            let e = match old.get(&path) {
+                Some(e) if e.mtime == mtime && e.size == size => e.clone(),
+                _ => Entry {
+                    mtime,
+                    size,
+                    track: read_track(p, mtime),
+                    cover_done: false,
+                },
+            };
+            idx.entries.insert(path, e);
+        }
+        self.fill_covers(idx);
+        self.save(idx);
+    }
+
+    /// 根据一批文件系统事件做增量更新，避免整库重扫。
+    /// 事件过多（例如一次拷入大量文件）时退回增量全扫（仍按 mtime 跳过未变文件）。
+    pub fn apply_paths(&self, folders: &[String], paths: &[PathBuf]) -> ApplyResult {
+        let mut idx = self.lock();
+        let mut result = ApplyResult::default();
+        if folders.is_empty() {
+            if !idx.entries.is_empty() {
+                idx.entries.clear();
+                self.save(&idx);
+                result.library_changed = true;
+            }
+            return result;
+        }
+        let related: Vec<PathBuf> = paths
+            .iter()
+            .filter(|p| is_under_library(p, folders) || index_touches(&idx, p))
+            .cloned()
+            .collect();
+        if related.is_empty() {
+            return result;
+        }
+        const FULL_SCAN: usize = 80;
+        if related.len() >= FULL_SCAN {
+            self.scan_into(&mut idx, folders);
+            result.library_changed = true;
+            for p in &related {
+                if is_lrc_path(p) {
+                    result.lyrics_changed.extend(audios_for_lrc(&idx, p));
                 }
-                let path = entry.path().to_string_lossy().to_string();
-                if !seen.insert(path.clone()) {
-                    continue;
+            }
+            dedup_paths(&mut result.lyrics_changed);
+            return result;
+        }
+        for p in &related {
+            self.apply_one(&mut idx, folders, p, &mut result);
+        }
+        dedup_paths(&mut result.lyrics_changed);
+        if result.library_changed {
+            self.fill_covers(&mut idx);
+            self.save(&idx);
+        }
+        result
+    }
+
+    fn apply_one(&self, idx: &mut Index, folders: &[String], p: &Path, out: &mut ApplyResult) {
+        if has_audio_ext(p) {
+            if p.is_file() {
+                if upsert_file(idx, p) {
+                    out.library_changed = true;
                 }
-                let (mtime, size) = entry
-                    .metadata()
-                    .map(|m| {
-                        let mt = m
-                            .modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                            .map(|d| d.as_millis() as u64)
-                            .unwrap_or(0);
-                        (mt, m.len())
-                    })
-                    .unwrap_or((0, 0));
-                let e = match old.entries.get(&path) {
-                    Some(e) if e.mtime == mtime && e.size == size => e.clone(),
-                    _ => Entry {
-                        mtime,
-                        size,
-                        track: read_track(entry.path(), mtime),
-                        cover_done: false,
-                    },
-                };
-                next.entries.insert(path, e);
+            } else if idx.entries.remove(&path_key(p)).is_some() {
+                out.library_changed = true;
+            }
+            return;
+        }
+        if is_lrc_path(p) {
+            out.lyrics_changed.extend(audios_for_lrc(idx, p));
+            // 可能与尚未入索引的新音频成对出现：再按扩展名探测
+            return;
+        }
+        if is_folder_cover_path(p) {
+            if let Some(dir) = p.parent() {
+                if invalidate_dir_covers(idx, dir, &self.cover_dir) {
+                    out.library_changed = true;
+                }
+            }
+            return;
+        }
+        if p.is_dir() {
+            // 根目录的无关触摸不要整库重扫；新建的子目录要收入里面的音频
+            if folders.iter().any(|f| Path::new(f) == p) {
+                return;
+            }
+            if is_under_library(p, folders) {
+                let mut changed = false;
+                for f in walk_audio(&[p.to_string_lossy().to_string()]) {
+                    if upsert_file(idx, Path::new(&f)) {
+                        changed = true;
+                    }
+                }
+                if changed {
+                    out.library_changed = true;
+                }
+            }
+            return;
+        }
+        // 已删除：目录或未知路径
+        if !p.exists() {
+            if is_lrc_path(p) {
+                out.lyrics_changed.extend(audios_for_lrc(idx, p));
+            }
+            if remove_missing(idx, p) {
+                out.library_changed = true;
             }
         }
-        self.fill_covers(&mut next);
-        self.save(&next);
-        finish(next.entries.into_values().map(|e| e.track).collect(), true)
     }
 
     /// 封面：按专辑键去重；缺失时读一次内嵌图片或同目录 cover.jpg，缩放成两种尺寸。
@@ -175,11 +281,152 @@ impl Library {
     }
 }
 
+fn path_key(p: &Path) -> String {
+    p.to_string_lossy().to_string()
+}
+
+fn file_stat(p: &Path) -> (u64, u64) {
+    std::fs::metadata(p)
+        .map(|m| {
+            let mt = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            (mt, m.len())
+        })
+        .unwrap_or((0, 0))
+}
+
+fn walk_audio(folders: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for folder in folders {
+        let walker = WalkDir::new(folder)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|e| e.depth() == 0 || !is_hidden(e.file_name()));
+        for entry in walker.filter_map(Result::ok) {
+            if entry.file_type().is_file() && has_audio_ext(entry.path()) {
+                out.push(entry.path().to_string_lossy().to_string());
+            }
+        }
+    }
+    out
+}
+
+fn upsert_file(idx: &mut Index, p: &Path) -> bool {
+    let key = path_key(p);
+    let (mtime, size) = file_stat(p);
+    if let Some(e) = idx.entries.get(&key) {
+        if e.mtime == mtime && e.size == size {
+            return false;
+        }
+    }
+    idx.entries.insert(
+        key,
+        Entry {
+            mtime,
+            size,
+            track: read_track(p, mtime),
+            cover_done: false,
+        },
+    );
+    true
+}
+
+fn is_under_library(p: &Path, folders: &[String]) -> bool {
+    folders.iter().any(|f| p.starts_with(f))
+}
+
+fn index_touches(idx: &Index, p: &Path) -> bool {
+    let k = path_key(p);
+    if idx.entries.contains_key(&k) {
+        return true;
+    }
+    let slash = format!("{k}/");
+    let back = format!("{k}\\");
+    idx.entries.keys().any(|e| e.starts_with(&slash) || e.starts_with(&back))
+}
+
+fn remove_missing(idx: &mut Index, p: &Path) -> bool {
+    let k = path_key(p);
+    let changed = idx.entries.remove(&k).is_some();
+    let slash = format!("{k}/");
+    let back = format!("{k}\\");
+    let before = idx.entries.len();
+    idx.entries
+        .retain(|e, _| !(e.starts_with(&slash) || e.starts_with(&back)));
+    changed || idx.entries.len() != before
+}
+
+fn invalidate_dir_covers(idx: &mut Index, dir: &Path, cover_dir: &Path) -> bool {
+    let mut changed = false;
+    let mut keys = HashSet::new();
+    for (path, e) in idx.entries.iter_mut() {
+        if Path::new(path).parent() == Some(dir) {
+            if let Some(c) = e.track.cover.take() {
+                if let Some(name) = Path::new(&c).file_stem() {
+                    keys.insert(name.to_string_lossy().to_string());
+                }
+            }
+            e.cover_done = false;
+            changed = true;
+        }
+    }
+    for key in keys {
+        let _ = std::fs::remove_file(cover_dir.join(format!("{key}.jpg")));
+        let _ = std::fs::remove_file(cover_dir.join(format!("{key}_s.jpg")));
+    }
+    changed
+}
+
+fn audios_for_lrc(idx: &Index, lrc: &Path) -> Vec<String> {
+    let Some(stem) = audio_stem_from_lrc(lrc) else {
+        return Vec::new();
+    };
+    let parent = lrc.parent();
+    let stem_l = stem.to_ascii_lowercase();
+    let mut out = Vec::new();
+    for (k, e) in &idx.entries {
+        let p = Path::new(k);
+        if p.parent() != parent {
+            continue;
+        }
+        let s = p
+            .file_stem()
+            .map(|x| x.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        if s == stem_l {
+            out.push(e.track.path.clone().unwrap_or_else(|| k.clone()));
+        }
+    }
+    // 索引里还没有对应音频时，按常见扩展名探测
+    if out.is_empty() {
+        if let Some(dir) = parent {
+            for ext in EXTS {
+                for name in [format!("{stem}.{ext}"), format!("{stem}.{}", ext.to_uppercase())] {
+                    let cand = dir.join(&name);
+                    if cand.is_file() {
+                        out.push(cand.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+fn dedup_paths(v: &mut Vec<String>) {
+    v.sort();
+    v.dedup();
+}
+
 fn is_hidden(name: &std::ffi::OsStr) -> bool {
     name.to_str().map(|s| s.starts_with('.')).unwrap_or(false)
 }
 
-fn has_audio_ext(p: &Path) -> bool {
+pub fn has_audio_ext(p: &Path) -> bool {
     p.extension()
         .and_then(|e| e.to_str())
         .map(|e| EXTS.contains(&e.to_ascii_lowercase().as_str()))
@@ -231,7 +478,7 @@ fn load_cover_bytes(p: &Path) -> Option<Vec<u8>> {
     for e in rd.flatten() {
         let fp = e.path();
         let ext = fp.extension().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase();
-        if !matches!(ext.as_str(), "jpg" | "jpeg" | "png") {
+        if !matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp") {
             continue;
         }
         let stem = fp.file_stem().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -314,15 +561,58 @@ fn tag_str(tag: &Tag, key: &ItemKey) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// 无标签时从文件名猜测：「03 标题」「03 - 标题」「艺人 - 标题」。只填空字段。
+pub fn guess_from_filename(stem: &str) -> (Option<u32>, Vec<String>, String) {
+    let s = stem.replace('_', " ");
+    let s = s.trim();
+    let (track_no, rest) = {
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if (1..=3).contains(&i) && i < s.len() {
+            let sep = s[i..].chars().next();
+            if matches!(sep, Some('.' | '-' | '–' | '—' | ' ' | '_')) {
+                let n: u32 = s[..i].parse().unwrap_or(0);
+                let rest = s[i..]
+                    .trim_start_matches(|c: char| matches!(c, '.' | '-' | '–' | '—' | ' ' | '_'));
+                if n > 0 && !rest.is_empty() {
+                    (Some(n), rest)
+                } else {
+                    (None, s)
+                }
+            } else {
+                (None, s)
+            }
+        } else {
+            (None, s)
+        }
+    };
+    for sep in [" - ", " – ", " — ", " － "] {
+        if let Some((a, b)) = rest.split_once(sep) {
+            let a = a.trim();
+            let b = b.trim();
+            if !a.is_empty() && !b.is_empty() {
+                return (track_no, vec![a.to_string()], b.to_string());
+            }
+        }
+    }
+    (track_no, vec![], rest.trim().to_string())
+}
+
 fn read_track(p: &Path, mtime: u64) -> Track {
     let path = p.to_string_lossy().to_string();
     let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let (guess_no, guess_artists, guess_title) = guess_from_filename(&stem);
     let mut t = Track {
         id: format!("local:{path}"),
         source: Source::Local,
-        title: stem,
+        title: if guess_title.is_empty() { stem } else { guess_title },
+        artists: guess_artists,
         path: Some(path),
         added_ms: Some(mtime),
+        track_no: guess_no,
         ..Default::default()
     };
     let opts = ParseOptions::new().read_cover_art(false);
@@ -345,11 +635,15 @@ fn read_track(p: &Path, mtime: u64) -> Track {
             }
         }
     }
-    t.artists = artists;
+    if !artists.is_empty() {
+        t.artists = artists;
+    }
     t.album = tag_str(tag, &ItemKey::AlbumTitle).unwrap_or_default();
     t.album_artist = tag_str(tag, &ItemKey::AlbumArtist);
     t.genre = tag_str(tag, &ItemKey::Genre);
-    t.track_no = tag.track();
+    if let Some(n) = tag.track() {
+        t.track_no = Some(n);
+    }
     t.disc_no = tag.disk();
     t.year = tag.year().or_else(|| {
         tag_str(tag, &ItemKey::RecordingDate)
@@ -437,6 +731,51 @@ pub fn normalize(s: &str) -> String {
         .collect()
 }
 
+/// 译文 sidecar 文件名介于主文件名与 `.lrc` 之间的中缀（大小写不敏感）。
+/// 仅在同名主 `.lrc` 已存在时采用，避免把「歌名.zh.lrc」单独当成译文。
+const TRANS_MIDS: &[&str] = &[
+    ".trans",
+    ".tlyric",
+    ".translation",
+    ".zh-hans",
+    ".zh-hant",
+    ".zh-cn",
+    ".zh-tw",
+    ".zh",
+    ".cn",
+    ".chs",
+    ".cht",
+    ".翻译",
+    ".译",
+    "_trans",
+    "_zh",
+];
+
+pub fn is_lrc_path(p: &Path) -> bool {
+    p.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("lrc"))
+        .unwrap_or(false)
+}
+
+pub fn is_folder_cover_path(p: &Path) -> bool {
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp") {
+        return false;
+    }
+    let stem = p
+        .file_stem()
+        .and_then(|x| x.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .replace(' ', "");
+    FOLDER_COVERS.iter().any(|n| stem == *n)
+}
+
 /// 音频同目录、同主文件名的 .lrc（大小写不敏感）。
 fn sibling_lrc_path(audio: &Path) -> Option<PathBuf> {
     let parent = audio.parent()?;
@@ -460,6 +799,89 @@ fn sibling_lrc_path(audio: &Path) -> Option<PathBuf> {
     None
 }
 
+fn mid_matches_trans(mid: &str) -> Option<usize> {
+    let lower = mid.to_ascii_lowercase();
+    TRANS_MIDS
+        .iter()
+        .position(|m| mid == *m || lower == m.to_ascii_lowercase())
+}
+
+/// 主 `.lrc` 旁的译文文件，例如 `歌名.trans.lrc`、`歌名.翻译.lrc`。
+fn sibling_trans_lrc(audio: &Path, main_lrc: &Path) -> Option<PathBuf> {
+    let parent = audio.parent()?;
+    let stem = audio.file_stem()?.to_string_lossy();
+    let stem_l = stem.to_ascii_lowercase();
+    let main_name = main_lrc.file_name()?.to_string_lossy().to_ascii_lowercase();
+    let rd = std::fs::read_dir(parent).ok()?;
+    let mut found: Option<(usize, PathBuf)> = None;
+    for e in rd.flatten() {
+        let path = e.path();
+        if !path.is_file() || !is_lrc_path(&path) {
+            continue;
+        }
+        let name = e.file_name();
+        let s = name.to_string_lossy();
+        let lower = s.to_ascii_lowercase();
+        if lower == main_name {
+            continue;
+        }
+        if !lower.starts_with(&stem_l) || !lower.ends_with(".lrc") {
+            continue;
+        }
+        let mid_end = lower.len() - 4;
+        if mid_end < stem_l.len() {
+            continue;
+        }
+        let mid = &s[stem.len()..s.len() - 4];
+        // 用原始切片的长度，大小写用 lower 的对应段比较
+        let mid_l = &lower[stem_l.len()..mid_end];
+        if let Some(rank) = mid_matches_trans(mid).or_else(|| mid_matches_trans(mid_l)) {
+            if found.as_ref().map(|(r, _)| rank < *r).unwrap_or(true) {
+                found = Some((rank, path));
+            }
+        }
+    }
+    found.map(|(_, p)| p)
+}
+
+/// `.lrc`（含译文后缀）对应的音频主文件名。
+pub fn audio_stem_from_lrc(lrc: &Path) -> Option<String> {
+    let stem = lrc.file_stem()?.to_string_lossy();
+    let lower = stem.to_ascii_lowercase();
+    for mid in TRANS_MIDS {
+        let mid_l = mid.to_ascii_lowercase();
+        if lower.ends_with(&mid_l) && stem.len() > mid.len() {
+            return Some(stem[..stem.len() - mid.len()].to_string());
+        }
+    }
+    Some(stem.to_string())
+}
+
+fn file_mtime_ms(p: &Path) -> u64 {
+    std::fs::metadata(p)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// 歌词源（sidecar / 译文 sidecar / 音频内嵌）的最新 mtime，用于磁盘缓存失效。
+pub fn lyric_source_mtime(audio_path: &str) -> u64 {
+    let audio = Path::new(audio_path);
+    if let Some(lrc) = sibling_lrc_path(audio) {
+        let mut mt = file_mtime_ms(&lrc);
+        if let Some(t) = sibling_trans_lrc(audio, &lrc) {
+            mt = mt.max(file_mtime_ms(&t));
+        }
+        return mt;
+    }
+    if audio.is_file() {
+        return file_mtime_ms(audio);
+    }
+    0
+}
+
 fn embedded_lyric(audio: &Path) -> Option<String> {
     let opts = ParseOptions::new().read_properties(false).read_cover_art(false);
     let tagged = Probe::open(audio).and_then(|pr| pr.options(opts).read()).ok()?;
@@ -475,31 +897,112 @@ fn embedded_lyric(audio: &Path) -> Option<String> {
     None
 }
 
-/// 本地歌词：优先同名 .lrc，否则读内嵌歌词；都没有返回空 payload（不报错）。
-pub fn load_local_lyric(audio_path: &str) -> Result<LyricPayload, String> {
+pub struct LocalLyric {
+    pub payload: LyricPayload,
+    pub source_mtime: u64,
+}
+
+/// 本地歌词：优先同名 .lrc（及译文 sidecar），否则读内嵌歌词；都没有返回空 payload。
+pub fn load_local_lyric(audio_path: &str) -> Result<LocalLyric, String> {
     let audio = Path::new(audio_path);
     if !audio.is_file() {
         return Err(format!("本地文件不存在: {audio_path}"));
     }
-    let raw = match sibling_lrc_path(audio) {
-        Some(lrc) => decode_text(&std::fs::read(&lrc).map_err(|e| e.to_string())?),
-        None => embedded_lyric(audio).unwrap_or_default(),
+    let (raw, trans, mtime) = match sibling_lrc_path(audio) {
+        Some(lrc) => {
+            let raw = decode_text(&std::fs::read(&lrc).map_err(|e| e.to_string())?);
+            let trans_path = sibling_trans_lrc(audio, &lrc);
+            let trans = trans_path
+                .as_ref()
+                .and_then(|p| std::fs::read(p).ok())
+                .map(|b| decode_text(&b));
+            let mut mt = file_mtime_ms(&lrc);
+            if let Some(t) = &trans_path {
+                mt = mt.max(file_mtime_ms(t));
+            }
+            (raw, trans, mt)
+        }
+        None => (
+            embedded_lyric(audio).unwrap_or_default(),
+            None,
+            file_mtime_ms(audio),
+        ),
     };
-    Ok(lyric_from_raw(raw))
+    Ok(LocalLyric {
+        payload: lyric_from_raw_pair(raw, trans),
+        source_mtime: mtime,
+    })
 }
 
 /// Android 原生层返回的 .lrc 原始字节（base64），在此探测编码。
 pub fn lyric_from_b64(b64: &str) -> LyricPayload {
-    use base64::Engine;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap_or_default();
-    lyric_from_raw(decode_text(&bytes))
+    lyric_from_b64_pair(b64, None)
 }
 
-/// 由原始 LRC 文本构造歌词；同一时间戳的第二行视为翻译（双语 LRC）。
+pub fn lyric_from_b64_pair(b64: &str, trans_b64: Option<&str>) -> LyricPayload {
+    use base64::Engine;
+    let eng = base64::engine::general_purpose::STANDARD;
+    let raw = decode_text(&eng.decode(b64).unwrap_or_default());
+    let trans = trans_b64
+        .filter(|s| !s.is_empty())
+        .map(|s| decode_text(&eng.decode(s).unwrap_or_default()));
+    lyric_from_raw_pair(raw, trans)
+}
+
+/// 由原始 LRC 文本构造歌词；同一时间戳的第二行或行内「原文 / 译文」视为翻译。
 pub fn lyric_from_raw(raw: String) -> LyricPayload {
+    lyric_from_raw_pair(raw, None)
+}
+
+pub fn lyric_from_raw_pair(raw: String, trans: Option<String>) -> LyricPayload {
     let raw = raw.trim_start_matches('\u{feff}').to_string();
-    let lines = merge_bilingual(ncm::parse_lrc(&raw));
-    LyricPayload { lines, raw, translated: None }
+    let mut lines = merge_bilingual(ncm::parse_lrc(&raw));
+    for l in &mut lines {
+        if l.translation.is_none() {
+            if let Some((a, b)) = split_inline_trans(&l.text) {
+                l.text = a;
+                l.translation = Some(b);
+            }
+        }
+    }
+    let translated = trans
+        .map(|t| t.trim_start_matches('\u{feff}').to_string())
+        .filter(|t| !t.trim().is_empty());
+    if let Some(t) = &translated {
+        lines = ncm::merge_translations(lines, t);
+    }
+    LyricPayload {
+        lines,
+        raw,
+        translated,
+    }
+}
+
+fn has_cjk(s: &str) -> bool {
+    s.chars().any(|c| {
+        let u = c as u32;
+        (0x4E00..=0x9FFF).contains(&u)
+            || (0x3400..=0x4DBF).contains(&u)
+            || (0x3040..=0x30FF).contains(&u)
+            || (0xAC00..=0xD7AF).contains(&u)
+    })
+}
+
+/// 常见中文双语写法：`Hello / 你好` 或全角 `／`；仅在一侧含汉字时拆分。
+fn split_inline_trans(text: &str) -> Option<(String, String)> {
+    for sep in ["／", " / "] {
+        if let Some((a, b)) = text.split_once(sep) {
+            let a = a.trim();
+            let b = b.trim();
+            if a.is_empty() || b.is_empty() {
+                continue;
+            }
+            if has_cjk(a) != has_cjk(b) {
+                return Some((a.to_string(), b.to_string()));
+            }
+        }
+    }
+    None
 }
 
 fn merge_bilingual(lines: Vec<LyricLine>) -> Vec<LyricLine> {
@@ -509,7 +1012,7 @@ fn merge_bilingual(lines: Vec<LyricLine>) -> Vec<LyricLine> {
             if prev.time_ms == l.time_ms && prev.translation.is_none() && !l.text.is_empty() {
                 if prev.text.is_empty() {
                     prev.text = l.text;
-                } else {
+                } else if prev.text != l.text {
                     prev.translation = Some(l.text);
                 }
                 continue;
@@ -584,5 +1087,101 @@ mod tests {
     fn py() {
         assert_eq!(pinyin_of("晴天").1, "qt");
         assert_eq!(normalize("ＡＢＣ"), "abc");
+    }
+
+    #[test]
+    fn filename_guess() {
+        assert_eq!(
+            guess_from_filename("03 - 晴天"),
+            (Some(3), vec![], "晴天".into())
+        );
+        assert_eq!(
+            guess_from_filename("周杰伦 - 晴天"),
+            (None, vec!["周杰伦".into()], "晴天".into())
+        );
+        assert_eq!(
+            guess_from_filename("02. Artist - Title"),
+            (Some(2), vec!["Artist".into()], "Title".into())
+        );
+        assert_eq!(guess_from_filename("1989").2, "1989");
+        assert_eq!(guess_from_filename("1989").0, None);
+    }
+
+    #[test]
+    fn inline_and_sidecar_trans() {
+        let p = lyric_from_raw("[00:01.00]Hello / 你好\n[00:02.00]World／世界".into());
+        assert_eq!(p.lines.len(), 2);
+        assert_eq!(p.lines[0].text, "Hello");
+        assert_eq!(p.lines[0].translation.as_deref(), Some("你好"));
+        assert_eq!(p.lines[1].text, "World");
+        assert_eq!(p.lines[1].translation.as_deref(), Some("世界"));
+        // 两侧都是拉丁文，不拆
+        let q = lyric_from_raw("[00:01.00]AC / DC".into());
+        assert_eq!(q.lines[0].text, "AC / DC");
+        assert!(q.lines[0].translation.is_none());
+
+        let pair = lyric_from_raw_pair(
+            "[00:01.00]Hello\n[00:02.00]World".into(),
+            Some("[00:01.00]你好\n[00:02.00]世界".into()),
+        );
+        assert_eq!(pair.lines[0].translation.as_deref(), Some("你好"));
+        assert_eq!(pair.lines[1].translation.as_deref(), Some("世界"));
+    }
+
+    #[test]
+    fn apply_paths_add_and_remove() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("slim-local-{stamp}"));
+        let music = root.join("music");
+        let data = root.join("data");
+        let cache = root.join("cache");
+        std::fs::create_dir_all(&music).unwrap();
+        std::fs::create_dir_all(&data).unwrap();
+        let lib = Library::new(&data, &cache);
+        let folders = [music.to_string_lossy().to_string()];
+        assert!(lib.cached().is_empty());
+
+        let song = music.join("周杰伦 - 晴天.mp3");
+        std::fs::write(&song, b"not a real mp3").unwrap();
+        let r = lib.apply_paths(&folders, &[song.clone()]);
+        assert!(r.library_changed);
+        let tracks = lib.cached();
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].track.title, "晴天");
+        assert_eq!(tracks[0].track.artists, vec!["周杰伦"]);
+
+        let lrc = music.join("周杰伦 - 晴天.lrc");
+        std::fs::write(&lrc, "[00:01.00]晴天\n[00:01.00]Sunny Day\n").unwrap();
+        let r = lib.apply_paths(&folders, &[lrc.clone()]);
+        assert!(!r.library_changed);
+        assert_eq!(r.lyrics_changed.len(), 1);
+        let ly = load_local_lyric(&song.to_string_lossy()).unwrap();
+        assert_eq!(ly.payload.lines[0].text, "晴天");
+        assert_eq!(ly.payload.lines[0].translation.as_deref(), Some("Sunny Day"));
+
+        std::fs::remove_file(&song).unwrap();
+        let r = lib.apply_paths(&folders, &[song.clone()]);
+        assert!(r.library_changed);
+        assert!(lib.cached().is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn lrc_stem_strips_trans_mid() {
+        assert_eq!(
+            audio_stem_from_lrc(Path::new("/m/晴天.trans.lrc")).as_deref(),
+            Some("晴天")
+        );
+        assert_eq!(
+            audio_stem_from_lrc(Path::new("/m/晴天.lrc")).as_deref(),
+            Some("晴天")
+        );
+        assert_eq!(
+            audio_stem_from_lrc(Path::new("/m/晴天.翻译.lrc")).as_deref(),
+            Some("晴天")
+        );
     }
 }

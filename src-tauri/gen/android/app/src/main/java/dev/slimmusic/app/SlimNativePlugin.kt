@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.database.ContentObserver
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -57,6 +58,8 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
   private var controller: MediaController? = null
   private val pending = ArrayList<(MediaController) -> Unit>()
   private var channel: Channel? = null
+  private var libraryObserver: ContentObserver? = null
+  private val notifyLibrary = Runnable { emit(JSObject().put("type", "library")) }
 
   private val ticker = object : Runnable {
     override fun run() {
@@ -229,6 +232,27 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
 
   // ---------- 本地音乐（MediaStore） ----------
 
+  /** 监听系统媒体库变化，防抖后通知前端静默刷新。 */
+  private fun ensureLibraryWatch() {
+    if (libraryObserver != null) return
+    val obs = object : ContentObserver(main) {
+      override fun onChange(selfChange: Boolean) {
+        onChange(selfChange, null)
+      }
+      override fun onChange(selfChange: Boolean, uri: Uri?) {
+        main.removeCallbacks(notifyLibrary)
+        main.postDelayed(notifyLibrary, 1200)
+      }
+    }
+    try {
+      activity.contentResolver.registerContentObserver(
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, obs
+      )
+      libraryObserver = obs
+    } catch (_: Exception) {
+    }
+  }
+
   private fun audioAlias(): String =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "audio" else "storage"
 
@@ -254,6 +278,7 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
     Thread {
       try {
+        ensureLibraryWatch()
         val out = JSArray()
         val cols = arrayOf(
           MediaStore.Audio.Media._ID,
@@ -403,13 +428,70 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
-  /** 尝试读取音频旁同名 .lrc（受分区存储限制，读不到就返回空）。 */
+  /** 译文 sidecar 文件名中缀，须与 Rust 端 TRANS_MIDS 保持一致。 */
+  private val transMids = arrayOf(
+    ".trans", ".tlyric", ".translation",
+    ".zh-hans", ".zh-hant", ".zh-cn", ".zh-tw",
+    ".zh", ".cn", ".chs", ".cht",
+    ".翻译", ".译",
+    "_trans", "_zh"
+  )
+
+  /** 直接读文件，失败再经 MediaStore Files 打开（分区存储）。 */
+  private fun readLrcBytes(f: File): ByteArray? {
+    try {
+      if (f.canRead()) return f.readBytes()
+    } catch (_: Exception) {
+    }
+    return try {
+      val sel = "${MediaStore.MediaColumns.DATA} = ?"
+      activity.contentResolver.query(
+        MediaStore.Files.getContentUri("external"), arrayOf(MediaStore.MediaColumns._ID),
+        sel, arrayOf(f.absolutePath), null
+      )?.use { c ->
+        if (c.moveToFirst()) {
+          val u = Uri.withAppendedPath(MediaStore.Files.getContentUri("external"), c.getLong(0).toString())
+          activity.contentResolver.openInputStream(u)?.use { it.readBytes() }
+        } else null
+      }
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  private fun findTransLrc(audio: File): ByteArray? {
+    val dir = audio.parentFile ?: return null
+    val stem = audio.nameWithoutExtension
+    for (mid in transMids) {
+      val b = readLrcBytes(File(dir, stem + mid + ".lrc"))
+      if (b != null) return b
+    }
+    try {
+      dir.listFiles()?.forEach { f ->
+        val n = f.name
+        val lower = n.lowercase()
+        val stemL = stem.lowercase()
+        if (lower.endsWith(".lrc") && lower.startsWith(stemL) && n.length > stem.length + 4) {
+          val mid = n.substring(stem.length, n.length - 4)
+          if (transMids.any { it.equals(mid, ignoreCase = true) }) {
+            val b = readLrcBytes(f)
+            if (b != null) return b
+          }
+        }
+      }
+    } catch (_: Exception) {
+    }
+    return null
+  }
+
+  /** 尝试读取音频旁同名 .lrc 及译文 sidecar（受分区存储限制，读不到就返回空）。 */
   @Command
   fun readLrc(invoke: Invoke) {
     val uri = invoke.getArgs().getString("uri", null) ?: ""
     Thread {
       var text = ""
       var raw: ByteArray? = null
+      var transRaw: ByteArray? = null
       try {
         var path: String? = null
         activity.contentResolver.query(Uri.parse(uri), arrayOf(MediaStore.Audio.Media.DATA), null, null, null)?.use {
@@ -417,28 +499,16 @@ class SlimNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
         path?.let { p ->
           val f = File(p)
-          val lrc = File(f.parentFile, f.nameWithoutExtension + ".lrc")
-          if (lrc.canRead()) raw = lrc.readBytes()
-          else {
-            // MediaStore 中按文件名查找（部分机型将 .lrc 索引为 Files）
-            val sel = "${MediaStore.MediaColumns.DATA} = ?"
-            activity.contentResolver.query(
-              MediaStore.Files.getContentUri("external"), arrayOf(MediaStore.MediaColumns._ID),
-              sel, arrayOf(lrc.absolutePath), null
-            )?.use { c ->
-              if (c.moveToFirst()) {
-                val u = Uri.withAppendedPath(MediaStore.Files.getContentUri("external"), c.getLong(0).toString())
-                activity.contentResolver.openInputStream(u)?.use { s -> raw = s.readBytes() }
-              }
-            }
-          }
+          raw = readLrcBytes(File(f.parentFile, f.nameWithoutExtension + ".lrc"))
+          if (raw != null) transRaw = findTransLrc(f)
         }
       } catch (_: Exception) {
       }
       // 原始字节交给 Rust 端探测编码（GBK / UTF-8 / UTF-16）
       raw?.let { text = String(it, Charsets.UTF_8) }
       val b64 = raw?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: ""
-      invoke.resolve(JSObject().put("lrc", text).put("lrcB64", b64))
+      val t64 = transRaw?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: ""
+      invoke.resolve(JSObject().put("lrc", text).put("lrcB64", b64).put("tlyricB64", t64))
     }.start()
   }
 
