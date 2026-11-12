@@ -118,7 +118,7 @@ async function onCopyPlayLog() {
   logBusy.value = true;
   try {
     const ok = await copyPlayLog();
-    void dialog.alert(ok ? '播放诊断日志已复制到剪贴板' : '暂无日志可复制');
+    void dialog.info(ok ? '播放诊断日志已复制到剪贴板' : '暂无日志可复制');
   } catch (e) {
     void dialog.alert(String(e));
   } finally {
@@ -130,7 +130,7 @@ async function onClearPlayLog() {
   logBusy.value = true;
   try {
     await clearPlayLogAll();
-    void dialog.alert('已清空');
+    void dialog.info('已清空');
   } catch (e) {
     void dialog.alert(String(e));
   } finally {

@@ -44,6 +44,8 @@ export const dialog = {
     show({ kind: 'confirm', title, message, danger: !!opts.danger, confirmText: opts.confirmText ?? '确定' }) as Promise<boolean>,
   alert: (message: string, title = '出错了') =>
     show({ kind: 'alert', title, message }).then(() => undefined),
+  info: (message: string, title = '提示') =>
+    show({ kind: 'alert', title, message }).then(() => undefined),
 };
 
 export function useDialog() { return dialog; }

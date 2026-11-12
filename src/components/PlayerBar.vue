@@ -172,7 +172,7 @@ async function onLike() {
 
 async function onCopyErrorLog() {
   const ok = await copyPlayLog();
-  void dialog.alert(ok ? '已复制播放诊断日志，可发给开发者' : '暂无日志');
+  void dialog.info(ok ? '已复制播放诊断日志，可发给开发者' : '暂无日志');
 }
 </script>
 
