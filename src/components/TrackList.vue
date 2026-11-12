@@ -62,6 +62,57 @@ const menuTrack = computed(() =>
 /** 只依赖当前曲 id，避免对每行调用 current() */
 const playingId = computed(() => current()?.id ?? null);
 
+/** 当前播放曲在本列表（筛选后）中的下标；不在列表里为 -1 */
+const playingIndex = computed(() => {
+  const id = playingId.value;
+  if (id == null) return -1;
+  const cur = current();
+  if (cur) {
+    const exact = props.tracks.indexOf(cur);
+    if (exact >= 0) return exact;
+  }
+  return props.tracks.findIndex((tr) => tr.id === id);
+});
+
+/** 滚动视口高度，用于把定位按钮贴在可见区域右下角 */
+const viewH = ref(0);
+/** 当前播放行是否已完整落在可见区内（在的话隐藏按钮） */
+const playingInView = ref(true);
+
+const LOCATE_PAD = 72;
+
+function rowStart(idx: number): number {
+  const item = virtualizer.value.measurementsCache[idx];
+  if (item) return item.start;
+  return idx * estimateRowSize();
+}
+
+function updatePlayingInView() {
+  const idx = playingIndex.value;
+  const el = scrollEl.value;
+  if (idx < 0 || !el || el.clientHeight <= 0) {
+    playingInView.value = true;
+    return;
+  }
+  const top = rowStart(idx);
+  const size = estimateRowSize();
+  const viewTop = el.scrollTop;
+  const viewBot = viewTop + el.clientHeight;
+  const marginTop = 8;
+  const marginBot = 20;
+  playingInView.value = top >= viewTop + marginTop && top + size <= viewBot - marginBot;
+}
+
+const showLocate = computed(
+  () => playingIndex.value >= 0 && viewH.value > 0 && !playingInView.value,
+);
+
+function locatePlaying() {
+  const idx = playingIndex.value;
+  if (idx < 0) return;
+  virtualizer.value.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
+}
+
 function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   let p = el?.parentElement ?? null;
   while (p && p !== document.documentElement) {
@@ -83,6 +134,7 @@ const virtualizer = useVirtualizer(
     getScrollElement: () => scrollEl.value,
     estimateSize: estimateRowSize,
     overscan: 12,
+    paddingEnd: LOCATE_PAD,
     getItemKey: (i: number) => `${props.tracks[i]?.id ?? i}-${i}`,
   })),
 );
@@ -90,21 +142,56 @@ const virtualizer = useVirtualizer(
 const virtualRows = computed(() => virtualizer.value.getVirtualItems());
 const totalSize = computed(() => virtualizer.value.getTotalSize());
 
+let boundScroll: HTMLElement | null = null;
+let scrollRo: ResizeObserver | null = null;
+
+function onListScroll() {
+  updatePlayingInView();
+}
+
+function bindScrollEl(el: HTMLElement | null) {
+  if (boundScroll === el) return;
+  if (boundScroll) boundScroll.removeEventListener('scroll', onListScroll);
+  scrollRo?.disconnect();
+  scrollRo = null;
+  boundScroll = el;
+  if (el) {
+    el.addEventListener('scroll', onListScroll, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') {
+      scrollRo = new ResizeObserver(() => {
+        viewH.value = el.clientHeight;
+        updatePlayingInView();
+      });
+      scrollRo.observe(el);
+    }
+  }
+}
+
 function refreshScrollParent() {
   scrollEl.value = findScrollParent(rootEl.value);
+  viewH.value = scrollEl.value?.clientHeight ?? 0;
+  bindScrollEl(scrollEl.value);
   virtualizer.value.measure();
+  updatePlayingInView();
 }
 
 onMounted(() => {
   void nextTick(refreshScrollParent);
   window.addEventListener('resize', refreshScrollParent);
 });
-onUnmounted(() => window.removeEventListener('resize', refreshScrollParent));
+onUnmounted(() => {
+  window.removeEventListener('resize', refreshScrollParent);
+  bindScrollEl(null);
+});
 
 watch(
   () => props.tracks.length,
-  () => void nextTick(() => virtualizer.value.measure()),
+  () => void nextTick(() => {
+    virtualizer.value.measure();
+    refreshScrollParent();
+  }),
 );
+watch(playingIndex, () => void nextTick(updatePlayingInView));
 
 function playAt(i: number) {
   playList(props.tracks, i);
@@ -172,6 +259,24 @@ function move(i: number, dir: -1 | 1) {
 
 <template>
   <div ref="rootEl" class="list">
+    <div
+      class="locate-slot"
+      :style="{ '--locate-view-h': viewH + 'px' }"
+    >
+      <Transition name="locate-in">
+        <button
+          v-if="showLocate"
+          key="locate"
+          type="button"
+          class="locate"
+          title="定位到当前播放"
+          aria-label="定位到当前播放"
+          @click="locatePlaying"
+        >
+          <Icon name="locate" :size="18" />
+        </button>
+      </Transition>
+    </div>
     <div v-if="tracks.length" class="virt" :style="{ height: totalSize + 'px' }">
       <div
         v-for="vRow in virtualRows"
@@ -275,6 +380,70 @@ function move(i: number, dir: -1 | 1) {
   width: 100%;
   min-width: 0;
   position: relative;
+}
+.locate-slot {
+  --locate-size: 40px;
+  --locate-inset: 16px;
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+  display: flex;
+  justify-content: flex-end;
+  overflow: visible;
+}
+.locate {
+  pointer-events: auto;
+  position: relative;
+  top: calc(var(--locate-view-h) - var(--locate-inset) - var(--locate-size));
+  margin-right: var(--locate-inset);
+  width: var(--locate-size);
+  height: var(--locate-size);
+  min-width: var(--locate-size);
+  min-height: var(--locate-size);
+  padding: 0;
+  border-radius: 50%;
+  border: 0.5px solid var(--border);
+  background: color-mix(in srgb, var(--panel-bg) 88%, transparent);
+  box-shadow: var(--elev-2);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 0;
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift),
+    box-shadow var(--dur-fast) var(--ease-swift),
+    transform var(--dur-fast) var(--ease-swift),
+    opacity var(--dur-fast) var(--ease-swift);
+}
+.locate:hover {
+  color: var(--accent);
+  background: var(--panel-bg);
+  box-shadow: var(--elev-2);
+}
+.locate:active {
+  transform: scale(0.96);
+}
+.locate-in-enter-active,
+.locate-in-leave-active {
+  transition:
+    opacity var(--dur) var(--ease-swift),
+    transform var(--dur) var(--ease-swift);
+}
+.locate-in-enter-from,
+.locate-in-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+@media (max-width: 700px) {
+  .locate-slot {
+    --locate-size: 44px;
+    --locate-inset: 12px;
+  }
 }
 .virt {
   width: 100%;

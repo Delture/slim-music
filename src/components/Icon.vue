@@ -37,6 +37,7 @@ const MAP: Record<string, string> = {
   plus: 'ph:plus',
   trash: 'ph:trash',
   refresh: 'ph:arrow-clockwise',
+  locate: 'ph:gps-fix',
 };
 
 const props = withDefaults(
