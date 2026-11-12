@@ -70,6 +70,13 @@ const qualities = Object.keys(QUALITY_LABELS) as Quality[];
 function onQualityChange() {
   void saveSettings();
 }
+
+function onCacheMaxChange() {
+  const n = Number(session.settings.audioCacheMaxMb);
+  const clamped = !Number.isFinite(n) || n <= 0 ? 2048 : Math.min(50 * 1024, Math.max(100, Math.round(n)));
+  session.settings.audioCacheMaxMb = clamped;
+  void saveSettings().then(() => refreshStats());
+}
 const accents = Object.keys(ACCENT_LABELS) as AccentId[];
 const themes = Object.keys(THEME_LABELS) as ThemeAppearance[];
 const stats = ref<CacheStats | null>(null);
@@ -256,10 +263,13 @@ async function saveQr() {
           step="100"
           style="width: 100px"
           v-model.number="session.settings.audioCacheMaxMb"
-          @change="saveSettings"
+          @change="onCacheMaxChange"
         />
         <span>MB</span>
       </div>
+      <p class="muted tip">
+        听过的网易云歌曲会按当前音质把音频存到本机，再次播放直接走本地文件，不依赖会过期的在线地址。调高音质会重新缓存；已有更高或同等音质时可直接复用。默认上限 2048 MB，超出后淘汰最久未听的。清空会同时删除歌单、歌词和音频缓存，不影响本机音乐库。
+      </p>
       <p class="muted tip" v-if="stats">
         已用 {{ fmtBytes(stats.totalBytes) }}（元数据 {{ fmtBytes(stats.metaBytes) }} /
         音频 {{ fmtBytes(stats.audioBytes) }}，{{ stats.audioFiles }} 个文件）

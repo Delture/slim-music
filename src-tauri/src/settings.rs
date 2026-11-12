@@ -1,8 +1,23 @@
 //! 设置与登录 cookie 持久化（应用数据目录下的 JSON 文件）。
 use serde::{Deserialize, Serialize};
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub const QUALITY_LEVELS: [&str; 5] = ["standard", "higher", "exhigh", "lossless", "hires"];
+
+/// 音频磁盘缓存上限（MB）：默认 2 GB，最小 100 MB，最大 50 GB。
+pub const AUDIO_CACHE_MAX_MB_DEFAULT: u64 = 2048;
+pub const AUDIO_CACHE_MAX_MB_MIN: u64 = 100;
+pub const AUDIO_CACHE_MAX_MB_MAX: u64 = 50 * 1024;
+
+pub fn clamp_audio_cache_max_mb(mb: u64) -> u64 {
+    if mb == 0 {
+        return AUDIO_CACHE_MAX_MB_DEFAULT;
+    }
+    mb.clamp(AUDIO_CACHE_MAX_MB_MIN, AUDIO_CACHE_MAX_MB_MAX)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -51,13 +66,12 @@ impl Default for Settings {
             shuffle: false,
             repeat: "off".into(),
             cache_enabled: true,
-            audio_cache_max_mb: 2048,
+            audio_cache_max_mb: AUDIO_CACHE_MAX_MB_DEFAULT,
             accent: "red".into(),
             theme_appearance: "system".into(),
         }
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -148,13 +162,17 @@ impl Store {
         self.dir.join(name)
     }
     pub fn load_settings(&self) -> Settings {
-        fs::read_to_string(self.file("settings.json"))
+        let mut s = fs::read_to_string(self.file("settings.json"))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        s.audio_cache_max_mb = clamp_audio_cache_max_mb(s.audio_cache_max_mb);
+        s
     }
     pub fn save_settings(&self, s: &Settings) -> Result<(), String> {
-        let json = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+        let mut s = s.clone();
+        s.audio_cache_max_mb = clamp_audio_cache_max_mb(s.audio_cache_max_mb);
+        let json = serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?;
         fs::write(self.file("settings.json"), json).map_err(|e| e.to_string())
     }
     pub fn load_cookie(&self) -> Option<String> {

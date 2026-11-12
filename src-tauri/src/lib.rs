@@ -10,7 +10,7 @@ mod settings;
 mod folder_watch;
 
 use model::{LyricPayload, Playlist, Profile, Track};
-use settings::{PlaybackSession, Settings, Store, QUALITY_LEVELS};
+use settings::{clamp_audio_cache_max_mb, PlaybackSession, Settings, Store, QUALITY_LEVELS};
 #[cfg(desktop)]
 use tauri::{
     image::Image,
@@ -195,7 +195,8 @@ async fn song_play_src(
 
     if enabled {
         if refresh {
-            state.cache.invalidate_audio(id, &quality);
+            // 作废该曲全部音质，避免更高音质的损坏文件被反复命中。
+            state.cache.invalidate_song_audio(id);
         } else if let Some(path) = state.cache.audio_cached_path(id, &quality) {
             return Ok(Some(cache::PlaySrc {
                 kind: "file".into(),
@@ -216,7 +217,10 @@ async fn song_play_src(
         let q = quality.clone();
         let u = url.clone();
         tauri::async_runtime::spawn(async move {
-            let _ = cache.download_audio(id, &q, &u, max_bytes).await;
+            if let Err(e) = cache.download_audio(id, &q, &u, max_bytes).await {
+                // 不含 URL（带签名），便于本地排查且不写诊断日志以外的数据。
+                eprintln!("[audio-cache] 下载失败 id={id} quality={q}: {e}");
+            }
         });
     }
 
@@ -251,9 +255,12 @@ async fn prefetch_song_audio(state: State<'_, AppState>, id: i64) -> R<bool> {
         }
         match ncm::song_url(&c, id, &q).await {
             Ok(Some(url)) => {
-                let _ = cache.download_audio(id, &q, &url, max_bytes).await;
+                if let Err(e) = cache.download_audio(id, &q, &url, max_bytes).await {
+                    eprintln!("[audio-cache] 预取失败 id={id} quality={q}: {e}");
+                }
             }
-            _ => {}
+            Err(e) => eprintln!("[audio-cache] 预取取链失败 id={id} quality={q}: {e}"),
+            Ok(None) => {}
         }
     });
     Ok(false)
@@ -307,9 +314,13 @@ async fn save_settings(state: State<'_, AppState>, settings: Settings) -> R<()> 
     if !QUALITY_LEVELS.contains(&settings.quality.as_str()) {
         return Err(format!("未知音质: {}", settings.quality));
     }
+    let mut settings = settings;
+    settings.audio_cache_max_mb = clamp_audio_cache_max_mb(settings.audio_cache_max_mb);
+    let max_bytes = settings.audio_cache_max_mb.saturating_mul(1024 * 1024);
     state.store.save_settings(&settings)?;
     let folders = settings.local_folders.clone();
     *state.settings.lock().await = settings;
+    state.cache.enforce_audio_limit(max_bytes);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     folder_watch::set_folders(&folders);
     let _ = folders;
