@@ -1,4 +1,5 @@
 //! Tauri 入口：所有前端调用都经由这里的 #[tauri::command]。
+mod artists;
 mod cache;
 mod local;
 mod local_playlists;

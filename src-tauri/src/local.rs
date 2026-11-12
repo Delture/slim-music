@@ -4,6 +4,7 @@
 //! - 索引按 (mtime, size) 判断文件是否变化，未变化的文件不再解析标签；
 //! - 扫描标签时不读封面（read_cover_art=false）；封面按专辑去重，仅缺失时读一次并缩放缓存；
 //! - 不跟随符号链接，避免目录环。
+use crate::artists::split_artists;
 use crate::model::{LyricLine, LyricPayload, Source, Track};
 use crate::ncm;
 use lofty::config::ParseOptions;
@@ -542,17 +543,6 @@ pub fn decode_text(bytes: &[u8]) -> String {
     let mut det = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Deny);
     det.feed(bytes, true);
     det.guess(Some(b"cn"), chardetng::Utf8Detection::Allow).decode_without_bom_handling(bytes).0.into_owned()
-}
-
-fn split_artists(v: &str) -> Vec<String> {
-    let mut s = v.to_string();
-    for sep in [" feat. ", " ft. ", " Feat. ", " FEAT. ", " featuring "] {
-        s = s.replace(sep, "/");
-    }
-    s.split(['/', ';', '；', '、', ',', '，', '\0'])
-        .map(|x| x.trim().to_string())
-        .filter(|x| !x.is_empty())
-        .collect()
 }
 
 fn tag_str(tag: &Tag, key: &ItemKey) -> Option<String> {
