@@ -162,7 +162,7 @@ impl Store {
         self.dir.join(name)
     }
     pub fn load_settings(&self) -> Settings {
-        let mut s = fs::read_to_string(self.file("settings.json"))
+        let mut s: Settings = fs::read_to_string(self.file("settings.json"))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
