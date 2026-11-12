@@ -114,6 +114,12 @@
   --menu-item-px: 14px;
   --dlg-scrim: rgba(0, 0, 0, 0.22);
 
+  /* Custom scrollbars — thin rounded thumb, discreet track (light + dark) */
+  --scrollbar-size: 10px;
+  --scrollbar-thumb: color-mix(in srgb, var(--text) 22%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 50%, color-mix(in srgb, var(--text) 18%, transparent));
+  --scrollbar-track: transparent;
+
   /* ---- ONE spacing scale ---- */
   --space-1: 4px;
   --space-2: 8px;
@@ -262,15 +268,37 @@ html, body {
 }
 #app { height: 100%; }
 
-* {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/* 自定义滚动条：不用系统原生（Windows 上尤其难看）。
+   Chromium / WebKit 用 ::-webkit-scrollbar；不要同时写 scrollbar-width，
+   否则 Chrome 会改走标准滚动条而丢掉圆角拇指。Firefox 走 @supports 分支。 */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
 }
 *::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
   background: transparent;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  margin: 4px 0;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  min-height: 32px;
+  min-width: 32px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 @keyframes sm-fade-in {
