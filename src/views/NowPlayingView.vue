@@ -433,6 +433,16 @@ function onNpAnimationEnd(e: AnimationEvent) {
   alignToActive('auto');
 }
 
+function onLocalLyrics(e: Event) {
+  const path = (e as CustomEvent<{ path?: string }>).detail?.path;
+  const track = t.value;
+  if (!track || track.source !== 'local' || !track.path) return;
+  if (path && path !== track.path) return;
+  void loadLocalLyricCached(track.id, track.path, { force: true })
+    .then(applyLyric)
+    .catch(() => {});
+}
+
 onMounted(() => {
   // 打开时已在 openNowPlaying 切 overlay；这里再确保一次（含直接挂载路径）
   npMounted = true;
@@ -443,6 +453,7 @@ onMounted(() => {
   window.addEventListener('focus', onWindowFocus);
   window.addEventListener('blur', onWindowBlur);
   window.addEventListener('keydown', onKey);
+  window.addEventListener('slim-local-lyrics', onLocalLyrics);
   rootEl.value?.addEventListener('animationend', onNpAnimationEnd);
   bindLyricsObserver();
   // 中途打开播放页（含关窗后再开 / 离开再进入）时对齐当前行，并等到布局就绪
@@ -479,6 +490,7 @@ onUnmounted(() => {
   window.removeEventListener('focus', onWindowFocus);
   window.removeEventListener('blur', onWindowBlur);
   window.removeEventListener('keydown', onKey);
+  window.removeEventListener('slim-local-lyrics', onLocalLyrics);
   rootEl.value?.removeEventListener('animationend', onNpAnimationEnd);
   unlistenFocus?.();
   unlistenFocus = null;

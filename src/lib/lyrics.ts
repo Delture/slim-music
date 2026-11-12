@@ -27,12 +27,31 @@ export async function loadLyricCached(ncmId: number): Promise<LyricPayload> {
 }
 
 /** 本地：同名 .lrc sidecar；内存 + 后端磁盘缓存。 */
-export async function loadLocalLyricCached(trackId: string, path: string): Promise<LyricPayload> {
-  const hit = mem.get(trackId);
-  if (hit) return hit;
+export async function loadLocalLyricCached(
+  trackId: string,
+  path: string,
+  opts?: { force?: boolean },
+): Promise<LyricPayload> {
+  if (!opts?.force) {
+    const hit = mem.get(trackId);
+    if (hit) return hit;
+  } else {
+    mem.delete(trackId);
+  }
   const payload = await api.localLyric(path);
   mem.set(trackId, payload);
   return payload;
+}
+
+/** 作废本地歌词内存缓存。不传 trackId 时清掉所有非网易云条目。 */
+export function invalidateLocalLyric(trackId?: string) {
+  if (trackId) {
+    mem.delete(trackId);
+    return;
+  }
+  for (const k of [...mem.keys()]) {
+    if (!k.startsWith('ncm:')) mem.delete(k);
+  }
 }
 
 export function clearLyricMemory() {

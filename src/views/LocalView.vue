@@ -3,15 +3,17 @@
 // 桌面端先读后端索引秒开，再后台增量扫描；Android 走 MediaStore。
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import { useVirtualizer } from '@tanstack/vue-virtual';
+import { listen } from '@tauri-apps/api/event';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import { session } from '../lib/session';
-import type { LocalTrack, Track } from '../lib/types';
+import type { LocalLibraryEvent, LocalTrack, Track } from '../lib/types';
+import { invalidateLocalLyric } from '../lib/lyrics';
 import TrackList from '../components/TrackList.vue';
 import CoverThumb from '../components/CoverThumb.vue';
 import Icon from '../components/Icon.vue';
 import SmSelect from '../components/SmSelect.vue';
-import { generateAlbumCovers, isAndroid, queryLocalAudio } from '../lib/native';
+import { generateAlbumCovers, isAndroid, nativeListen, queryLocalAudio } from '../lib/native';
 
 type Grouping = 'album' | 'artist' | 'folder';
 type SortBy = 'smart' | 'title' | 'artist' | 'album' | 'duration' | 'added';
@@ -43,6 +45,8 @@ const hidden = ref<{ count: number; exts: string[] }>({ count: 0, exts: [] });
 const filter = ref('');
 const loading = ref(false);
 const err = ref('');
+const autoNote = ref('');
+let autoNoteTimer = 0;
 const grouping = ref<Grouping>('album');
 const selected = ref(ALL);
 const sortBy = ref<SortBy>('smart');
@@ -59,6 +63,7 @@ const MIME: Record<string, string> = {
   aac: 'audio/aac',
   wav: 'audio/wav',
   ogg: 'audio/ogg',
+  oga: 'audio/ogg',
   opus: 'audio/ogg; codecs="opus"',
   aiff: 'audio/aiff',
   aif: 'audio/aiff',
@@ -114,10 +119,43 @@ function apply(list: LocalTrack[], filePath: (t: LocalTrack) => string) {
   all.value = out;
 }
 
-async function scan() {
-  if (loading.value) return;
-  loading.value = true;
-  err.value = '';
+function flashNote(msg: string) {
+  autoNote.value = msg;
+  if (autoNoteTimer) window.clearTimeout(autoNoteTimer);
+  autoNoteTimer = window.setTimeout(() => {
+    autoNoteTimer = 0;
+    autoNote.value = '';
+  }, 2500);
+}
+
+function applyLyricsChanged(paths: string[]) {
+  for (const p of paths) {
+    invalidateLocalLyric('local:' + p);
+    window.dispatchEvent(new CustomEvent('slim-local-lyrics', { detail: { path: p } }));
+  }
+}
+
+async function applyCached() {
+  try {
+    apply(await api.localCached(), (t) => t.path ?? '');
+  } catch {
+    /* 索引尚未写好 */
+  }
+}
+
+let scanning = false;
+
+function fingerprint(list: LocalTrack[]) {
+  return list.map((t) => [t.id, t.title, t.album, t.cover ?? '', t.durationMs].join('\t')).join('\n');
+}
+
+async function scan(opts?: { quiet?: boolean }) {
+  if (scanning) return;
+  scanning = true;
+  const quiet = !!opts?.quiet;
+  if (!quiet) loading.value = true;
+  if (!quiet) err.value = '';
+  const before = quiet ? fingerprint(all.value) : '';
   try {
     if (isAndroid) {
       const list = await queryLocalAudio();
@@ -170,10 +208,12 @@ async function scan() {
       apply(await api.scanLocal(), (t) => t.path ?? '');
     }
   } catch (e) {
-    err.value = String(e);
+    if (!quiet) err.value = String(e);
   } finally {
-    loading.value = false;
+    scanning = false;
+    if (!quiet) loading.value = false;
   }
+  return quiet ? fingerprint(all.value) !== before : true;
 }
 
 async function init() {
@@ -294,15 +334,54 @@ const syncNarrow = () => {
   if (!narrow.value) mobileDetail.value = false;
 };
 
+let unlistenLib: (() => void) | null = null;
+let unlistenNative: (() => void) | null = null;
+
 onMounted(() => {
   mql = window.matchMedia('(max-width: 700px)');
   syncNarrow();
   mql.addEventListener('change', syncNarrow);
   void init();
+  void listen<LocalLibraryEvent>('local-library-updated', (e) => {
+    const ev = e.payload;
+    if (!ev) return;
+    if (ev.libraryChanged) {
+      const before = fingerprint(all.value);
+      void applyCached().then(() => {
+        if (fingerprint(all.value) !== before) flashNote('曲库已自动更新');
+      });
+    }
+    if (ev.lyricsChanged?.length) applyLyricsChanged(ev.lyricsChanged);
+  }).then((fn) => {
+    unlistenLib = fn;
+  });
+  if (isAndroid) {
+    void nativeListen((ne) => {
+      if (ne.type !== 'library') return;
+      if (loading.value) return;
+      void scanQuiet();
+    }).then((fn) => {
+      unlistenNative = fn;
+    });
+  }
 });
 onUnmounted(() => {
   mql?.removeEventListener('change', syncNarrow);
+  unlistenLib?.();
+  unlistenNative?.();
+  if (autoNoteTimer) window.clearTimeout(autoNoteTimer);
 });
+
+/** Android MediaStore 变更：静默刷新，不闪「扫描中」。 */
+async function scanQuiet() {
+  if (scanning || !isAndroid) return;
+  try {
+    const changed = await scan({ quiet: true });
+    if (changed) flashNote('曲库已自动更新');
+  } catch {
+    /* 权限等 */
+  }
+}
 watch(
   () => session.settings.localFolders.join('\n'),
   () => {
@@ -379,7 +458,7 @@ watch(
             icon="sort"
           />
           <button class="btn-primary" :disabled="!shown.length" @click="playList(shown)">播放全部</button>
-          <button class="btn-secondary" :disabled="loading" @click="scan">
+          <button class="btn-secondary" :disabled="loading" @click="() => scan()">
             {{ loading ? '扫描中…' : isAndroid ? '刷新' : '重新扫描' }}
           </button>
         </div>
@@ -387,6 +466,7 @@ watch(
       <p v-if="!isAndroid && !session.settings.localFolders.length" class="muted note">
         还没有添加文件夹，去「设置」里添加。
       </p>
+      <p v-if="autoNote" class="muted note">{{ autoNote }}</p>
       <p v-if="hidden.count" class="muted note">
         已隐藏 {{ hidden.count }} 首当前平台无法播放的文件（{{ hidden.exts.join(' / ') }}）
       </p>

@@ -58,6 +58,12 @@ export interface LyricPayload {
   translated: string | null;
 }
 
+/** 桌面端文件夹监听：后端只发变更标记，曲目再读 localCached。 */
+export interface LocalLibraryEvent {
+  libraryChanged: boolean;
+  lyricsChanged: string[];
+}
+
 export type Quality = 'standard' | 'higher' | 'exhigh' | 'lossless' | 'hires';
 export type AccentId = 'red' | 'terracotta';
 export type ThemeAppearance = 'system' | 'light' | 'dark';

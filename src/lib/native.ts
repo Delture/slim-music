@@ -13,12 +13,28 @@ export type NativeEvent =
   | { type: 'ended' }
   | { type: 'error'; message: string }
   | { type: 'remote'; action: 'next' | 'prev' }
-  | { type: 'back' };
+  | { type: 'back' }
+  | { type: 'library' };
 
-export async function nativeListen(cb: (e: NativeEvent) => void) {
-  const ch = new Channel<NativeEvent>();
-  ch.onmessage = cb;
-  await invoke('native_listen', { onEvent: ch });
+const nativeListeners = new Set<(e: NativeEvent) => void>();
+let nativeListenStarted: Promise<void> | null = null;
+
+/** 原生事件可被多处订阅（播放器 + 本地曲库）；底层只注册一条 Channel。 */
+export async function nativeListen(cb: (e: NativeEvent) => void): Promise<() => void> {
+  nativeListeners.add(cb);
+  if (!nativeListenStarted) {
+    nativeListenStarted = (async () => {
+      const ch = new Channel<NativeEvent>();
+      ch.onmessage = (e) => {
+        for (const fn of [...nativeListeners]) fn(e);
+      };
+      await invoke('native_listen', { onEvent: ch });
+    })();
+  }
+  await nativeListenStarted;
+  return () => {
+    nativeListeners.delete(cb);
+  };
 }
 
 export interface NativeAudio {
