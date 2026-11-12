@@ -301,32 +301,64 @@ pub async fn song_url(cookie: &Option<String>, id: i64, level: &str) -> R<Option
     ))
 }
 
+fn json_i64(v: &Value) -> Option<i64> {
+    v.as_i64()
+        .or_else(|| v.as_u64().and_then(|n| i64::try_from(n).ok()))
+        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+}
+
+/// 从 playlist/detail 取出 (id, 收藏时间 at)。优先 trackIds；CDN 偶发只给 tracks。
+fn liked_track_entries(playlist: &Value) -> Vec<(i64, i64)> {
+    let from_ids = playlist["trackIds"].as_array().map(|a| {
+        a.iter()
+            .filter_map(|t| Some((json_i64(&t["id"])?, json_i64(&t["at"]).unwrap_or(0))))
+            .collect::<Vec<_>>()
+    });
+    if let Some(entries) = from_ids {
+        if !entries.is_empty() {
+            return entries;
+        }
+    }
+    playlist["tracks"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|t| json_i64(&t["id"]).map(|id| (id, 0)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 「我喜欢的音乐」：顺序以歌单自身 trackIds 为准（`at` 为收藏时间，按其倒序）；
 /// likelist 的 id 不按收藏时间排序，只用来补齐 CDN 未更新的新收藏（置顶）并剔除已取消的。
 pub async fn liked_tracks(cookie: &Option<String>, uid: i64, playlist_id: i64) -> R<Vec<Track>> {
     let query = q(cookie).param("id", &playlist_id.to_string()).param("s", "0");
     let res = ok(create_client(None).playlist_detail(&query).await)?;
-    let mut entries: Vec<(i64, i64)> = res.body["playlist"]["trackIds"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|t| Some((t["id"].as_i64()?, t["at"].as_i64().unwrap_or(0))))
-                .collect()
-        })
-        .unwrap_or_default();
-    if entries.iter().all(|e| e.1 > 0) {
+    let mut entries = liked_track_entries(&res.body["playlist"]);
+    if !entries.is_empty() && entries.iter().all(|e| e.1 > 0) {
         entries.sort_by(|x, y| y.1.cmp(&x.1)); // stable; 收藏时间倒序
     }
     let mut order: Vec<i64> = entries.into_iter().map(|e| e.0).collect();
-    if let Ok(likes) = liked_ids(cookie, uid).await {
-        if !likes.is_empty() {
-            let like_set: std::collections::HashSet<i64> = likes.iter().copied().collect();
-            let have: std::collections::HashSet<i64> = order.iter().copied().collect();
-            let mut fresh: Vec<i64> = likes.iter().copied().filter(|id| !have.contains(id)).collect();
-            order.retain(|id| like_set.contains(id));
-            fresh.extend(order);
-            order = fresh;
+    if uid > 0 {
+        match liked_ids(cookie, uid).await {
+            Ok(likes) if !likes.is_empty() => {
+                let like_set: std::collections::HashSet<i64> = likes.iter().copied().collect();
+                let have: std::collections::HashSet<i64> = order.iter().copied().collect();
+                let mut fresh: Vec<i64> = likes.iter().copied().filter(|id| !have.contains(id)).collect();
+                order.retain(|id| like_set.contains(id));
+                fresh.extend(order);
+                order = fresh;
+            }
+            Ok(_) => { /* likelist 确认无新红心，保留 trackIds（可能本来就是空歌单） */ }
+            Err(e) => {
+                // trackIds 也是空时不能当成「没有喜欢的歌」成功返回，否则会被缓存
+                if order.is_empty() {
+                    return Err(e);
+                }
+            }
         }
+    } else if order.is_empty() {
+        return Err("无法获取「我喜欢的音乐」：未取得用户信息".into());
     }
     let mut all = Vec::with_capacity(order.len());
     for chunk in order.chunks(500) {
@@ -348,7 +380,7 @@ pub async fn liked_ids(cookie: &Option<String>, uid: i64) -> R<Vec<i64>> {
     let res = ok(create_client(None).likelist(&query).await)?;
     Ok(res.body["ids"]
         .as_array()
-        .map(|a| a.iter().filter_map(|v| v.as_i64()).collect())
+        .map(|a| a.iter().filter_map(json_i64).collect())
         .unwrap_or_default())
 }
 
@@ -526,6 +558,38 @@ mod tests {
         assert_eq!(super::level_to_br("exhigh"), "320000");
         assert_eq!(super::level_to_br("hires"), "999000");
         assert_eq!(super::level_to_br("lossless"), "999000");
+    }
+
+    #[test]
+    fn json_i64_parses_number_and_string() {
+        use serde_json::json;
+        assert_eq!(super::json_i64(&json!(12345)), Some(12345));
+        assert_eq!(super::json_i64(&json!("67890")), Some(67890));
+        assert_eq!(super::json_i64(&json!(" 42 ")), Some(42));
+        assert_eq!(super::json_i64(&json!(null)), None);
+    }
+
+    #[test]
+    fn liked_entries_prefer_track_ids() {
+        use serde_json::json;
+        let playlist = json!({
+            "trackIds": [
+                {"id": 1, "at": 100},
+                {"id": "2", "at": "200"}
+            ],
+            "tracks": [{"id": 99}]
+        });
+        assert_eq!(super::liked_track_entries(&playlist), vec![(1, 100), (2, 200)]);
+    }
+
+    #[test]
+    fn liked_entries_fall_back_to_tracks_when_ids_missing() {
+        use serde_json::json;
+        assert_eq!(
+            super::liked_track_entries(&json!({"tracks": [{"id": 7}, {"id": "8"}]})),
+            vec![(7, 0), (8, 0)]
+        );
+        assert!(super::liked_track_entries(&json!({})).is_empty());
     }
 
     #[tokio::test]

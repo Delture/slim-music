@@ -6,9 +6,9 @@ import { api } from '../lib/api';
 import { playList } from '../lib/player';
 import {
   forgetCachedPlaylistTracks,
-  getCachedPlaylistTracks,
   playlistCacheEpoch,
   setCachedPlaylistTracks,
+  usableCachedPlaylistTracks,
 } from '../lib/playlistCache';
 import { resumeSync, session } from '../lib/session';
 import type { Playlist, Track } from '../lib/types';
@@ -67,7 +67,16 @@ async function enrichInPlace(list: Track[], playlistId: number) {
   }
 }
 
+function tracksUid(p: Playlist): number | undefined {
+  return p.creatorId || session.profile?.userId || undefined;
+}
+
 function rememberTracks(p: Playlist, list: Track[]) {
+  // 预期有曲目却拿到空列表：不要把空结果当成有效缓存
+  if (!list.length && p.trackCount > 0) {
+    forgetCachedPlaylistTracks(p.id);
+    return;
+  }
   setCachedPlaylistTracks(p.id, list);
 }
 
@@ -86,7 +95,17 @@ function loadTracks(p: Playlist, refresh: boolean, backgroundRefresh: boolean) {
   let req!: Promise<void>;
   req = (async () => {
     try {
-      const hit = await api.playlistTracks(p.id, refresh, p.isLiked);
+      const hit = await api.playlistTracks(p.id, refresh, p.isLiked, tracksUid(p));
+      const unexpectedEmpty = !hit.data.length && p.trackCount > 0;
+      if (unexpectedEmpty) {
+        forgetCachedPlaylistTracks(p.id);
+        if (!refresh && backgroundRefresh) {
+          await refreshTracks(p);
+          return;
+        }
+        if (active.value?.id === p.id) showTracks(p, [], false);
+        return;
+      }
       rememberTracks(p, hit.data);
       if (active.value?.id === p.id) {
         showTracks(p, hit.data, hit.fromCache);
@@ -156,15 +175,24 @@ function applyFreshLists(fresh: Playlist[]) {
 /** 强制从网络拉取曲目并替换 UI（新数组，保证虚拟列表重渲染） */
 async function refreshTracks(p: Playlist) {
   try {
-    const h = await api.playlistTracks(p.id, true, p.isLiked);
+    const h = await api.playlistTracks(p.id, true, p.isLiked, tracksUid(p));
+    if (!h.data.length && p.trackCount > 0) {
+      forgetCachedPlaylistTracks(p.id);
+      if (active.value?.id === p.id && !tracks.value.length) showTracks(p, [], false);
+      return;
+    }
     const list = h.data.slice();
     rememberTracks(p, list);
     if (active.value?.id === p.id) {
       showTracks(p, list, false);
       void enrichInPlace(list, p.id);
     }
-  } catch {
-    /* 保留缓存 */
+  } catch (e) {
+    // 已有曲目时保留画面；首次仍是空的则露出错误并结束「加载中…」
+    if (active.value?.id === p.id && !tracks.value.length) {
+      err.value = String(e);
+      loading.value = false;
+    }
   }
 }
 
@@ -187,7 +215,7 @@ async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true)
   err.value = '';
 
   // 先换壳并开始过渡，不把动画和点击卡在曲目接口上。
-  const cached = getCachedPlaylistTracks(p.id);
+  const cached = usableCachedPlaylistTracks(p.id, p.trackCount);
   if (cached) {
     showTracks(p, cached, true);
     void enrichInPlace(cached, p.id);

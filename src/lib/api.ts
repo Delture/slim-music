@@ -22,8 +22,8 @@ export const api = {
   search: (keywords: string, offset = 0) => invoke<Track[]>('search', { keywords, offset }),
   myPlaylists: (refresh = false) =>
     invoke<CacheHit<Playlist[]>>('my_playlists', { refresh }),
-  playlistTracks: (id: number, refresh = false, liked = false) =>
-    invoke<CacheHit<Track[]>>('playlist_tracks', { id, refresh, liked }),
+  playlistTracks: (id: number, refresh = false, liked = false, uid?: number) =>
+    invoke<CacheHit<Track[]>>('playlist_tracks', { id, refresh, liked, uid }),
   songUrl: (id: number) => invoke<string | null>('song_url', { id }),
   songPlaySrc: (id: number, refresh = false) =>
     invoke<PlaySrc | null>('song_play_src', { id, refresh }),

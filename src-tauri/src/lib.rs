@@ -118,27 +118,38 @@ async fn playlist_tracks(
     id: i64,
     refresh: Option<bool>,
     liked: Option<bool>,
+    uid: Option<i64>,
 ) -> R<cache::CacheHit<Vec<Track>>> {
     let refresh = refresh.unwrap_or(false);
     let key = format!("playlist_{id}");
     let enabled = state.settings.lock().await.cache_enabled;
     if enabled && !refresh {
         if let Some(hit) = state.cache.read_json::<Vec<Track>>(&key) {
-            return Ok(hit);
+            // 空缓存可能是之前把失败结果写进去的，不当作命中
+            if !hit.data.is_empty() {
+                return Ok(hit);
+            }
         }
     }
     let c = cookie(&state).await;
     let fetched = if liked.unwrap_or(false) {
-        match ncm::profile(&c).await {
-            Ok(Some(p)) => ncm::liked_tracks(&c, p.user_id, id).await,
-            _ => ncm::playlist_tracks(&c, id).await,
-        }
+        // 不要在 profile 失败时退回普通 playlist_tracks：
+        // 「我喜欢的音乐」的 trackIds 偶发缺失时，那条路径会得到空列表并被缓存。
+        // uid 优先用前端传来的 creatorId / 已登录用户，profile 只是兜底。
+        let uid = match uid.filter(|u| *u > 0) {
+            Some(u) => u,
+            None => match ncm::profile(&c).await {
+                Ok(Some(p)) if p.user_id > 0 => p.user_id,
+                _ => 0,
+            },
+        };
+        ncm::liked_tracks(&c, uid, id).await
     } else {
         ncm::playlist_tracks(&c, id).await
     };
     match fetched {
         Ok(tracks) => {
-            if enabled {
+            if enabled && (!tracks.is_empty() || refresh) {
                 let _ = state.cache.write_json(&key, &tracks);
             }
             Ok(cache::CacheHit {
@@ -149,7 +160,9 @@ async fn playlist_tracks(
         }
         Err(e) => {
             if let Some(hit) = state.cache.read_json::<Vec<Track>>(&key) {
-                return Ok(hit);
+                if !hit.data.is_empty() {
+                    return Ok(hit);
+                }
             }
             Err(e)
         }
