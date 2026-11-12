@@ -424,46 +424,99 @@ pub async fn playlist_delete(cookie: &Option<String>, id: i64) -> R<()> {
     Ok(())
 }
 
+/// 解析 LRC 时间标签：`mm:ss`、`mm:ss.x(x)(x)`，也接受 `hh:mm:ss`。
+/// 分数位按毫秒左对齐：`.5` / `.50` / `.500` 都是 500ms。
+pub fn parse_lrc_time(tag: &str) -> Option<u64> {
+    let tag = tag.trim();
+    if tag.is_empty() || !tag.as_bytes().first()?.is_ascii_digit() {
+        return None;
+    }
+    let (hms, frac) = match tag.split_once('.') {
+        Some((a, b)) => (a, b),
+        None => (tag, ""),
+    };
+    if frac.chars().any(|c| !c.is_ascii_digit()) {
+        return None;
+    }
+    let ms = if frac.is_empty() {
+        0
+    } else {
+        let t: String = frac.chars().take(3).collect();
+        let n: u64 = t.parse().ok()?;
+        n * 10u64.pow((3 - t.len()) as u32)
+    };
+    let mut parts = Vec::new();
+    for p in hms.split(':') {
+        parts.push(p.parse::<u64>().ok()?);
+    }
+    let (h, m, s) = match parts.as_slice() {
+        [m, s] => (0, *m, *s),
+        [h, m, s] => (*h, *m, *s),
+        _ => return None,
+    };
+    if s >= 60 {
+        return None;
+    }
+    Some(h * 3_600_000 + m * 60_000 + s * 1000 + ms)
+}
+
+/// 去掉逐字歌词 `<mm:ss.xx>` 时间戳，只保留文本。
+fn strip_enhanced_lrc(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find('<') {
+        out.push_str(&rest[..i]);
+        if let Some(rel) = rest[i + 1..].find('>') {
+            let inner = &rest[i + 1..i + 1 + rel];
+            if parse_lrc_time(inner).is_some() {
+                rest = &rest[i + 2 + rel..];
+                continue;
+            }
+        }
+        out.push('<');
+        rest = &rest[i + 1..];
+    }
+    out.push_str(rest);
+    out.trim().to_string()
+}
+
 pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
     let mut lines = Vec::new();
-    // [mm:ss.xx]text 或 [mm:ss.xxx]
+    // [mm:ss.xx]text；同一行多个时间戳（副歌复用）各生成一行
     for line in raw.lines() {
-        let line = line.trim();
-        if !line.starts_with('[') {
+        let mut rest = line.trim();
+        if !rest.starts_with('[') {
             continue;
         }
-        let Some(end) = line.find(']') else { continue };
-        let tag = &line[1..end];
-        let text = line[end + 1..].trim().to_string();
-        // 跳过 meta：[ti:] [ar:] 等
-        if tag.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) == false {
+        let mut times = Vec::new();
+        while rest.starts_with('[') {
+            let Some(end) = rest.find(']') else { break };
+            let tag = &rest[1..end];
+            if let Some(ms) = parse_lrc_time(tag) {
+                times.push(ms);
+                rest = rest[end + 1..].trim_start();
+            } else {
+                break;
+            }
+        }
+        if times.is_empty() {
             continue;
         }
-        let parts: Vec<&str> = tag.split(':').collect();
-        if parts.len() < 2 {
-            continue;
+        let text = strip_enhanced_lrc(rest.trim());
+        for time_ms in times {
+            lines.push(LyricLine {
+                time_ms,
+                text: text.clone(),
+                translation: None,
+            });
         }
-        let Ok(min) = parts[0].parse::<u64>() else { continue };
-        let sec_parts: Vec<&str> = parts[1].split('.').collect();
-        let Ok(sec) = sec_parts[0].parse::<u64>() else { continue };
-        let frac = sec_parts.get(1).copied().unwrap_or("0");
-        // 两位→百分之一秒；三位→毫秒
-        let ms = if frac.len() <= 2 {
-            frac.parse::<u64>().unwrap_or(0) * 10
-        } else {
-            frac.parse::<u64>().unwrap_or(0)
-        };
-        lines.push(LyricLine {
-            time_ms: min * 60_000 + sec * 1000 + ms,
-            text,
-            translation: None,
-        });
     }
     lines.sort_by_key(|l| l.time_ms);
     lines
 }
 
-fn merge_translations(mut lines: Vec<LyricLine>, tlyric: &str) -> Vec<LyricLine> {
+/// 把译文 LRC 按时间戳（±50ms）对齐到原文；对不上则按顺序填。
+pub fn merge_translations(mut lines: Vec<LyricLine>, tlyric: &str) -> Vec<LyricLine> {
     let tlines = parse_lrc(tlyric);
     if tlines.is_empty() {
         return lines;
@@ -590,6 +643,29 @@ mod tests {
             vec![(7, 0), (8, 0)]
         );
         assert!(super::liked_track_entries(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn parse_lrc_time_fractions_and_hours() {
+        assert_eq!(super::parse_lrc_time("00:01.5"), Some(1500));
+        assert_eq!(super::parse_lrc_time("00:01.50"), Some(1500));
+        assert_eq!(super::parse_lrc_time("00:01.500"), Some(1500));
+        assert_eq!(super::parse_lrc_time("01:02.03"), Some(62_030));
+        assert_eq!(super::parse_lrc_time("1:02:03.000"), Some(3_723_000));
+        assert_eq!(super::parse_lrc_time("ti:title"), None);
+        assert_eq!(super::parse_lrc_time("00:61.00"), None);
+    }
+
+    #[test]
+    fn parse_lrc_multi_timestamp_and_enhanced() {
+        let lines = super::parse_lrc("[00:01.00][00:10.00]Hello\n[00:02.00]Let <00:02.20>go");
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0].time_ms, 1000);
+        assert_eq!(lines[0].text, "Hello");
+        assert_eq!(lines[1].time_ms, 2000);
+        assert_eq!(lines[1].text, "Let go");
+        assert_eq!(lines[2].time_ms, 10_000);
+        assert_eq!(lines[2].text, "Hello");
     }
 
     #[tokio::test]
