@@ -33,6 +33,7 @@ const MAP: Record<string, string> = {
   pencil: 'ph:pencil-simple',
   x: 'ph:x',
   'chevron-down': 'ph:caret-down',
+  'chevron-up': 'ph:caret-up',
   'chevron-left': 'ph:caret-left',
   plus: 'ph:plus',
   trash: 'ph:trash',

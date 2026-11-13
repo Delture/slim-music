@@ -325,13 +325,21 @@ function move(i: number, dir: -1 | 1) {
         <span v-else class="heart spacer"></span>
         <div class="dur">{{ fmtTime(tracks[vRow.index].durationMs / 1000) }}</div>
         <div v-if="showReorder" class="ord">
-          <button :disabled="vRow.index === 0" title="上移" @click.stop="move(vRow.index, -1)">↑</button>
           <button
+            type="button"
+            :disabled="vRow.index === 0"
+            title="上移"
+            @click.stop="move(vRow.index, -1)"
+          >
+            <Icon name="chevron-up" :size="12" />
+          </button>
+          <button
+            type="button"
             :disabled="vRow.index === tracks.length - 1"
             title="下移"
             @click.stop="move(vRow.index, 1)"
           >
-            ↓
+            <Icon name="chevron-down" :size="12" />
           </button>
         </div>
       </div>
@@ -478,7 +486,8 @@ function move(i: number, dir: -1 | 1) {
     transform var(--dur-fast) var(--ease-swift);
 }
 .row:has(.ord) {
-  grid-template-columns: 40px 48px minmax(0, 1fr) minmax(0, 20%) 56px 32px 52px 40px;
+  grid-template-columns: 40px 48px minmax(0, 1fr) minmax(0, 20%) 56px 32px 52px 22px;
+  padding-right: calc(var(--row-px) + var(--scrollbar-size, 10px));
 }
 .row:hover {
   background: var(--fill-secondary);
@@ -596,20 +605,38 @@ function move(i: number, dir: -1 | 1) {
 .ord {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 0;
+  width: 100%;
 }
 .ord button {
   background: none;
   border: 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: 0 4px;
-  line-height: 1.1;
-  font-size: 11px;
-  min-height: 0;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+  width: 22px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  opacity: 0.8;
+}
+.ord button :deep(.icon) {
+  vertical-align: 0;
+}
+.ord button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+  opacity: 1;
 }
 .ord button:disabled {
-  opacity: 0.3;
+  opacity: 0.28;
+  cursor: default;
 }
 .empty {
   color: var(--muted);
@@ -672,7 +699,8 @@ function move(i: number, dir: -1 | 1) {
     display: none;
   }
   .row:has(.ord) {
-    grid-template-columns: 48px minmax(0, 1fr) 44px 72px;
+    grid-template-columns: 48px minmax(0, 1fr) 44px 22px;
+    padding-right: calc(var(--space-1) + var(--scrollbar-size, 10px));
   }
   :deep(.cover-thumb) {
     width: 44px;
