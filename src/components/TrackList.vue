@@ -607,8 +607,11 @@ function move(i: number, dir: -1 | 1) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  align-self: center;
   gap: 0;
   width: 100%;
+  height: auto;
+  line-height: 0;
 }
 .ord button {
   background: none;
@@ -620,11 +623,23 @@ function move(i: number, dir: -1 | 1) {
   line-height: 0;
   width: 22px;
   height: 16px;
+  /* Defeat global `button { min-height: var(--btn-h); height: var(--btn-h) }`
+     (32px, 44px on mobile). Without min-height: 0 the two controls fill the
+     60px row, overflow into neighbors, and make the track look off-center. */
+  min-width: 0;
+  min-height: 0;
+  max-height: 16px;
+  flex: 0 0 16px;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
   opacity: 0.8;
+  transform: none;
+}
+.ord button:active:not(:disabled) {
+  transform: none;
 }
 .ord button :deep(.icon) {
   vertical-align: 0;
