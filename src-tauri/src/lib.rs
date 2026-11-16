@@ -637,7 +637,19 @@ mod win_tray {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    // 单实例必须最先注册。Windows 再点一次图标会新开进程和窗口。
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }));
+    }
+    let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(mobile::init())
         .setup(|app| {
@@ -667,6 +679,11 @@ pub fn run() {
                 // 托盘仅图标 + 菜单，不设标题（避免挤占右侧状态栏）
                 if let Some(tray) = app.handle().tray_by_id("main") {
                     let _ = tray.set_title(None::<&str>);
+                }
+                // Windows/Linux：避免托盘菜单被挂到窗口标题栏下成为菜单栏
+                #[cfg(not(target_os = "macos"))]
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.remove_menu();
                 }
                 folder_watch::start(app.handle().clone());
             }
