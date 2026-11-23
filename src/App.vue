@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, type Component } from 'vue';
+import { computed, onMounted, onUnmounted, ref, type Component } from 'vue';
 import { closeNowPlaying, initSession, session } from './lib/session';
+import { dialogState } from './lib/dialog';
+import { togglePlay } from './lib/player';
 import { bindTrayBridge } from './lib/tray';
 import PlayerBar from './components/PlayerBar.vue';
 import Icon from './components/Icon.vue';
@@ -53,12 +55,30 @@ function onPageAfterLeave() {
   chromeSplit.value = isSplitKey(page.value);
 }
 
+function isEditableTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON';
+}
+
+function onGlobalKey(e: KeyboardEvent) {
+  if (e.code !== 'Space' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.isComposing || dialogState.open || isEditableTarget(e.target)) return;
+  e.preventDefault();
+  togglePlay();
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onGlobalKey);
   await initSession().catch(console.error);
   await bindTrayBridge().catch(console.error);
   chromeSplit.value = isSplitKey(page.value);
   ready.value = true;
   setTimeout(() => checkUpdate(true), 3000);
+});
+onUnmounted(() => {
+  window.removeEventListener('keydown', onGlobalKey);
 });
 </script>
 
@@ -110,12 +130,16 @@ onMounted(async () => {
 </template>
 
 <style>
-/* Identical to PlaylistsView / LocalPlaylistsView `.tracks-swap-*`. */
-.page-swap-enter-active,
+/* 单栏页切换：轻淡入 + 横向微移（out-in）。 */
+.page-swap-enter-active {
+  transition:
+    opacity var(--dur) var(--ease-enter),
+    transform var(--dur) var(--ease-enter);
+}
 .page-swap-leave-active {
   transition:
-    opacity var(--dur) var(--ease-swift),
-    transform var(--dur) var(--ease-swift);
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
 }
 .page-swap-enter-from {
   opacity: 0;
@@ -123,8 +147,75 @@ onMounted(async () => {
 }
 .page-swap-leave-to {
   opacity: 0;
+  transform: translateX(-6px);
+}
+
+/* 双栏浮动面板页（我的歌单 / 播放列表 / 本地音乐）：中栏先落位，右栏错峰 65ms 滑入。
+   外层容器只承载总过渡时长，避免两个独立面板焊成一整块同步出现。 */
+.page-swap-enter-active:is(.pl, .lv) {
+  transition: opacity 290ms linear;
+}
+.page-swap-enter-from:is(.pl, .lv) {
+  opacity: 0.999;
+  transform: none;
+}
+.page-swap-enter-active:is(.pl, .lv) > .side.float-panel,
+.page-swap-enter-active:is(.pl, .lv) > .login-hint.float-panel {
+  transition:
+    opacity 210ms var(--ease-enter) 0ms,
+    transform 210ms var(--ease-enter) 0ms;
+}
+.page-swap-enter-active:is(.pl, .lv) > .body.float-panel {
+  transition:
+    opacity 220ms var(--ease-enter) 65ms,
+    transform 220ms var(--ease-enter) 65ms;
+}
+.page-swap-enter-from:is(.pl, .lv) > .side.float-panel,
+.page-swap-enter-from:is(.pl, .lv) > .login-hint.float-panel {
+  opacity: 0;
+  transform: translateX(8px) scale(0.994);
+}
+.page-swap-enter-from:is(.pl, .lv) > .body.float-panel {
+  opacity: 0;
+  transform: translateX(14px) scale(0.994);
+}
+
+/* 双栏退场：右栏先轻退，中栏晚 25ms 收起 */
+.page-swap-leave-active:is(.pl, .lv) {
+  transition: opacity 170ms linear;
+}
+.page-swap-leave-to:is(.pl, .lv) {
+  opacity: 0.999;
+  transform: none;
+}
+.page-swap-leave-active:is(.pl, .lv) > .body.float-panel {
+  transition:
+    opacity 135ms var(--ease-out) 0ms,
+    transform 135ms var(--ease-out) 0ms;
+}
+.page-swap-leave-active:is(.pl, .lv) > .side.float-panel,
+.page-swap-leave-active:is(.pl, .lv) > .login-hint.float-panel {
+  transition:
+    opacity 135ms var(--ease-out) 25ms,
+    transform 135ms var(--ease-out) 25ms;
+}
+.page-swap-leave-to:is(.pl, .lv) > .body.float-panel {
+  opacity: 0;
   transform: translateX(-8px);
 }
+.page-swap-leave-to:is(.pl, .lv) > .side.float-panel,
+.page-swap-leave-to:is(.pl, .lv) > .login-hint.float-panel {
+  opacity: 0;
+  transform: translateX(-5px);
+}
+
+@media (max-width: 700px) {
+  .page-swap-enter-active:is(.pl, .lv) > .body.float-panel,
+  .page-swap-leave-active:is(.pl, .lv) > .side.float-panel {
+    transition-delay: 0ms;
+  }
+}
+
 .np-enter-active {
   animation: sm-slide-up var(--dur-slow) var(--ease-enter);
 }

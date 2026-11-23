@@ -317,6 +317,64 @@ html, body {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes sm-detail-in {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Shared list/content soft swap (Playlists / LocalPlaylists / LocalView) */
+.tracks-swap-enter-active {
+  transition:
+    opacity var(--dur) var(--ease-enter),
+    transform var(--dur) var(--ease-enter);
+}
+.tracks-swap-leave-active {
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+.tracks-swap-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.tracks-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+/* Shared popover / context menu / select dropdown enter+leave */
+.sm-pop-enter-active {
+  transition:
+    opacity 150ms var(--ease-enter),
+    transform 150ms var(--ease-enter);
+}
+.sm-pop-leave-active {
+  transition:
+    opacity 110ms var(--ease-out),
+    transform 110ms var(--ease-out);
+}
+.sm-pop-enter-from,
+.sm-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.96) translateY(-2px);
+}
+
+/* Floating notification toast (update prompt) */
+.sm-toast-enter-active {
+  transition:
+    opacity var(--dur) var(--ease-enter),
+    transform var(--dur) var(--ease-enter);
+}
+.sm-toast-leave-active {
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+.sm-toast-enter-from,
+.sm-toast-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -668,7 +726,7 @@ input:focus, select:focus, button:focus-visible, .sm-select-trigger:focus-visibl
   box-shadow: var(--elev-2);
   max-height: 280px;
   overflow: auto;
-  animation: sm-scale-in var(--dur-fast) var(--ease-enter) both;
+  transform-origin: top center;
 }
 /* Teleport 到 body：避开 .main-col / .float-panel 的 overflow 与动画层叠裁切 */
 .sm-select-menu.portal {
@@ -823,6 +881,11 @@ input[type='checkbox'] {
   box-shadow: var(--shadow-sm);
   animation: sm-fade-in var(--dur) var(--ease-enter) both;
 }
+.settings-card:nth-of-type(2) { animation-delay: 28ms; }
+.settings-card:nth-of-type(3) { animation-delay: 56ms; }
+.settings-card:nth-of-type(4) { animation-delay: 84ms; }
+.settings-card:nth-of-type(5) { animation-delay: 112ms; }
+.settings-card:nth-of-type(n + 6) { animation-delay: 140ms; }
 .settings-card h3 {
   margin: 0 0 var(--space-3);
   font-family: var(--font-display);

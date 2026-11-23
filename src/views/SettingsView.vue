@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { dialog } from '../lib/dialog';
 import { isAndroid, openExternal, saveImage } from '../lib/native';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onActivated, onMounted, onUnmounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api } from '../lib/api';
 import { refreshProfile, saveSettings, session, setAppearance } from '../lib/session';
@@ -112,6 +112,7 @@ async function clearCache() {
 }
 
 onMounted(refreshStats);
+onActivated(() => void refreshStats());
 
 const logBusy = ref(false);
 async function onCopyPlayLog() {

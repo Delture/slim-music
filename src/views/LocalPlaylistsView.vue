@@ -307,6 +307,7 @@ watch(
     </div>
 
     <Teleport to="body">
+    <Transition name="sm-pop">
     <div
       v-if="menu.show"
       ref="menuEl"
@@ -321,6 +322,7 @@ watch(
         <div class="danger" @click="menuDelete">删除歌单</div>
       </template>
     </div>
+    </Transition>
     </Teleport>
   </section>
 </template>
@@ -434,7 +436,6 @@ watch(
   box-shadow: var(--elev-2);
   z-index: 9000;
   min-width: 160px;
-  animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -478,23 +479,7 @@ watch(
     display: none;
   }
   .pl.mobile-detail .body {
-    animation: sm-fade-in var(--dur) var(--ease-enter);
+    animation: sm-detail-in var(--dur) var(--ease-enter);
   }
-}
-
-/* Playlist → tracks content soft swap */
-.tracks-swap-enter-active,
-.tracks-swap-leave-active {
-  transition:
-    opacity var(--dur) var(--ease-swift),
-    transform var(--dur) var(--ease-swift);
-}
-.tracks-swap-enter-from {
-  opacity: 0;
-  transform: translateX(10px);
-}
-.tracks-swap-leave-to {
-  opacity: 0;
-  transform: translateX(-8px);
 }
 </style>

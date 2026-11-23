@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 本地音乐：左侧分组（专辑 / 艺人 / 文件夹，虚拟列表）+ 右侧歌曲（虚拟列表）。
 // 桌面端先读后端索引秒开，再后台增量扫描；Android 走 MediaStore。
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import { listen } from '@tauri-apps/api/event';
 import { api } from '../lib/api';
@@ -309,6 +309,9 @@ const shown = computed<LocalTrack[]>(() => {
 
 // ---------- 左侧虚拟列表 ----------
 const sideEl = ref<HTMLElement | null>(null);
+const sideActive = ref(true);
+let sideDeactivated = false;
+let sideSavedTop = 0;
 const SIDE_ROW = 52;
 const sideV = useVirtualizer(
   computed(() => ({
@@ -316,6 +319,7 @@ const sideV = useVirtualizer(
     getScrollElement: () => sideEl.value,
     estimateSize: () => SIDE_ROW,
     overscan: 10,
+    enabled: sideActive.value,
   })),
 );
 const sideRows = computed(() => sideV.value.getVirtualItems());
@@ -364,6 +368,28 @@ onMounted(() => {
       unlistenNative = fn;
     });
   }
+});
+onDeactivated(() => {
+  sideDeactivated = true;
+  sideSavedTop = sideEl.value?.scrollTop ?? 0;
+  sideActive.value = false;
+});
+onActivated(() => {
+  syncNarrow();
+  if (!sideDeactivated) return;
+  sideDeactivated = false;
+  sideActive.value = true;
+  void nextTick(() => {
+    const el = sideEl.value;
+    if (!el) return;
+    if (sideSavedTop > 0) el.scrollTop = sideSavedTop;
+    sideV.value._willUpdate();
+    const target = el.scrollTop;
+    if (target > 0 || (sideV.value.scrollOffset ?? 0) !== 0) {
+      sideV.value.scrollToOffset(target);
+    }
+    sideV.value.measure();
+  });
 });
 onUnmounted(() => {
   mql?.removeEventListener('change', syncNarrow);
@@ -616,22 +642,7 @@ watch(
     display: none;
   }
   .lv.mobile-detail .body {
-    animation: sm-fade-in var(--dur) var(--ease-enter);
+    animation: sm-detail-in var(--dur) var(--ease-enter);
   }
-}
-
-.tracks-swap-enter-active,
-.tracks-swap-leave-active {
-  transition:
-    opacity var(--dur) var(--ease-swift),
-    transform var(--dur) var(--ease-swift);
-}
-.tracks-swap-enter-from {
-  opacity: 0;
-  transform: translateX(10px);
-}
-.tracks-swap-leave-to {
-  opacity: 0;
-  transform: translateX(-8px);
 }
 </style>

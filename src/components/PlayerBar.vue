@@ -26,6 +26,45 @@ const repeatLabel = computed(
 );
 const volumePct = computed(() => Math.round(player.volume * 100));
 const volumeIcon = computed(() => (player.volume <= 0.001 ? 'volume-mute' : 'volume'));
+let lastNonZeroVol = 0.8;
+
+function toggleMute() {
+  if (player.volume > 0.001) {
+    lastNonZeroVol = player.volume;
+    setVolume(0);
+    paintVolume(0);
+  } else {
+    const restored = lastNonZeroVol > 0.01 ? lastNonZeroVol : 0.8;
+    setVolume(restored);
+    paintVolume(restored);
+  }
+}
+
+function onSeekKey(e: KeyboardEvent) {
+  const dur = player.duration || 0;
+  if (dur <= 0) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    seek(Math.min(dur, player.currentTime + 5));
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    seek(Math.max(0, player.currentTime - 5));
+  }
+}
+
+function onVolKey(e: KeyboardEvent) {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const next = Math.min(1, player.volume + 0.05);
+    setVolume(next);
+    paintVolume(next);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = Math.max(0, player.volume - 0.05);
+    setVolume(next);
+    paintVolume(next);
+  }
+}
 
 /**
  * 自定义进度条：不用 <input type=range>（WebKit 填充轨会每帧重算导致整条左右抖）。
@@ -189,7 +228,10 @@ async function onCopyErrorLog() {
       />
       <div v-else class="cover ph"><Icon name="music" :size="18" /></div>
       <div v-if="t" class="info">
-        <div class="title">{{ t.title }} <SourceBadge :source="t.source" /></div>
+        <div class="title">
+          <span class="title-text">{{ t.title }}</span>
+          <SourceBadge :source="t.source" />
+        </div>
         <div class="sub">{{ t.artists.join(' / ') }}</div>
       </div>
       <div v-else class="sub">未在播放</div>
@@ -233,8 +275,12 @@ async function onCopyErrorLog() {
           ref="trackEl"
           class="seek"
           role="slider"
+          aria-label="播放进度"
+          :aria-valuenow="Math.round(player.currentTime)"
           aria-valuemin="0"
+          :aria-valuemax="Math.round(player.duration || 0)"
           tabindex="0"
+          @keydown="onSeekKey"
           @pointerdown.prevent="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
@@ -250,16 +296,26 @@ async function onCopyErrorLog() {
     </div>
 
     <div class="vol">
-      <Icon :name="volumeIcon" :size="15" />
+      <button
+        type="button"
+        class="mute-btn"
+        :title="player.volume <= 0.001 ? '取消静音' : '静音'"
+        :aria-label="player.volume <= 0.001 ? '取消静音' : '静音'"
+        @click="toggleMute"
+      >
+        <Icon :name="volumeIcon" :size="15" />
+      </button>
       <div
         ref="volTrackEl"
         class="vol-seek"
         role="slider"
+        aria-label="音量"
         :aria-valuenow="volumePct"
         aria-valuemin="0"
         aria-valuemax="100"
         :title="`音量 ${volumePct}%`"
         tabindex="0"
+        @keydown="onVolKey"
         @pointerdown.prevent="onVolDown"
         @pointermove="onVolMove"
         @pointerup="onVolUp"
@@ -342,10 +398,20 @@ async function onCopyErrorLog() {
   text-overflow: ellipsis;
 }
 .title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.015em;
   opacity: 0.92;
+}
+.title-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .sub {
   color: var(--text-secondary);
@@ -474,8 +540,15 @@ async function onCopyErrorLog() {
   height: 3px;
   margin-top: -1.5px;
   border-radius: 2px;
-  transition: none;
+  transition: height var(--dur-fast) var(--ease-swift), margin-top var(--dur-fast) var(--ease-swift);
   pointer-events: none;
+}
+.seek:hover .seek-rail,
+.seek:hover .seek-fill,
+.seek:active .seek-rail,
+.seek:active .seek-fill {
+  height: 4px;
+  margin-top: -2px;
 }
 .seek-rail {
   background: var(--border-strong);
@@ -500,14 +573,17 @@ async function onCopyErrorLog() {
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--surface-player-solid);
   left: 0%;
-  transition: none;
+  transition: opacity var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+  transform: scale(0.65);
   pointer-events: none;
-  will-change: left;
+  will-change: left, transform, opacity;
   opacity: 0;
 }
 .seek:hover .seek-thumb,
-.seek:active .seek-thumb {
+.seek:active .seek-thumb,
+.seek:focus-visible .seek-thumb {
   opacity: 1;
+  transform: scale(1);
 }
 .err {
   color: #c62f2f;
@@ -524,6 +600,26 @@ async function onCopyErrorLog() {
   justify-content: flex-end;
   color: var(--muted);
   min-width: 0;
+}
+.mute-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 0;
+}
+.mute-btn:hover {
+  background: var(--fill-secondary);
+  color: var(--text);
 }
 .vol-seek {
   position: relative;
@@ -543,8 +639,15 @@ async function onCopyErrorLog() {
   height: 3px;
   margin-top: -1.5px;
   border-radius: 2px;
-  transition: none;
+  transition: height var(--dur-fast) var(--ease-swift), margin-top var(--dur-fast) var(--ease-swift);
   pointer-events: none;
+}
+.vol-seek:hover .seek-rail,
+.vol-seek:hover .seek-fill,
+.vol-seek:active .seek-rail,
+.vol-seek:active .seek-fill {
+  height: 4px;
+  margin-top: -2px;
 }
 .vol-seek .seek-rail {
   background: var(--border-strong);
@@ -569,14 +672,17 @@ async function onCopyErrorLog() {
   background: var(--text);
   box-shadow: 0 0 0 2px var(--surface-player-solid);
   left: 0%;
-  transition: none;
+  transition: opacity var(--dur-fast) var(--ease-swift), transform var(--dur-fast) var(--ease-swift);
+  transform: scale(0.65);
   pointer-events: none;
-  will-change: left;
+  will-change: left, transform, opacity;
   opacity: 0;
 }
 .vol-seek:hover .seek-thumb,
-.vol-seek:active .seek-thumb {
+.vol-seek:active .seek-thumb,
+.vol-seek:focus-visible .seek-thumb {
   opacity: 1;
+  transform: scale(1);
 }
 .pct {
   font-size: 11px;

@@ -14,6 +14,7 @@ import { resumeSync, session } from '../lib/session';
 import type { Playlist, Track } from '../lib/types';
 import { filterTracks } from '../lib/trackFilter';
 import TrackList from '../components/TrackList.vue';
+import TrackSkeleton from '../components/TrackSkeleton.vue';
 import TrackFilter from '../components/TrackFilter.vue';
 import Icon from '../components/Icon.vue';
 
@@ -421,6 +422,7 @@ onUnmounted(() => {
         <small class="muted count">{{ p.trackCount }}</small>
       </div>
     </aside>
+    <Transition name="panel-reveal">
     <div v-if="active" class="body float-panel">
       <!-- Mobile only: back + tiny status. No large title / action buttons — selection in middle panel is enough. -->
       <header v-if="narrow" class="mobile-bar">
@@ -443,13 +445,15 @@ onUnmounted(() => {
           class="muted empty-hint"
         >没有匹配「{{ filter.trim() }}」的歌曲</p>
         <div v-else :key="active.id" class="tracks-scroll">
-          <p v-if="loading && !tracks.length" class="muted empty-hint">加载中…</p>
+          <TrackSkeleton v-if="loading && !tracks.length" />
           <TrackList v-else :tracks="shown" />
         </div>
       </Transition>
     </div>
+    </Transition>
 
     <Teleport to="body">
+    <Transition name="sm-pop">
     <div
       v-if="menu.show && menu.target"
       ref="menuEl"
@@ -463,6 +467,7 @@ onUnmounted(() => {
       <div v-if="menuCanUnsubscribe" :class="{ disabled: busy }" @click="menuUnsubscribe">取消收藏</div>
       <div v-if="menuCanDelete" class="danger" :class="{ disabled: busy }" @click="menuDelete">删除歌单</div>
     </div>
+    </Transition>
     </Teleport>
   </section>
 </template>
@@ -500,6 +505,24 @@ onUnmounted(() => {
   flex-direction: column;
   padding: var(--space-3) var(--space-4);
   overflow: hidden;
+}
+.panel-reveal-enter-active {
+  transition:
+    opacity 220ms var(--ease-enter) 55ms,
+    transform 220ms var(--ease-enter) 55ms;
+}
+.panel-reveal-leave-active {
+  transition:
+    opacity 130ms var(--ease-out),
+    transform 130ms var(--ease-out);
+}
+.panel-reveal-enter-from {
+  opacity: 0;
+  transform: translateX(14px) scale(0.994);
+}
+.panel-reveal-leave-to {
+  opacity: 0;
+  transform: translateX(-6px);
 }
 .side-head {
   display: flex;
@@ -593,7 +616,6 @@ onUnmounted(() => {
   box-shadow: var(--elev-2);
   z-index: 9000;
   min-width: 160px;
-  animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -641,23 +663,7 @@ onUnmounted(() => {
     display: none;
   }
   .pl.mobile-detail .body {
-    animation: sm-fade-in var(--dur) var(--ease-enter);
+    animation: sm-detail-in var(--dur) var(--ease-enter);
   }
-}
-
-/* Playlist → tracks content soft swap */
-.tracks-swap-enter-active,
-.tracks-swap-leave-active {
-  transition:
-    opacity var(--dur) var(--ease-swift),
-    transform var(--dur) var(--ease-swift);
-}
-.tracks-swap-enter-from {
-  opacity: 0;
-  transform: translateX(10px);
-}
-.tracks-swap-leave-to {
-  opacity: 0;
-  transform: translateX(-8px);
 }
 </style>

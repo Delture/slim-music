@@ -3,18 +3,20 @@ import { dismissUpdate, installUpdate, updater } from '../lib/updater';
 </script>
 
 <template>
-  <div v-if="updater.prompt" class="update-prompt">
-    <div class="title">新版本 v{{ updater.latest }}</div>
-    <template v-if="updater.downloading">
-      <div class="bar"><i :style="{ width: (updater.progress < 0 ? 100 : updater.progress * 100) + '%' }" /></div>
-      <div class="muted">{{ updater.progress < 0 ? '下载中…' : Math.round(updater.progress * 100) + '%' }}</div>
-    </template>
-    <div v-else class="actions">
-      <button @click="dismissUpdate">稍后</button>
-      <button class="primary" @click="installUpdate">更新</button>
+  <Transition name="sm-toast">
+    <div v-if="updater.prompt" class="update-prompt">
+      <div class="title">新版本 v{{ updater.latest }}</div>
+      <template v-if="updater.downloading">
+        <div class="bar"><i :style="{ width: (updater.progress < 0 ? 100 : updater.progress * 100) + '%' }" /></div>
+        <div class="muted">{{ updater.progress < 0 ? '下载中…' : Math.round(updater.progress * 100) + '%' }}</div>
+      </template>
+      <div v-else class="actions">
+        <button @click="dismissUpdate">稍后</button>
+        <button class="primary" @click="installUpdate">更新</button>
+      </div>
+      <div v-if="updater.error" class="err">{{ updater.error }}</div>
     </div>
-    <div v-if="updater.error" class="err">{{ updater.error }}</div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -31,7 +33,6 @@ import { dismissUpdate, installUpdate, updater } from '../lib/updater';
   color: inherit;
   box-shadow: var(--elev-2);
   font-size: 13px;
-  animation: sm-scale-in var(--dur) var(--ease-enter);
   /* Solid panel — same wireframe as chrome; no live vibrancy blur */
   -webkit-backdrop-filter: none;
   backdrop-filter: none;

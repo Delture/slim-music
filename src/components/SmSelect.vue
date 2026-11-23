@@ -3,7 +3,7 @@
  * 自定义下拉：菜单 Teleport 到 body，避免被浮动面板 overflow / 层叠上下文裁切
  * （设置页音质、本地排序等）。
  */
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { nextTick, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 
 const props = defineProps<{
@@ -82,6 +82,13 @@ function onReposition() {
   if (open.value) placeMenu();
 }
 
+function onDocKey(e: KeyboardEvent) {
+  if (open.value && e.key === 'Escape') {
+    e.preventDefault();
+    open.value = false;
+  }
+}
+
 watch(open, (o) => {
   if (!o) return;
   void nextTick(placeMenu);
@@ -89,11 +96,16 @@ watch(open, (o) => {
 
 onMounted(() => {
   document.addEventListener('pointerdown', onDocPointer, true);
+  window.addEventListener('keydown', onDocKey, true);
   window.addEventListener('resize', onReposition);
   window.addEventListener('scroll', onReposition, true);
 });
+onDeactivated(() => {
+  open.value = false;
+});
 onUnmounted(() => {
   document.removeEventListener('pointerdown', onDocPointer, true);
+  window.removeEventListener('keydown', onDocKey, true);
   window.removeEventListener('resize', onReposition);
   window.removeEventListener('scroll', onReposition, true);
 });
@@ -113,26 +125,28 @@ onUnmounted(() => {
       <Icon class="chev" name="chevron-down" :size="14" />
     </button>
     <Teleport to="body">
-      <ul
-        v-if="open"
-        ref="menuEl"
-        class="sm-select-menu portal"
-        role="listbox"
-        :style="menuStyle"
-      >
-        <li
-          v-for="opt in options"
-          :key="opt"
-          role="option"
-          :aria-selected="modelValue === opt"
-          :class="{ on: modelValue === opt }"
-          tabindex="0"
-          @click="pick(opt)"
-          @keydown.enter.prevent="pick(opt)"
+      <Transition name="sm-pop">
+        <ul
+          v-if="open"
+          ref="menuEl"
+          class="sm-select-menu portal"
+          role="listbox"
+          :style="menuStyle"
         >
-          {{ labels[opt] ?? opt }}
-        </li>
-      </ul>
+          <li
+            v-for="opt in options"
+            :key="opt"
+            role="option"
+            :aria-selected="modelValue === opt"
+            :class="{ on: modelValue === opt }"
+            tabindex="0"
+            @click="pick(opt)"
+            @keydown.enter.prevent="pick(opt)"
+          >
+            {{ labels[opt] ?? opt }}
+          </li>
+        </ul>
+      </Transition>
     </Teleport>
   </div>
 </template>

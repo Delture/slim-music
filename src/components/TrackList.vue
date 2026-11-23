@@ -415,6 +415,7 @@ function move(i: number, dir: -1 | 1) {
     <div v-else class="empty">暂无歌曲</div>
 
     <Teleport to="body">
+    <Transition name="sm-pop">
     <div
       v-if="menu.show"
       ref="menuEl"
@@ -454,6 +455,7 @@ function move(i: number, dir: -1 | 1) {
         </div>
       </template>
     </div>
+    </Transition>
     </Teleport>
   </div>
 </template>
@@ -546,12 +548,11 @@ function move(i: number, dir: -1 | 1) {
   box-sizing: border-box;
   content-visibility: auto;
   contain-intrinsic-size: auto 60px;
-  /* Avoid paint storms while scrolling long lists */
+  /* Avoid paint storms while scrolling long lists; never transition transform on virtualized rows */
   will-change: transform;
   transition:
     background var(--dur-fast) var(--ease-swift),
-    color var(--dur-fast) var(--ease-swift),
-    transform var(--dur-fast) var(--ease-swift);
+    color var(--dur-fast) var(--ease-swift);
 }
 .row:has(.ord) {
   grid-template-columns: 40px 48px minmax(0, 1fr) minmax(0, 20%) 56px 32px 52px 22px;
@@ -563,6 +564,17 @@ function move(i: number, dir: -1 | 1) {
 .row.playing {
   background: var(--selected);
   box-shadow: none;
+}
+.row.playing::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  pointer-events: none;
 }
 .row.playing .title {
   color: var(--text);
@@ -738,7 +750,6 @@ function move(i: number, dir: -1 | 1) {
   min-width: 200px;
   max-height: 70vh;
   overflow: auto;
-  animation: sm-scale-in var(--dur) var(--ease-enter);
   transform-origin: top left;
   /* Solid menu — backdrop-filter while list scrolls is a major jank source */
   -webkit-backdrop-filter: none;

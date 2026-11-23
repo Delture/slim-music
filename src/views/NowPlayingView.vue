@@ -419,6 +419,18 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') closeNowPlaying();
 }
 
+function onSeekKey(e: KeyboardEvent) {
+  const dur = player.duration || 0;
+  if (dur <= 0) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    seek(Math.min(dur, player.currentTime + 5));
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    seek(Math.max(0, player.currentTime - 5));
+  }
+}
+
 const showWinChrome = isWinNowPlayingChrome();
 
 function onTitleDblClick() {
@@ -549,13 +561,16 @@ onUnmounted(() => {
 
     <div class="stage">
       <div class="art">
-        <img
-          v-if="t?.cover && badCover !== t.cover"
-          :src="coverSrc(t.cover, '500y500')"
-          class="cover"
-          @error="badCover = t.cover"
-        />
-        <div v-else class="cover ph"><Icon name="music" :size="56" /></div>
+        <Transition name="np-cover" mode="out-in">
+          <img
+            v-if="t?.cover && badCover !== t.cover"
+            :key="t.cover"
+            :src="coverSrc(t.cover, '500y500')"
+            class="cover"
+            @error="badCover = t.cover"
+          />
+          <div v-else key="ph" class="cover ph"><Icon name="music" :size="56" /></div>
+        </Transition>
         <div class="meta">
           <div class="title">
             {{ t?.title ?? '未在播放' }}
@@ -597,7 +612,12 @@ onUnmounted(() => {
           ref="trackEl"
           class="seek"
           role="slider"
+          aria-label="播放进度"
+          :aria-valuenow="Math.round(player.currentTime)"
+          aria-valuemin="0"
+          :aria-valuemax="Math.round(player.duration || 0)"
           tabindex="0"
+          @keydown="onSeekKey"
           @pointerdown.prevent="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
@@ -727,6 +747,20 @@ onUnmounted(() => {
   box-shadow: var(--shadow-lg);
   border: 0.5px solid rgba(0, 0, 0, 0.06);
   animation: sm-scale-in var(--dur-slow) var(--ease-enter);
+}
+.np-cover-enter-active {
+  transition: opacity var(--dur) var(--ease-enter), transform var(--dur) var(--ease-enter);
+}
+.np-cover-leave-active {
+  transition: opacity 120ms var(--ease-out), transform 120ms var(--ease-out);
+}
+.np-cover-enter-from {
+  opacity: 0;
+  transform: scale(0.97);
+}
+.np-cover-leave-to {
+  opacity: 0;
+  transform: scale(0.985);
 }
 .ph {
   display: grid;
@@ -896,6 +930,12 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px var(--surface-1);
   left: 0%;
   pointer-events: none;
+  transition: transform var(--dur-fast) var(--ease-swift);
+}
+.seek:hover .seek-thumb,
+.seek:active .seek-thumb,
+.seek:focus-visible .seek-thumb {
+  transform: scale(1.16);
 }
 .ctrls {
   display: flex;
