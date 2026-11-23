@@ -77,33 +77,27 @@ const playingIndex = computed(() => {
   return props.tracks.findIndex((tr) => tr.id === id);
 });
 
-/** 滚动视口高度，用于把定位按钮贴在可见区域右下角 */
 const viewH = ref(0);
+const scrollMargin = ref(0);
+const scrollPaddingBottom = ref(0);
 /** 当前播放行是否已完整落在可见区内（在的话隐藏按钮） */
 const playingInView = ref(true);
 
 const LOCATE_PAD = 72;
 
-function rowStart(idx: number): number {
-  const item = virtualizer.value.measurementsCache[idx];
-  if (item) return item.start;
-  return idx * estimateRowSize();
-}
-
 function updatePlayingInView() {
   const idx = playingIndex.value;
   const el = scrollEl.value;
-  if (idx < 0 || !el || el.clientHeight <= 0) {
+  if (idx < 0 || !el || viewH.value <= 0) {
     playingInView.value = true;
     return;
   }
-  const top = rowStart(idx);
   const size = estimateRowSize();
+  const top = scrollMargin.value + idx * size;
   const viewTop = el.scrollTop;
-  const viewBot = viewTop + el.clientHeight;
-  const marginTop = 8;
-  const marginBot = 20;
-  playingInView.value = top >= viewTop + marginTop && top + size <= viewBot - marginBot;
+  const viewBottom = viewTop + viewH.value;
+  // offsetTop 和 clientHeight 按整数像素取值，留 1px 给布局舍入。
+  playingInView.value = top >= viewTop - 1 && top + size <= viewBottom + 1;
 }
 
 const showLocate = computed(
@@ -126,6 +120,15 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+// 使用布局坐标，避免页面过渡动画的缩放和滚动位置影响列表偏移。
+function layoutTop(el: HTMLElement): number {
+  let top = el.offsetTop;
+  for (let parent = el.offsetParent; parent instanceof HTMLElement; parent = parent.offsetParent) {
+    top += parent.offsetTop + parent.clientTop;
+  }
+  return top;
+}
+
 function estimateRowSize() {
   /* cover + equal vertical padding — cover must not touch row bg edges */
   return window.matchMedia('(max-width: 700px)').matches ? 64 : 60;
@@ -142,16 +145,21 @@ const virtualizer = useVirtualizer(
   computed(() => ({
     count: props.tracks.length,
     getScrollElement: () => scrollEl.value,
+    initialOffset: () => scrollEl.value?.scrollTop ?? 0,
     estimateSize: estimateRowSize,
     overscan: 12,
     paddingEnd: LOCATE_PAD,
-    enabled: active.value,
+    scrollMargin: scrollMargin.value,
+    enabled: active.value && scrollEl.value !== null,
     getItemKey: (i: number) => `${props.tracks[i]?.id ?? i}-${i}`,
   })),
 );
 
 const virtualRows = computed(() => virtualizer.value.getVirtualItems());
-const totalSize = computed(() => virtualizer.value.getTotalSize());
+// 失活时停止渲染行，保留占位高度供双栏页恢复滚动位置。
+const totalSize = computed<number>((previous) =>
+  scrollEl.value ? virtualizer.value.getTotalSize() : previous ?? 0,
+);
 
 let boundScroll: HTMLElement | null = null;
 let scrollRo: ResizeObserver | null = null;
@@ -167,6 +175,16 @@ function onListScroll() {
   updatePlayingInView();
 }
 
+function syncScrollLayout() {
+  const el = scrollEl.value;
+  const root = rootEl.value;
+  if (!el || !root) return;
+  viewH.value = el.clientHeight;
+  scrollMargin.value = layoutTop(root) - layoutTop(el) - el.clientTop;
+  scrollPaddingBottom.value = parseFloat(getComputedStyle(el).paddingBottom);
+  updatePlayingInView();
+}
+
 function bindScrollEl(el: HTMLElement | null) {
   if (boundScroll === el) return;
   if (boundScroll) boundScroll.removeEventListener('scroll', onListScroll);
@@ -176,11 +194,12 @@ function bindScrollEl(el: HTMLElement | null) {
   if (el) {
     el.addEventListener('scroll', onListScroll, { passive: true });
     if (typeof ResizeObserver !== 'undefined') {
-      scrollRo = new ResizeObserver(() => {
-        viewH.value = el.clientHeight;
-        updatePlayingInView();
-      });
+      scrollRo = new ResizeObserver(syncScrollLayout);
       scrollRo.observe(el);
+      // 搜索前一段的结果增减时，共享视口的大小不变，后一段的起点仍会移动。
+      for (let node = rootEl.value; node && node !== el; node = node.parentElement) {
+        scrollRo.observe(node);
+      }
     }
   }
 }
@@ -190,9 +209,8 @@ function refreshScrollParent() {
   scrollEl.value = findScrollParent(rootEl.value);
   viewH.value = scrollEl.value?.clientHeight ?? 0;
   bindScrollEl(scrollEl.value);
-  virtualizer.value._willUpdate();
   virtualizer.value.measure();
-  updatePlayingInView();
+  syncScrollLayout();
 }
 
 function scheduleLayoutSync() {
@@ -204,6 +222,8 @@ function scheduleLayoutSync() {
     const h = el?.clientHeight ?? 0;
     if (el !== scrollEl.value || h !== viewH.value) {
       refreshScrollParent();
+    } else {
+      syncScrollLayout();
     }
   });
 }
@@ -234,15 +254,8 @@ onActivated(() => {
     if (!active.value) return;
     refreshScrollParent();
     const el = scrollEl.value;
-    if (el) {
-      if (ownsScrollEl && savedScrollTop > 0) {
-        el.scrollTop = savedScrollTop;
-      }
-      const target = el.scrollTop;
-      if (target > 0 || (virtualizer.value.scrollOffset ?? 0) !== 0) {
-        virtualizer.value.scrollToOffset(target);
-      }
-      virtualizer.value.measure();
+    if (el && ownsScrollEl && savedScrollTop > 0) {
+      el.scrollTop = savedScrollTop;
       updatePlayingInView();
     }
     scheduleLayoutSync();
@@ -256,11 +269,7 @@ onUnmounted(() => {
 
 watch(
   () => props.tracks.length,
-  () => void nextTick(() => {
-    if (!active.value) return;
-    virtualizer.value.measure();
-    refreshScrollParent();
-  }),
+  () => void nextTick(refreshScrollParent),
 );
 watch(playingIndex, () => void nextTick(updatePlayingInView));
 
@@ -330,24 +339,26 @@ function move(i: number, dir: -1 | 1) {
 
 <template>
   <div ref="rootEl" class="list">
-    <div
-      class="locate-slot"
-      :style="{ '--locate-view-h': viewH + 'px' }"
-    >
-      <Transition name="locate-in">
-        <button
-          v-if="showLocate"
-          key="locate"
-          type="button"
-          class="locate"
-          title="定位到当前播放"
-          aria-label="定位到当前播放"
-          @click="locatePlaying"
-        >
-          <Icon name="locate" :size="18" />
-        </button>
-      </Transition>
-    </div>
+    <Teleport v-if="scrollEl" :to="scrollEl">
+      <div
+        class="locate-slot"
+        :style="{ '--locate-scroll-padding': scrollPaddingBottom + 'px' }"
+      >
+        <Transition name="locate-in">
+          <button
+            v-if="showLocate"
+            key="locate"
+            type="button"
+            class="locate"
+            title="定位到当前播放"
+            aria-label="定位到当前播放"
+            @click="locatePlaying"
+          >
+            <Icon name="locate" :size="18" />
+          </button>
+        </Transition>
+      </div>
+    </Teleport>
     <div v-if="tracks.length" class="virt" :style="{ height: totalSize + 'px' }">
       <div
         v-for="vRow in virtualRows"
@@ -361,7 +372,7 @@ function move(i: number, dir: -1 | 1) {
           left: 0,
           width: '100%',
           height: vRow.size + 'px',
-          transform: `translateY(${vRow.start}px)`,
+          transform: `translateY(${vRow.start - scrollMargin}px)`,
         }"
         @click="PLAY_ON_SINGLE_CLICK && playAt(vRow.index)"
         @dblclick="playAt(vRow.index)"
@@ -470,19 +481,18 @@ function move(i: number, dir: -1 | 1) {
   --locate-size: 40px;
   --locate-inset: 16px;
   position: sticky;
-  top: 0;
+  bottom: 0;
   height: 0;
+  overflow-anchor: none;
   z-index: 6;
   pointer-events: none;
-  display: flex;
-  justify-content: flex-end;
-  overflow: visible;
 }
 .locate {
   pointer-events: auto;
-  position: relative;
-  top: calc(var(--locate-view-h) - var(--locate-inset) - var(--locate-size));
-  margin-right: var(--locate-inset);
+  position: absolute;
+  right: var(--locate-inset);
+  /* 末尾锚点在内容区，扣除容器的下内边距，使按钮距视口底边保持固定。 */
+  bottom: calc(var(--locate-inset) - var(--locate-scroll-padding));
   width: var(--locate-size);
   height: var(--locate-size);
   min-width: var(--locate-size);
