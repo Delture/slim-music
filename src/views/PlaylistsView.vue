@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { dialog } from '../lib/dialog';
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useAppMenuDismiss } from '../lib/appMenu';
 import { api } from '../lib/api';
 import { playList } from '../lib/player';
@@ -88,6 +88,7 @@ function showTracks(p: Playlist, list: Track[], cached: boolean) {
 }
 
 const inflight = new Map<number, Promise<void>>();
+const refreshInflight = new Map<number, Promise<void>>();
 
 function loadTracks(p: Playlist, refresh: boolean, backgroundRefresh: boolean) {
   const existing = !refresh ? inflight.get(p.id) : undefined;
@@ -103,11 +104,15 @@ function loadTracks(p: Playlist, refresh: boolean, backgroundRefresh: boolean) {
           await refreshTracks(p);
           return;
         }
-        if (active.value?.id === p.id) showTracks(p, [], false);
+        if (active.value?.id === p.id) {
+          err.value = '歌单曲目暂时未加载出来，请重试';
+          showTracks(p, [], false);
+        }
         return;
       }
       rememberTracks(p, hit.data);
       if (active.value?.id === p.id) {
+        err.value = '';
         showTracks(p, hit.data, hit.fromCache);
         void enrichInPlace(hit.data, p.id);
         if (backgroundRefresh && !refresh && (hit.fromCache || hit.ageSecs > 0)) {
@@ -173,27 +178,40 @@ function applyFreshLists(fresh: Playlist[]) {
 }
 
 /** 强制从网络拉取曲目并替换 UI（新数组，保证虚拟列表重渲染） */
-async function refreshTracks(p: Playlist) {
-  try {
-    const h = await api.playlistTracks(p.id, true, p.isLiked, tracksUid(p));
-    if (!h.data.length && p.trackCount > 0) {
-      forgetCachedPlaylistTracks(p.id);
-      if (active.value?.id === p.id && !tracks.value.length) showTracks(p, [], false);
-      return;
+function refreshTracks(p: Playlist) {
+  const existing = refreshInflight.get(p.id);
+  if (existing) return existing;
+  let req!: Promise<void>;
+  req = (async () => {
+    try {
+      const h = await api.playlistTracks(p.id, true, p.isLiked, tracksUid(p));
+      if (!h.data.length && p.trackCount > 0) {
+        forgetCachedPlaylistTracks(p.id);
+        if (active.value?.id === p.id && !tracks.value.length) {
+          err.value = '歌单曲目暂时未加载出来，请重试';
+          showTracks(p, [], false);
+        }
+        return;
+      }
+      const list = h.data.slice();
+      rememberTracks(p, list);
+      if (active.value?.id === p.id) {
+        err.value = '';
+        showTracks(p, list, false);
+        void enrichInPlace(list, p.id);
+      }
+    } catch (e) {
+      // 已有曲目时保留画面；首次仍是空的则露出错误并结束「加载中…」
+      if (active.value?.id === p.id && !tracks.value.length) {
+        err.value = String(e);
+        loading.value = false;
+      }
+    } finally {
+      if (refreshInflight.get(p.id) === req) refreshInflight.delete(p.id);
     }
-    const list = h.data.slice();
-    rememberTracks(p, list);
-    if (active.value?.id === p.id) {
-      showTracks(p, list, false);
-      void enrichInPlace(list, p.id);
-    }
-  } catch (e) {
-    // 已有曲目时保留画面；首次仍是空的则露出错误并结束「加载中…」
-    if (active.value?.id === p.id && !tracks.value.length) {
-      err.value = String(e);
-      loading.value = false;
-    }
-  }
+  })();
+  refreshInflight.set(p.id, req);
+  return req;
 }
 
 /** 静默刷新：歌单列表 + 当前歌单曲目 */
@@ -209,13 +227,14 @@ async function syncNow() {
 
 async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true) {
   const switched = active.value?.id !== p.id;
+  const needRetryCurrent = !switched && !tracks.value.length && (p.trackCount > 0 || !!err.value);
   active.value = p;
   if (switched) filter.value = '';
   if (enterDetail && narrow.value) mobileDetail.value = true;
   err.value = '';
 
   // 先换壳并开始过渡，不把动画和点击卡在曲目接口上。
-  const cached = usableCachedPlaylistTracks(p.id, p.trackCount);
+  const cached = needRetryCurrent ? undefined : usableCachedPlaylistTracks(p.id, p.trackCount);
   if (cached) {
     showTracks(p, cached, true);
     void enrichInPlace(cached, p.id);
@@ -225,7 +244,18 @@ async function open(p: Playlist, doBackgroundRefresh = true, enterDetail = true)
 
   if (switched) tracks.value = [];
   loading.value = true;
-  await loadTracks(p, false, doBackgroundRefresh);
+  await loadTracks(p, needRetryCurrent, doBackgroundRefresh);
+}
+
+function retryActive() {
+  if (!session.profile) return;
+  if (!lists.value.length || !active.value) {
+    void loadLists(true);
+    return;
+  }
+  err.value = '';
+  loading.value = true;
+  void refreshTracks(active.value);
 }
 
 function backToLists() {
@@ -329,6 +359,34 @@ onMounted(() => {
   mql.addEventListener('change', syncNarrow);
   if (session.profile) void loadLists(false);
 });
+onActivated(() => {
+  syncNarrow();
+  if (!session.profile) return;
+  if (!lists.value.length) {
+    void loadLists(false);
+    return;
+  }
+  if (active.value && active.value.trackCount > 0 && !tracks.value.length && !loading.value) {
+    void open(active.value, true, false);
+  }
+});
+watch(
+  () => session.profile?.userId ?? 0,
+  (uid, prev) => {
+    if (!uid) {
+      lists.value = [];
+      active.value = null;
+      tracks.value = [];
+      err.value = '';
+      loading.value = false;
+      mobileDetail.value = false;
+      return;
+    }
+    if (uid !== prev || !lists.value.length) {
+      void loadLists(false);
+    }
+  },
+);
 watch(() => resumeSync.tick, () => void syncNow());
 watch(playlistCacheEpoch, () => {
   if (!session.profile || !active.value) return;
@@ -372,7 +430,10 @@ onUnmounted(() => {
         <span v-if="fromCache" class="sm-badge muted-chip">缓存</span>
         <span v-if="loading && !tracks.length" class="muted tiny">加载中…</span>
       </header>
-      <p v-if="err" class="error">{{ err }}</p>
+      <div v-if="err" class="err-bar">
+        <p class="error">{{ err }}</p>
+        <button v-if="!tracks.length && !loading" type="button" class="btn-secondary" @click="retryActive">重试</button>
+      </div>
       <TrackFilter v-model="filter" />
       <!-- Soft fade/slide when switching selected playlist (not only row highlight). -->
       <Transition name="tracks-swap" mode="out-in">
@@ -469,6 +530,17 @@ onUnmounted(() => {
   padding: var(--empty-pad);
   text-align: center;
   font-size: 14px;
+}
+.err-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.err-bar .error {
+  margin: 0;
+  min-width: 0;
 }
 .item {
   justify-content: space-between;

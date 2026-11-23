@@ -3,7 +3,7 @@ import { dialog } from '../lib/dialog';
 import { isMobile } from '../lib/native';
 // 通用歌曲列表。播放：把当前列表设为「播放队列」从该曲开始（不影响本机播放列表内容）。
 // 虚拟列表：只渲染视口附近行，消除长歌单上下滚动卡顿。
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import { useAppMenuDismiss } from '../lib/appMenu';
 import type { Track } from '../lib/types';
@@ -131,6 +131,13 @@ function estimateRowSize() {
   return window.matchMedia('(max-width: 700px)').matches ? 64 : 60;
 }
 
+/** KeepAlive 失活时暂停虚拟列表，激活后重新绑定滚动容器并同步视口与偏移 */
+const active = ref(true);
+let deactivated = false;
+let savedScrollTop = 0;
+let ownsScrollEl = false;
+let layoutRaf: number | null = null;
+
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: props.tracks.length,
@@ -138,6 +145,7 @@ const virtualizer = useVirtualizer(
     estimateSize: estimateRowSize,
     overscan: 12,
     paddingEnd: LOCATE_PAD,
+    enabled: active.value,
     getItemKey: (i: number) => `${props.tracks[i]?.id ?? i}-${i}`,
   })),
 );
@@ -147,6 +155,13 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
 
 let boundScroll: HTMLElement | null = null;
 let scrollRo: ResizeObserver | null = null;
+
+function cancelLayoutSync() {
+  if (layoutRaf != null) {
+    window.cancelAnimationFrame(layoutRaf);
+    layoutRaf = null;
+  }
+}
 
 function onListScroll() {
   updatePlayingInView();
@@ -171,18 +186,70 @@ function bindScrollEl(el: HTMLElement | null) {
 }
 
 function refreshScrollParent() {
+  if (!active.value) return;
   scrollEl.value = findScrollParent(rootEl.value);
   viewH.value = scrollEl.value?.clientHeight ?? 0;
   bindScrollEl(scrollEl.value);
+  virtualizer.value._willUpdate();
   virtualizer.value.measure();
   updatePlayingInView();
 }
 
+function scheduleLayoutSync() {
+  cancelLayoutSync();
+  layoutRaf = window.requestAnimationFrame(() => {
+    layoutRaf = null;
+    if (!active.value) return;
+    const el = findScrollParent(rootEl.value);
+    const h = el?.clientHeight ?? 0;
+    if (el !== scrollEl.value || h !== viewH.value) {
+      refreshScrollParent();
+    }
+  });
+}
+
 onMounted(() => {
-  void nextTick(refreshScrollParent);
+  void nextTick(() => {
+    refreshScrollParent();
+    scheduleLayoutSync();
+  });
   window.addEventListener('resize', refreshScrollParent);
 });
+onDeactivated(() => {
+  deactivated = true;
+  cancelLayoutSync();
+  const el = scrollEl.value;
+  savedScrollTop = el?.scrollTop ?? 0;
+  // .content 是 App 级共享滚动容器，只恢复页面私有滚动容器（如 .tracks-scroll）的位置
+  ownsScrollEl = !!el && !el.classList.contains('content');
+  active.value = false;
+  scrollEl.value = null;
+  bindScrollEl(null);
+});
+onActivated(() => {
+  if (!deactivated) return;
+  deactivated = false;
+  active.value = true;
+  void nextTick(() => {
+    if (!active.value) return;
+    refreshScrollParent();
+    const el = scrollEl.value;
+    if (el) {
+      if (ownsScrollEl && savedScrollTop > 0) {
+        el.scrollTop = savedScrollTop;
+      }
+      const target = el.scrollTop;
+      if (target > 0 || (virtualizer.value.scrollOffset ?? 0) !== 0) {
+        virtualizer.value.scrollToOffset(target);
+      }
+      virtualizer.value.measure();
+      updatePlayingInView();
+    }
+    scheduleLayoutSync();
+  });
+});
 onUnmounted(() => {
+  cancelLayoutSync();
   window.removeEventListener('resize', refreshScrollParent);
   bindScrollEl(null);
 });
@@ -190,6 +257,7 @@ onUnmounted(() => {
 watch(
   () => props.tracks.length,
   () => void nextTick(() => {
+    if (!active.value) return;
     virtualizer.value.measure();
     refreshScrollParent();
   }),

@@ -135,7 +135,8 @@ async fn playlist_tracks(
         }
     }
     let c = cookie(&state).await;
-    let fetched = if liked.unwrap_or(false) {
+    let is_liked = liked.unwrap_or(false);
+    let fetched = if is_liked {
         // 不要在 profile 失败时退回普通 playlist_tracks：
         // 「我喜欢的音乐」的 trackIds 偶发缺失时，那条路径会得到空列表并被缓存。
         // uid 优先用前端传来的 creatorId / 已登录用户，profile 只是兜底。
@@ -152,7 +153,8 @@ async fn playlist_tracks(
     };
     match fetched {
         Ok(tracks) => {
-            if enabled && (!tracks.is_empty() || refresh) {
+            // 「我喜欢的音乐」拿空时不覆写磁盘缓存，避免偶发空响应毁掉已有缓存
+            if enabled && (!tracks.is_empty() || (refresh && !is_liked)) {
                 let _ = state.cache.write_json(&key, &tracks);
             }
             Ok(cache::CacheHit {

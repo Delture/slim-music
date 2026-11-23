@@ -329,37 +329,78 @@ fn liked_track_entries(playlist: &Value) -> Vec<(i64, i64)> {
         .unwrap_or_default()
 }
 
-/// 「我喜欢的音乐」：顺序以歌单自身 trackIds 为准（`at` 为收藏时间，按其倒序）；
-/// likelist 的 id 不按收藏时间排序，只用来补齐 CDN 未更新的新收藏（置顶）并剔除已取消的。
-pub async fn liked_tracks(cookie: &Option<String>, uid: i64, playlist_id: i64) -> R<Vec<Track>> {
-    let query = q(cookie).param("id", &playlist_id.to_string()).param("s", "0");
-    let res = ok(create_client(None).playlist_detail(&query).await)?;
-    let mut entries = liked_track_entries(&res.body["playlist"]);
+/// 合并 playlist/detail 的 (id, at) 与 likelist 的 id 列表。
+/// 优先保留 trackIds 收藏时间倒序；playlist_detail 失败时允许用 likelist 兜底。
+fn merge_liked_order(
+    mut entries: Vec<(i64, i64)>,
+    detail_track_count: i64,
+    detail_err: Option<String>,
+    uid: i64,
+    likes_res: Option<R<Vec<i64>>>,
+) -> R<Vec<i64>> {
     if !entries.is_empty() && entries.iter().all(|e| e.1 > 0) {
         entries.sort_by(|x, y| y.1.cmp(&x.1)); // stable; 收藏时间倒序
     }
     let mut order: Vec<i64> = entries.into_iter().map(|e| e.0).collect();
     if uid > 0 {
-        match liked_ids(cookie, uid).await {
-            Ok(likes) if !likes.is_empty() => {
-                let like_set: std::collections::HashSet<i64> = likes.iter().copied().collect();
-                let have: std::collections::HashSet<i64> = order.iter().copied().collect();
-                let mut fresh: Vec<i64> = likes.iter().copied().filter(|id| !have.contains(id)).collect();
-                order.retain(|id| like_set.contains(id));
-                fresh.extend(order);
-                order = fresh;
-            }
-            Ok(_) => { /* likelist 确认无新红心，保留 trackIds（可能本来就是空歌单） */ }
-            Err(e) => {
-                // trackIds 也是空时不能当成「没有喜欢的歌」成功返回，否则会被缓存
-                if order.is_empty() {
-                    return Err(e);
+        if let Some(res) = likes_res {
+            match res {
+                Ok(likes) if !likes.is_empty() => {
+                    let like_set: std::collections::HashSet<i64> = likes.iter().copied().collect();
+                    let have: std::collections::HashSet<i64> = order.iter().copied().collect();
+                    let mut fresh: Vec<i64> =
+                        likes.iter().copied().filter(|id| !have.contains(id)).collect();
+                    order.retain(|id| like_set.contains(id));
+                    fresh.extend(order);
+                    order = fresh;
+                }
+                Ok(_) => {
+                    // playlist_detail 失败或声明有曲目却两边都空，不当作空歌单成功返回
+                    if order.is_empty() {
+                        if let Some(e) = detail_err {
+                            return Err(e);
+                        }
+                        if detail_track_count > 0 {
+                            return Err("网易云暂未返回「我喜欢的音乐」曲目列表".into());
+                        }
+                    }
+                }
+                Err(e) => {
+                    if order.is_empty() {
+                        return Err(detail_err.unwrap_or(e));
+                    }
                 }
             }
         }
     } else if order.is_empty() {
-        return Err("无法获取「我喜欢的音乐」：未取得用户信息".into());
+        return Err(detail_err.unwrap_or_else(|| "无法获取「我喜欢的音乐」：未取得用户信息".into()));
     }
+    if order.is_empty() && detail_track_count > 0 {
+        return Err("网易云暂未返回「我喜欢的音乐」曲目列表".into());
+    }
+    Ok(order)
+}
+
+/// 「我喜欢的音乐」：顺序以歌单自身 trackIds 为准（`at` 为收藏时间，按其倒序）；
+/// likelist 的 id 不按收藏时间排序，只用来补齐 CDN 未更新的新收藏（置顶）并剔除已取消的；
+/// 当 playlist/detail 偶发失败时也用 likelist 兜底，避免整页空白。
+pub async fn liked_tracks(cookie: &Option<String>, uid: i64, playlist_id: i64) -> R<Vec<Track>> {
+    let query = q(cookie).param("id", &playlist_id.to_string()).param("s", "0");
+    let (entries, detail_track_count, detail_err) =
+        match ok(create_client(None).playlist_detail(&query).await) {
+            Ok(res) => {
+                let pl = &res.body["playlist"];
+                let tc = json_i64(&pl["trackCount"]).unwrap_or(0);
+                (liked_track_entries(pl), tc, None)
+            }
+            Err(e) => (Vec::new(), 0, Some(e)),
+        };
+    let likes_res = if uid > 0 {
+        Some(liked_ids(cookie, uid).await)
+    } else {
+        None
+    };
+    let order = merge_liked_order(entries, detail_track_count, detail_err, uid, likes_res)?;
     let mut all = Vec::with_capacity(order.len());
     for chunk in order.chunks(500) {
         let joined = chunk.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
@@ -369,6 +410,9 @@ pub async fn liked_tracks(cookie: &Option<String>, uid: i64, playlist_id: i64) -
         let pos: std::collections::HashMap<i64, usize> = chunk.iter().enumerate().map(|(i, id)| (*id, i)).collect();
         page.sort_by_key(|t| t.ncm_id.and_then(|id| pos.get(&id).copied()).unwrap_or(usize::MAX));
         all.extend(page);
+    }
+    if !order.is_empty() && all.is_empty() {
+        return Err("网易云暂未返回「我喜欢的音乐」曲目详情".into());
     }
     Ok(all)
 }
@@ -643,6 +687,50 @@ mod tests {
             vec![(7, 0), (8, 0)]
         );
         assert!(super::liked_track_entries(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn merge_liked_order_falls_back_to_likelist_when_detail_fails() {
+        let got = super::merge_liked_order(
+            vec![],
+            0,
+            Some("detail failed".into()),
+            42,
+            Some(Ok(vec![10, 20, 30])),
+        )
+        .expect("should fall back to likelist");
+        assert_eq!(got, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn merge_liked_order_rejects_empty_when_detail_failed_or_expected_nonempty() {
+        assert!(super::merge_liked_order(
+            vec![],
+            0,
+            Some("detail failed".into()),
+            42,
+            Some(Ok(vec![])),
+        )
+        .is_err());
+        assert!(super::merge_liked_order(vec![], 12, None, 42, Some(Ok(vec![]))).is_err());
+        assert_eq!(
+            super::merge_liked_order(vec![], 0, None, 42, Some(Ok(vec![]))).unwrap(),
+            Vec::<i64>::new()
+        );
+    }
+
+    #[test]
+    fn merge_liked_order_keeps_recency_and_prepends_fresh_likes() {
+        let got = super::merge_liked_order(
+            vec![(1, 100), (2, 300), (3, 200)],
+            3,
+            None,
+            42,
+            Some(Ok(vec![4, 1, 2])),
+        )
+        .unwrap();
+        // 3 已取消喜欢被剔除；4 为新收藏置顶；2(at=300) 在 1(at=100) 前
+        assert_eq!(got, vec![4, 2, 1]);
     }
 
     #[test]
